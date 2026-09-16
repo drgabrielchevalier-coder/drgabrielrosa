@@ -236,7 +236,7 @@ window.CHEVALIER_BUILD=<?= json_encode($chevalierBuild, JSON_HEX_TAG|JSON_HEX_AM
       <!-- PROCEDIMENTOS -->
       <section class="page" id="page-procedimentos">
         <div class="page-head">
-          <div><h2>Procedimentos</h2><p>Catálogo clínico com preço, ficha de custo padrão e margem projetada.</p></div>
+          <div><h2>Procedimentos</h2><p>Catálogo clínico com preço por clínica, forma de recebimento (valor fechado ou %) e ficha de custo.</p></div>
           <div class="page-actions"><button class="btn primary" onclick="openProcedureModal()">＋ Novo procedimento</button></div>
         </div>
         <div class="grid layout-2">

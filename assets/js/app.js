@@ -22,12 +22,42 @@ const seed = {
     {id:'m8',name:'Análogo',brand:'Implacil',type:'Análogo',supplier:'Dental fornecedor',pack:'1 un',price:45,unitCost:45,stock:3,min:2,updated:pastDays(7)}
   ],
   procedures:[
-    {id:'p1',name:'Implante unitário',price:1500,items:[{materialId:'m1',qty:1},{materialId:'m4',qty:4},{materialId:'m5',qty:1},{materialId:'m6',qty:1}],extra:44},
-    {id:'p2',name:'Implante + enxerto',price:1700,items:[{materialId:'m1',qty:1},{materialId:'m3',qty:1},{materialId:'m4',qty:4},{materialId:'m5',qty:1},{materialId:'m6',qty:1}],extra:44},
-    {id:'p3',name:'Coroa sobre implante',price:1500,items:[{materialId:'m7',qty:1},{materialId:'m8',qty:1}],extra:450},
-    {id:'p4',name:'Implante + coroa',price:2400,items:[{materialId:'m1',qty:1},{materialId:'m4',qty:4},{materialId:'m5',qty:1},{materialId:'m6',qty:1},{materialId:'m7',qty:1},{materialId:'m8',qty:1}],extra:450},
-    {id:'p5',name:'Protocolo por arcada',price:13000,items:[{materialId:'m1',qty:4},{materialId:'m4',qty:8},{materialId:'m5',qty:1},{materialId:'m6',qty:2},{materialId:'m2',qty:4}],extra:1900},
-    {id:'p6',name:'Restauração simples',price:230,items:[],extra:32}
+    {id:'p1',name:'Implante unitário',price:1500,items:[{materialId:'m1',qty:1},{materialId:'m4',qty:4},{materialId:'m5',qty:1},{materialId:'m6',qty:1}],extra:44,clinicPrices:[
+      {clinicId:'allon',practicedValue:1500,receiveMode:'fixed',receiveAmount:490,receivePercent:100},
+      {clinicId:'daniele',practicedValue:1500,receiveMode:'fixed',receiveAmount:700,receivePercent:100},
+      {clinicId:'gerlucia',practicedValue:1500,receiveMode:'percent',receiveAmount:0,receivePercent:40},
+      {clinicId:'particular',practicedValue:1500,receiveMode:'fixed',receiveAmount:1500,receivePercent:100}
+    ]},
+    {id:'p2',name:'Implante + enxerto',price:1700,items:[{materialId:'m1',qty:1},{materialId:'m3',qty:1},{materialId:'m4',qty:4},{materialId:'m5',qty:1},{materialId:'m6',qty:1}],extra:44,clinicPrices:[
+      {clinicId:'allon',practicedValue:1700,receiveMode:'fixed',receiveAmount:490,receivePercent:100},
+      {clinicId:'daniele',practicedValue:1700,receiveMode:'fixed',receiveAmount:750,receivePercent:100},
+      {clinicId:'gerlucia',practicedValue:1700,receiveMode:'percent',receiveAmount:0,receivePercent:40},
+      {clinicId:'particular',practicedValue:1700,receiveMode:'fixed',receiveAmount:1700,receivePercent:100}
+    ]},
+    {id:'p3',name:'Coroa sobre implante',price:1500,items:[{materialId:'m7',qty:1},{materialId:'m8',qty:1}],extra:450,clinicPrices:[
+      {clinicId:'allon',practicedValue:1500,receiveMode:'fixed',receiveAmount:850,receivePercent:100},
+      {clinicId:'daniele',practicedValue:1500,receiveMode:'fixed',receiveAmount:850,receivePercent:100},
+      {clinicId:'gerlucia',practicedValue:1500,receiveMode:'fixed',receiveAmount:850,receivePercent:100},
+      {clinicId:'particular',practicedValue:1500,receiveMode:'fixed',receiveAmount:1500,receivePercent:100}
+    ]},
+    {id:'p4',name:'Implante + coroa',price:2400,items:[{materialId:'m1',qty:1},{materialId:'m4',qty:4},{materialId:'m5',qty:1},{materialId:'m6',qty:1},{materialId:'m7',qty:1},{materialId:'m8',qty:1}],extra:450,clinicPrices:[
+      {clinicId:'allon',practicedValue:2400,receiveMode:'percent',receiveAmount:0,receivePercent:50},
+      {clinicId:'daniele',practicedValue:2400,receiveMode:'percent',receiveAmount:0,receivePercent:50},
+      {clinicId:'gerlucia',practicedValue:2400,receiveMode:'percent',receiveAmount:0,receivePercent:45},
+      {clinicId:'particular',practicedValue:2400,receiveMode:'fixed',receiveAmount:2400,receivePercent:100}
+    ]},
+    {id:'p5',name:'Protocolo por arcada',price:13000,items:[{materialId:'m1',qty:4},{materialId:'m4',qty:8},{materialId:'m5',qty:1},{materialId:'m6',qty:2},{materialId:'m2',qty:4}],extra:1900,clinicPrices:[
+      {clinicId:'allon',practicedValue:13000,receiveMode:'percent',receiveAmount:0,receivePercent:35},
+      {clinicId:'daniele',practicedValue:13000,receiveMode:'percent',receiveAmount:0,receivePercent:35},
+      {clinicId:'gerlucia',practicedValue:13000,receiveMode:'percent',receiveAmount:0,receivePercent:30},
+      {clinicId:'particular',practicedValue:13000,receiveMode:'fixed',receiveAmount:13000,receivePercent:100}
+    ]},
+    {id:'p6',name:'Restauração simples',price:230,items:[],extra:32,clinicPrices:[
+      {clinicId:'allon',practicedValue:230,receiveMode:'fixed',receiveAmount:150,receivePercent:100},
+      {clinicId:'daniele',practicedValue:230,receiveMode:'fixed',receiveAmount:150,receivePercent:100},
+      {clinicId:'gerlucia',practicedValue:230,receiveMode:'percent',receiveAmount:0,receivePercent:60},
+      {clinicId:'particular',practicedValue:230,receiveMode:'fixed',receiveAmount:230,receivePercent:100}
+    ]}
   ],
   patients:[
     {id:'pt1',name:'Paciente Exemplo 01',origin:'Prestação',clinicId:'allon',procedureId:'p1',date:pastDays(20),value:490,received:490,due:pastDays(10),status:'Faturado / Recebido',cost:224.86,lab:0,components:0,clinical:0,progress:'Alta'},
@@ -65,8 +95,43 @@ function save(){
   fetch('api/state.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)}).catch(()=>{});
 }
 function clinic(id){return state.clinics.find(x=>x.id===id)||{name:'—',color:'??'};}
-function procedure(id){return state.procedures.find(x=>x.id===id)||{name:'—',price:0,items:[],extra:0};}
+function procedure(id){return state.procedures.find(x=>x.id===id)||{name:'—',price:0,items:[],extra:0,clinicPrices:[]};}
 function material(id){return state.materials.find(x=>x.id===id)||{name:'—',unitCost:0};}
+function normalizeClinicPrice(row={},fallbackPrice=0){
+  const practiced=Number(row.practicedValue ?? fallbackPrice ?? 0);
+  const mode=row.receiveMode==='percent'?'percent':'fixed';
+  return {
+    clinicId:String(row.clinicId||''),
+    practicedValue:practiced,
+    receiveMode:mode,
+    receiveAmount:Number(row.receiveAmount ?? (mode==='fixed'?practiced:0)),
+    receivePercent:Number(row.receivePercent ?? (mode==='percent'?50:100))
+  };
+}
+function ensureClinicPrices(){
+  (state.procedures||[]).forEach(p=>{
+    const map=Object.fromEntries((p.clinicPrices||[]).filter(x=>x&&x.clinicId).map(x=>[x.clinicId,x]));
+    p.clinicPrices=(state.clinics||[]).map(c=>normalizeClinicPrice({...(map[c.id]||{}),clinicId:c.id},p.price||0));
+  });
+}
+function clinicPriceFor(procId,clinicId){
+  const p=procedure(procId);
+  const row=(p.clinicPrices||[]).find(x=>x.clinicId===clinicId);
+  return row?normalizeClinicPrice(row,p.price||0):normalizeClinicPrice({clinicId,practicedValue:p.price||0,receiveMode:'fixed',receiveAmount:p.price||0,receivePercent:100},p.price||0);
+}
+function honorariumFromPrice(row){
+  const r=normalizeClinicPrice(row);
+  if(r.receiveMode==='percent') return Math.round((Number(r.practicedValue||0)*Number(r.receivePercent||0)/100)*100)/100;
+  return Math.round(Number(r.receiveAmount||0)*100)/100;
+}
+function procedureHonorarium(procId,clinicId){
+  return honorariumFromPrice(clinicPriceFor(procId,clinicId));
+}
+function clinicPriceLabel(row){
+  const r=normalizeClinicPrice(row);
+  if(r.receiveMode==='percent') return `${brl.format(r.practicedValue)} · ${r.receivePercent}% = ${brl.format(honorariumFromPrice(r))}`;
+  return `${brl.format(r.practicedValue)} · fechado ${brl.format(r.receiveAmount)}`;
+}
 function patientCost(p){return Number(p.cost||0)+Number(p.lab||0)+Number(p.components||0)+Number(p.clinical||0);}
 function patientProfit(p){return Number(p.value||0)-patientCost(p);}
 function balance(p){return Math.max(0,Number(p.value||0)-Number(p.received||0));}
@@ -227,13 +292,19 @@ function procedureCost(p){return (p.items||[]).reduce((s,i)=>s+material(i.materi
 function renderProcedures(){
   document.getElementById('proceduresTable').innerHTML=state.procedures.map(p=>{
     const cost=procedureCost(p), m=pct(p.price-cost,p.price);
-    return `<tr>${td('Procedimento',`<strong>${esc(p.name)}</strong>`)}${td('Preço',brl.format(p.price))}${td('Custo',brl.format(cost))}${td('Margem',badge(m+'%'))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="showCostSheet('${p.id}')">Ficha</button><button class="btn small" onclick="openProcedureModal('${p.id}')">Editar</button><button class="btn small danger" onclick="deleteProcedure('${p.id}')">Excluir</button></div></td></tr>`;
+    const clinics=(p.clinicPrices||[]).filter(x=>Number(x.practicedValue||0)>0||Number(x.receiveAmount||0)>0||Number(x.receivePercent||0)>0).length || (p.clinicPrices||[]).length;
+    return `<tr>${td('Procedimento',`<strong>${esc(p.name)}</strong><span class="cell-sub">${clinics} clínica(s) com valor configurado</span>`)}${td('Preço',brl.format(p.price))}${td('Custo',brl.format(cost))}${td('Margem',badge(m+'%'))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="showCostSheet('${p.id}')">Ficha</button><button class="btn small" onclick="openProcedureModal('${p.id}')">Editar</button><button class="btn small danger" onclick="deleteProcedure('${p.id}')">Excluir</button></div></td></tr>`;
   }).join('');
 }
 function showCostSheet(id){
   const p=procedure(id);
   document.getElementById('costSheetTitle').textContent=p.name;
   const cost=procedureCost(p);
+  const clinicRows=(p.clinicPrices||[]).map(row=>{
+    const r=normalizeClinicPrice(row,p.price||0);
+    const mode=r.receiveMode==='percent'?`Porcentagem · ${r.receivePercent}%`:'Valor fechado';
+    return `<div class="cost-row"><div>${esc(clinic(r.clinicId).name)}</div><div>${brl.format(r.practicedValue)}</div><div>${esc(mode)}</div><div><strong>${brl.format(honorariumFromPrice(r))}</strong></div></div>`;
+  }).join('')||'<div class="empty">Nenhuma clínica configurada. Edite o procedimento para definir valores.</div>';
   document.getElementById('costSheet').innerHTML=`
     <div class="cost-sheet">
       <div class="cost-row header"><div>Item</div><div>Qtd.</div><div>Unitário</div><div>Total</div></div>
@@ -241,7 +312,12 @@ function showCostSheet(id){
       <div class="cost-row"><div>Laboratório / custos adicionais</div><div>1</div><div>${brl.format(p.extra)}</div><div><strong>${brl.format(p.extra)}</strong></div></div>
     </div>
     <div class="summary-bar"><div><small>Preço base</small><strong>${brl.format(p.price)}</strong></div><div><small>Custo previsto</small><strong>${brl.format(cost)}</strong></div><div><small>Lucro projetado</small><strong>${brl.format(p.price-cost)}</strong></div><div><small>Margem</small><strong>${pct(p.price-cost,p.price)}%</strong></div></div>
-    <div class="row-actions" style="margin-top:12px"><button class="btn small" onclick="openProcedureModal('${id}')">Editar custos</button></div>`;
+    <h4 class="sheet-subtitle">Valores por clínica</h4>
+    <div class="cost-sheet">
+      <div class="cost-row header"><div>Clínica</div><div>Praticado</div><div>Recebimento</div><div>Você recebe</div></div>
+      ${clinicRows}
+    </div>
+    <div class="row-actions" style="margin-top:12px"><button class="btn small" onclick="openProcedureModal('${id}')">Editar procedimento</button></div>`;
 }
 function renderService(){
   const arr=state.patients.filter(p=>p.origin==='Prestação');
@@ -471,6 +547,7 @@ function openModal(title,body,onSave){
   const s=document.getElementById('modalSave');
   s.style.display='';s.textContent='Salvar';s.classList.remove('danger');
   document.getElementById('modalTitle').textContent=title;document.getElementById('modalBody').innerHTML=body;document.getElementById('modalRoot').classList.add('open');
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.remove('modal-wide');
   s.onclick=onSave;
 }
 function closeModal(){
@@ -492,7 +569,11 @@ function deletePatient(id){
 function deleteClinic(id){
   const n=state.patients.filter(p=>p.clinicId===id).length;
   if(n){toast('Há lançamentos nesta clínica. Transfira ou exclua os pacientes antes.');return;}
-  confirmDelete('Excluir esta clínica?',()=>{state.clinics=state.clinics.filter(x=>x.id!==id);});
+  confirmDelete('Excluir esta clínica?',()=>{
+    state.clinics=state.clinics.filter(x=>x.id!==id);
+    ensureClinicPrices();
+    save();
+  });
 }
 function deleteProcedure(id){
   const n=state.patients.filter(p=>p.procedureId===id).length;
@@ -558,7 +639,8 @@ function renderBanco(){
   const procs=state.procedures.filter(p=>!pq||p.name.toLowerCase().includes(pq));
   document.getElementById('bancoProcTable').innerHTML=procs.map(p=>{
     const cost=procedureCost(p), mats=(p.items||[]).length;
-    return `<tr>${td('Procedimento',`<strong>${esc(p.name)}</strong>`)}${td('Preço',brl.format(p.price))}${td('Materiais',`${mats} item(ns)`)}${td('Lab / extra',brl.format(p.extra||0))}${td('Custo total',`<strong>${brl.format(cost)}</strong>`)}${td('Margem',badge(pct(p.price-cost,p.price)+'%'))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="showCostSheet('${p.id}');go('procedimentos')">Ficha</button><button class="btn small" onclick="openProcedureModal('${p.id}')">Editar custos</button><button class="btn small danger" onclick="deleteProcedure('${p.id}')">Excluir</button></div></td></tr>`;
+    const priced=(p.clinicPrices||[]).filter(x=>Number(x.practicedValue||0)>0).length;
+    return `<tr>${td('Procedimento',`<strong>${esc(p.name)}</strong><span class="cell-sub">${priced} clínica(s) com valor</span>`)}${td('Preço',brl.format(p.price))}${td('Materiais',`${mats} item(ns)`)}${td('Lab / extra',brl.format(p.extra||0))}${td('Custo total',`<strong>${brl.format(cost)}</strong>`)}${td('Margem',badge(pct(p.price-cost,p.price)+'%'))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="showCostSheet('${p.id}');go('procedimentos')">Ficha</button><button class="btn small" onclick="openProcedureModal('${p.id}')">Editar</button><button class="btn small danger" onclick="deleteProcedure('${p.id}')">Excluir</button></div></td></tr>`;
   }).join('')||'<tr><td colspan="7"><div class="empty">Nenhum procedimento cadastrado.</div></td></tr>';
 }
 document.getElementById('modalRoot').addEventListener('click',e=>{if(e.target.id==='modalRoot')closeModal()});
@@ -571,14 +653,17 @@ function procOptions(selected=''){return state.procedures.map(p=>`<option value=
 function statusOptions(selected='À receber'){return ['À receber','Recebido parcial','Faturado / Recebido','Aguardando acerto','Retrabalho','Não vai receber'].map(s=>`<option ${s===selected?'selected':''}>${s}</option>`).join('')}
 function openPatientModal(origin='',editId=''){
   const p=state.patients.find(x=>x.id===editId)||{};
+  const initialClinic=p.clinicId||(origin==='Particular'?'particular':'allon');
+  const initialProc=p.procedureId||'p1';
+  const suggested=editId?null:procedureHonorarium(initialProc,initialClinic);
   openModal(editId?'Editar paciente':'Novo paciente',`
     <div class="form-grid">
       <div class="field full"><label>Nome do paciente</label><input id="fName" class="input" value="${esc(p.name||'')}" placeholder="Nome completo"></div>
       <div class="field"><label>Origem</label><select id="fOrigin" class="select"><option ${((p.origin||origin)==='Prestação')?'selected':''}>Prestação</option><option ${((p.origin||origin)==='Particular')?'selected':''}>Particular</option></select></div>
-      <div class="field"><label>Clínica / centro de resultado</label><select id="fClinic" class="select">${clinicOptions(p.clinicId||(origin==='Particular'?'particular':'allon'))}</select></div>
-      <div class="field"><label>Procedimento</label><select id="fProc" class="select">${procOptions(p.procedureId||'p1')}</select></div>
+      <div class="field"><label>Clínica / centro de resultado</label><select id="fClinic" class="select">${clinicOptions(initialClinic)}</select></div>
+      <div class="field"><label>Procedimento</label><select id="fProc" class="select">${procOptions(initialProc)}</select></div>
       <div class="field"><label>Data</label><input id="fDate" type="date" class="input" value="${p.date||todayISO()}"></div>
-      <div class="field"><label>Valor / honorário</label><input id="fValue" type="number" step="0.01" class="input" value="${p.value??''}"></div>
+      <div class="field"><label>Valor / honorário</label><input id="fValue" type="number" step="0.01" class="input" value="${p.value??suggested??''}"><small id="fHonorHint" class="field-hint">Altere clínica ou procedimento para sugerir o valor cadastrado.</small></div>
       <div class="field"><label>Recebido</label><input id="fReceived" type="number" step="0.01" class="input" value="${p.received??0}"></div>
       <div class="field"><label>Vencimento</label><input id="fDue" type="date" class="input" value="${p.due||addDays(10)}"></div>
       <div class="field"><label>Status financeiro</label><select id="fStatus" class="select">${statusOptions(p.status)}</select></div>
@@ -593,6 +678,8 @@ function openPatientModal(origin='',editId=''){
       if(editId){state.patients=state.patients.map(x=>x.id===editId?obj:x)}else state.patients.unshift(obj);
       save();closeModal();renderAll();toast('Paciente salvo.');
     });
+  wireHonorariumAutosuggest('fClinic','fProc');
+  if(!editId) syncPatientHonorarium();
 }
 function editPatient(id){openPatientModal('',id)}
 function openClinicModal(editId=''){
@@ -601,18 +688,101 @@ function openClinicModal(editId=''){
     if(!getv('cName'))return toast('Informe o nome da clínica.');
     const obj={id:editId||uid(),name:getv('cName'),type:getv('cType'),rule:getv('cRule')||'Regra não definida',color:(getv('cColor')||getv('cName').slice(0,2)).toUpperCase()};
     if(editId) state.clinics=state.clinics.map(x=>x.id===editId?obj:x); else state.clinics.push(obj);
+    ensureClinicPrices();
     save();closeModal();renderAll();toast('Clínica salva.');
   })
 }
+function clinicPriceRow(row={},fallbackPrice=0){
+  const r=normalizeClinicPrice(row,fallbackPrice);
+  const c=clinic(r.clinicId);
+  const isPercent=r.receiveMode==='percent';
+  const receive=honorariumFromPrice(r);
+  return `<div class="clinic-price-row" data-clinic-id="${esc(r.clinicId)}">
+    <div class="clinic-price-head"><span class="clinic-logo mini">${esc(c.color||'??')}</span><div><strong>${esc(c.name)}</strong><small>${esc(c.type||'')}</small></div></div>
+    <div class="clinic-price-grid">
+      <div class="field"><label>Valor praticado na clínica</label><input class="input cp-practiced" type="number" step="0.01" min="0" value="${r.practicedValue||''}" oninput="refreshClinicPriceRow(this)"></div>
+      <div class="field"><label>Como eu recebo</label><select class="select cp-mode" onchange="toggleClinicPriceMode(this)"><option value="fixed" ${!isPercent?'selected':''}>Valor fechado (integral)</option><option value="percent" ${isPercent?'selected':''}>Porcentagem</option></select></div>
+      <div class="field cp-fixed-wrap" ${isPercent?'hidden':''}><label>Valor fechado que eu recebo</label><input class="input cp-amount" type="number" step="0.01" min="0" value="${r.receiveAmount||''}" oninput="refreshClinicPriceRow(this)"></div>
+      <div class="field cp-percent-wrap" ${isPercent?'':'hidden'}><label>% que eu recebo</label><input class="input cp-percent" type="number" step="0.01" min="0" max="100" value="${r.receivePercent||''}" oninput="refreshClinicPriceRow(this)"></div>
+    </div>
+    <small class="cp-preview">Você recebe: <strong>${brl.format(receive)}</strong></small>
+  </div>`;
+}
+function toggleClinicPriceMode(sel){
+  const row=sel.closest('.clinic-price-row');
+  if(!row)return;
+  const percent=sel.value==='percent';
+  row.querySelector('.cp-fixed-wrap').hidden=percent;
+  row.querySelector('.cp-percent-wrap').hidden=!percent;
+  refreshClinicPriceRow(sel);
+}
+function refreshClinicPriceRow(el){
+  const row=el.closest?.('.clinic-price-row')||el;
+  if(!row||!row.classList.contains('clinic-price-row'))return;
+  const preview=row.querySelector('.cp-preview');
+  if(!preview)return;
+  const data={
+    clinicId:row.dataset.clinicId,
+    practicedValue:Number(row.querySelector('.cp-practiced')?.value||0),
+    receiveMode:row.querySelector('.cp-mode')?.value||'fixed',
+    receiveAmount:Number(row.querySelector('.cp-amount')?.value||0),
+    receivePercent:Number(row.querySelector('.cp-percent')?.value||0)
+  };
+  preview.innerHTML=`Você recebe: <strong>${brl.format(honorariumFromPrice(data))}</strong>`;
+}
+function collectClinicPrices(){
+  return [...document.querySelectorAll('.clinic-price-row')].map(row=>({
+    clinicId:row.dataset.clinicId,
+    practicedValue:Number(row.querySelector('.cp-practiced')?.value||0),
+    receiveMode:row.querySelector('.cp-mode')?.value==='percent'?'percent':'fixed',
+    receiveAmount:Number(row.querySelector('.cp-amount')?.value||0),
+    receivePercent:Number(row.querySelector('.cp-percent')?.value||0)
+  })).filter(x=>x.clinicId);
+}
 function openProcedureModal(editId=''){
-  const p=state.procedures.find(x=>x.id===editId)||{items:[],extra:0,price:0};
+  const p=state.procedures.find(x=>x.id===editId)||{items:[],extra:0,price:0,clinicPrices:[]};
+  const map=Object.fromEntries((p.clinicPrices||[]).map(x=>[x.clinicId,x]));
+  const clinicRows=state.clinics.map(c=>clinicPriceRow(map[c.id]?{...map[c.id],clinicId:c.id}:{clinicId:c.id,practicedValue:p.price||0,receiveMode:'fixed',receiveAmount:p.price||0,receivePercent:100},p.price||0)).join('')
+    ||'<div class="empty">Cadastre clínicas para definir valores por unidade.</div>';
   const rows=(p.items&&p.items.length?p.items:[{}]).map(procItemRow).join('');
-  openModal(editId?'Editar custos do procedimento':'Novo procedimento',`<div class="form-grid"><div class="field full"><label>Procedimento</label><input id="pName" class="input" value="${esc(p.name||'')}"></div><div class="field"><label>Preço base / honorário</label><input id="pPrice" type="number" step="0.01" class="input" value="${p.price??''}"></div><div class="field"><label>Laboratório / extra</label><input id="pExtra" type="number" step="0.01" class="input" value="${p.extra??0}"></div><div class="field full"><label>Materiais utilizados (qtd. × custo unitário)</label><div id="procItems">${rows}</div><button type="button" class="btn small" onclick="document.getElementById('procItems').insertAdjacentHTML('beforeend', procItemRow())">＋ Material</button></div></div>`,()=>{
+  openModal(editId?'Editar procedimento':'Novo procedimento',`<div class="form-grid">
+    <div class="field full"><label>Procedimento</label><input id="pName" class="input" value="${esc(p.name||'')}"></div>
+    <div class="field"><label>Preço base de referência</label><input id="pPrice" type="number" step="0.01" class="input" value="${p.price??''}"></div>
+    <div class="field"><label>Laboratório / extra</label><input id="pExtra" type="number" step="0.01" class="input" value="${p.extra??0}"></div>
+    <div class="field full"><label>Valor praticado e recebimento por clínica</label>
+      <p class="field-hint">Em cada clínica, informe o valor praticado e se você recebe valor fechado (integral) ou porcentagem desse valor.</p>
+      <div id="clinicPrices" class="clinic-price-list">${clinicRows}</div>
+    </div>
+    <div class="field full"><label>Materiais utilizados (qtd. × custo unitário)</label><div id="procItems">${rows}</div><button type="button" class="btn small" onclick="document.getElementById('procItems').insertAdjacentHTML('beforeend', procItemRow())">＋ Material</button></div>
+  </div>`,()=>{
     if(!getv('pName'))return toast('Informe o nome do procedimento.');
-    const obj={id:editId||uid(),name:getv('pName'),price:num('pPrice'),extra:num('pExtra'),items:collectProcItems()};
+    const obj={id:editId||uid(),name:getv('pName'),price:num('pPrice'),extra:num('pExtra'),items:collectProcItems(),clinicPrices:collectClinicPrices()};
     if(editId) state.procedures=state.procedures.map(x=>x.id===editId?obj:x); else state.procedures.push(obj);
     save();closeModal();renderAll();if(editId) showCostSheet(editId);toast('Procedimento salvo.');
-  })
+  });
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+}
+function syncPatientHonorarium(){
+  const clinicEl=document.getElementById('fClinic')||document.getElementById('rClinic');
+  const procEl=document.getElementById('fProc')||document.getElementById('rProc');
+  const valueEl=document.getElementById('fValue')||document.getElementById('rValue');
+  const hint=document.getElementById('fHonorHint')||document.getElementById('rHonorHint');
+  if(!clinicEl||!procEl||!valueEl)return;
+  const row=clinicPriceFor(procEl.value,clinicEl.value);
+  const honor=honorariumFromPrice(row);
+  valueEl.value=honor;
+  if(hint){
+    hint.textContent=row.receiveMode==='percent'
+      ? `Sugerido: ${row.receivePercent}% de ${brl.format(row.practicedValue)} = ${brl.format(honor)}`
+      : `Sugerido: valor fechado ${brl.format(honor)} (praticado ${brl.format(row.practicedValue)})`;
+  }
+}
+function wireHonorariumAutosuggest(clinicId,procId){
+  const clinicEl=document.getElementById(clinicId);
+  const procEl=document.getElementById(procId);
+  if(!clinicEl||!procEl)return;
+  clinicEl.addEventListener('change',syncPatientHonorarium);
+  procEl.addEventListener('change',syncPatientHonorarium);
 }
 function openCostModal(editId=''){
   const types=['IMPLANTE','LAB','BIOMATERIAL','INSUMOS','COMPONENTES','EQUIPAMENTO','ALUGUEL','Transporte','Alimentação','IMPOSTO E CRO','Consultoria'];
@@ -643,10 +813,13 @@ function openPayrollModal(editId=''){
   })
 }
 function openReceivableModal(type=''){
-  openModal('Novo recebível',`<div class="form-grid"><div class="field full"><label>Paciente</label><input id="rName" class="input"></div><div class="field"><label>Clínica</label><select id="rClinic" class="select">${clinicOptions(type==='prestacao'?'allon':'particular')}</select></div><div class="field"><label>Procedimento</label><select id="rProc" class="select">${procOptions()}</select></div><div class="field"><label>Valor</label><input id="rValue" type="number" class="input"></div><div class="field"><label>Recebido</label><input id="rReceived" type="number" class="input" value="0"></div><div class="field"><label>Vencimento</label><input id="rDue" type="date" class="input" value="${addDays(7)}"></div><div class="field"><label>Status</label><select id="rStatus" class="select">${statusOptions()}</select></div></div>`,()=>{
+  const initialClinic=type==='prestacao'?'allon':'particular';
+  openModal('Novo recebível',`<div class="form-grid"><div class="field full"><label>Paciente</label><input id="rName" class="input"></div><div class="field"><label>Clínica</label><select id="rClinic" class="select">${clinicOptions(initialClinic)}</select></div><div class="field"><label>Procedimento</label><select id="rProc" class="select">${procOptions()}</select></div><div class="field"><label>Valor</label><input id="rValue" type="number" class="input"><small id="rHonorHint" class="field-hint">Sugestão pelo cadastro do procedimento × clínica.</small></div><div class="field"><label>Recebido</label><input id="rReceived" type="number" class="input" value="0"></div><div class="field"><label>Vencimento</label><input id="rDue" type="date" class="input" value="${addDays(7)}"></div><div class="field"><label>Status</label><select id="rStatus" class="select">${statusOptions()}</select></div></div>`,()=>{
     if(!getv('rName'))return toast('Informe o paciente.');
     const cl=getv('rClinic'); state.patients.unshift({id:uid(),name:getv('rName'),origin:cl==='particular'?'Particular':'Prestação',clinicId:cl,procedureId:getv('rProc'),date:todayISO(),value:num('rValue'),received:num('rReceived'),due:getv('rDue'),status:getv('rStatus'),cost:0,lab:0,components:0,clinical:0,progress:'Em tratamento'});save();closeModal();renderAll();toast('Recebível lançado.');
-  })
+  });
+  wireHonorariumAutosuggest('rClinic','rProc');
+  syncPatientHonorarium();
 }
 function openStockModal(){
   openModal('Movimentar estoque',`<div class="form-grid"><div class="field full"><label>Material</label><select id="sMaterial" class="select">${state.materials.map(m=>`<option value="${m.id}">${esc(m.name)} · saldo ${m.stock}</option>`).join('')}</select></div><div class="field"><label>Movimento</label><select id="sType" class="select"><option value="in">Entrada</option><option value="out">Saída / consumo</option></select></div><div class="field"><label>Quantidade</label><input id="sQty" type="number" class="input" value="1"></div></div>`,()=>{
@@ -695,6 +868,7 @@ async function boot(){
   }catch(e){ /* fallback localStorage */ }
   ensureCatalog();
   ensureProstheses();
+  ensureClinicPrices();
   renderAll();
   setBancoTab(bancoTab);
 }
