@@ -1,8 +1,8 @@
 {
   "name": "Chevalier Gestão",
-  "version": "1.0.0",
-  "type": "static-prototype",
-  "entry": "index.html",
-  "storage": "localStorage",
-  "generated": "2026-09-14"
+  "version": "1.1.0",
+  "type": "php-spa",
+  "entry": "index.php",
+  "storage": "localStorage+mysql",
+  "generated": "2026-09-16"
 }

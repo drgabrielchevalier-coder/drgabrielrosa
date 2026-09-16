@@ -84,7 +84,7 @@ header('Content-Type: text/html; charset=utf-8');
   <?php if ($connected): ?>
     <p class="ok"><?php echo $saved ? 'Banco conectado e tabela criada.' : 'O banco ja esta conectado.'; ?></p>
     <p>Os lançamentos do sistema passam a ser gravados em <strong><?php echo htmlspecialchars(DB_NAME, ENT_QUOTES, 'UTF-8'); ?></strong>.</p>
-    <p><a href="../index.html" style="color:#d7b56d">Abrir o Chevalier Gestão</a></p>
+    <p><a href="../index.php" style="color:#d7b56d">Abrir o Chevalier Gestão</a></p>
   <?php else: ?>
     <p>Use a senha do banco <strong>u680963503_drgabriel</strong> (a mesma do phpMyAdmin no hPanel).</p>
     <?php if ($error): ?><p class="err"><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></p><?php endif; ?>

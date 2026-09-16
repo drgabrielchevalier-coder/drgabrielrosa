@@ -5,12 +5,16 @@ COMO INSTALAR NA HOSTINGER
 2. Entre na pasta public_html do domínio/subdomínio desejado.
 3. Faça backup do conteúdo atual antes de substituir arquivos.
 4. Envie o conteúdo desta pasta public_html preservando a estrutura:
-   - index.html
+   - index.php (entrada principal)
+   - index.html (redireciona para index.php)
    - .htaccess
-   - assets/css/app.css
-   - assets/js/app.js
+   - release.json
+   - api/ (incluindo version.php)
+   - assets/css/app.css e assets/css/update.css
+   - assets/js/app.js e assets/js/update-manager.js
    - assets/img/favicon.svg
 5. Abra o domínio e atualize o navegador com Ctrl+F5.
+   A barra no topo avisa quando uma versão nova estiver no servidor.
 
 BANCO MYSQL (Hostinger)
 - Banco: u680963503_drgabriel

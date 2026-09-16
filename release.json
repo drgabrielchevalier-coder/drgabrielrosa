@@ -1,0 +1,11 @@
+{
+  "version": "1.1",
+  "name": "Edição, mobile e banco de custos",
+  "releasedAt": "2026-09-16",
+  "changes": [
+    "Todos os lançamentos (pacientes, próteses, custos, folha e materiais) podem ser editados e excluídos.",
+    "Layout ajustado para celular em todas as páginas, com tabelas em cartão e menu em gaveta.",
+    "Nova área Banco de dados: custos unitários dos materiais odontológicos e ficha de custo de cada procedimento.",
+    "Barra de atualização no topo avisa quando uma versão nova do sistema estiver no servidor."
+  ]
+}
