@@ -1,7 +1,10 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/api/auth-lib.php';
 require_once __DIR__ . '/api/app-version-lib.php';
+chevalier_auth_require();
 $chevalierBuild = chevalier_app_build(__DIR__);
+$chevalierUser = chevalier_auth_user();
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
@@ -19,6 +22,7 @@ header('Expires: 0');
 <link rel="stylesheet" href="<?= chevalier_asset_url('assets/css/update.css') ?>">
 <script>
 window.CHEVALIER_BUILD=<?= json_encode($chevalierBuild, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
+window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
 </script>
 </head>
 <body>
@@ -86,8 +90,9 @@ window.CHEVALIER_BUILD=<?= json_encode($chevalierBuild, JSON_HEX_TAG|JSON_HEX_AM
     </div>
 
     <div class="sidebar-foot">
-      <strong>Chevalier Gestão v1.1</strong>
-      <p>Baseado na estrutura atual do Notion. Os lançamentos deste protótipo ficam salvos neste navegador.</p>
+      <strong>Chevalier Gestão v1.3</strong>
+      <p>Conectado como <span id="sidebarUser"><?= htmlspecialchars($chevalierUser, ENT_QUOTES, 'UTF-8') ?></span>.</p>
+      <p><a href="api/auth.php?action=logout" style="color:#c4b086;text-decoration:none">Sair da conta</a></p>
     </div>
   </aside>
 

@@ -5,6 +5,19 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/auth-lib.php';
+
+chevalier_auth_boot();
+if (!chevalier_auth_logged_in()) {
+    http_response_code(401);
+    echo json_encode([
+        'ok' => false,
+        'needsAuth' => true,
+        'error' => 'Faça login para continuar.',
+        'loginUrl' => 'login.php',
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 try {
     $pdo = chevalier_pdo();
