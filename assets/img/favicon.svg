@@ -1,5 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-<rect width="64" height="64" rx="16" fill="#171816"/>
-<rect x="10" y="10" width="44" height="44" rx="13" fill="#9f8a63"/>
-<text x="32" y="39" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#171816">CG</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Dr Gabriel Rosa">
+  <rect width="64" height="64" rx="14" fill="#0d0e0c"/>
+  <g fill="none" stroke="#c4b086" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 18h22a10 10 0 0 1 10 10v8a14 14 0 0 1-14 14H18"/>
+    <path d="M28 18v38"/>
+    <path d="M28 34h14a8 8 0 0 0 0-16H28"/>
+    <path d="M34 34l12 22"/>
+  </g>
 </svg>

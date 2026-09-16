@@ -14,9 +14,9 @@ header('Expires: 0');
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Chevalier Gestão — Clínica & Performance</title>
+<title>Dr Gabriel Rosa — Gestão</title>
 <meta name="theme-color" content="#171816">
-<meta name="description" content="Chevalier Gestão — gestão clínica, financeira, pacientes, custos, estoque e rentabilidade.">
+<meta name="description" content="Dr Gabriel Rosa — reabilitação oral e estética. Gestão clínica, financeira, pacientes, custos e próteses.">
 <link rel="icon" type="image/svg+xml" href="<?= chevalier_asset_url('assets/img/favicon.svg') ?>">
 <link rel="stylesheet" href="<?= chevalier_asset_url('assets/css/app.css') ?>">
 <link rel="stylesheet" href="<?= chevalier_asset_url('assets/css/update.css') ?>">
@@ -30,11 +30,7 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
 <div class="app">
   <aside class="sidebar" id="sidebar">
     <div class="brand">
-      <div class="brand-mark">CG</div>
-      <div>
-        <h1>Chevalier Gestão</h1>
-        <small>Clínica & Performance</small>
-      </div>
+      <img class="brand-logo" src="<?= chevalier_asset_url('assets/img/logo-gabriel-rosa-wide.png') ?>" alt="Dr Gabriel Rosa">
     </div>
 
     <div class="nav-group">
@@ -90,7 +86,7 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
     </div>
 
     <div class="sidebar-foot">
-      <strong>Chevalier Gestão v1.3</strong>
+      <strong>Dr Gabriel Rosa</strong>
       <p>Conectado como <span id="sidebarUser"><?= htmlspecialchars($chevalierUser, ENT_QUOTES, 'UTF-8') ?></span>.</p>
       <p><a href="api/auth.php?action=logout" style="color:#c4b086;text-decoration:none">Sair da conta</a></p>
     </div>
@@ -360,9 +356,9 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
           <div class="card">
             <div class="card-head"><h3>Consultar pelo código</h3></div>
             <div class="card-body">
-              <p class="lookup-lead">Digite o código do trabalho (ex.: CG0001) para abrir a ficha completa.</p>
+              <p class="lookup-lead">Digite o código do trabalho (ex.: GR0001) para abrir a ficha completa.</p>
               <div class="lookup-row">
-                <input class="input" id="lookupCode" placeholder="Ex.: CG0001" maxlength="40" onkeydown="if(event.key==='Enter')lookupProsthesis()">
+                <input class="input" id="lookupCode" placeholder="Ex.: GR0001" maxlength="40" onkeydown="if(event.key==='Enter')lookupProsthesis()">
                 <button class="btn primary" onclick="lookupProsthesis()">Consultar</button>
               </div>
               <div id="lookupResult" class="lookup-result"></div>

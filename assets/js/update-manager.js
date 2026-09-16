@@ -21,7 +21,7 @@
 
   function releaseListHtml(release){
     const r=normalizedRelease(release);
-    if(!r.changes.length)return '<ul class="protea-update-changes"><li>Arquivos e recursos do Chevalier Gestão foram atualizados.</li></ul>';
+    if(!r.changes.length)return '<ul class="protea-update-changes"><li>Arquivos e recursos do sistema Dr Gabriel Rosa foram atualizados.</li></ul>';
     return `<ul class="protea-update-changes">${r.changes.map(item=>`<li>${esc(item)}</li>`).join('')}</ul>`;
   }
 
@@ -30,7 +30,7 @@
     const version=r.version?` v${esc(r.version)}`:'';
     const title=r.name?esc(r.name):'Nova versão do sistema';
     return `<div class="protea-update-bar" role="status" aria-live="polite">
-      <div class="protea-update-message"><span class="protea-update-dot"></span><div class="protea-update-copy"><strong>Atualização do Chevalier Gestão${version} disponível</strong><small>${title}</small>${releaseListHtml(r)}</div></div>
+      <div class="protea-update-message"><span class="protea-update-dot"></span><div class="protea-update-copy"><strong>Atualização Dr Gabriel Rosa${version} disponível</strong><small>${title}</small>${releaseListHtml(r)}</div></div>
       <button type="button" class="button primary protea-update-button" data-protea-update-install>Atualizar agora</button>
     </div>`;
   }
@@ -39,7 +39,7 @@
     const r=normalizedRelease(release);
     const version=r.version?` v${esc(r.version)}`:'';
     return `<div class="protea-update-bar success" role="status" aria-live="polite">
-      <div class="protea-update-message"><span class="protea-update-check">✓</span><div class="protea-update-copy"><strong>Chevalier Gestão${version} atualizado</strong><small>${r.name?esc(r.name):'Veja o que mudou nesta versão.'}</small>${releaseListHtml(r)}</div></div>
+      <div class="protea-update-message"><span class="protea-update-check">✓</span><div class="protea-update-copy"><strong>Dr Gabriel Rosa${version} atualizado</strong><small>${r.name?esc(r.name):'Veja o que mudou nesta versão.'}</small>${releaseListHtml(r)}</div></div>
       <button type="button" class="button protea-update-dismiss" data-protea-update-dismiss>Entendi</button>
     </div>`;
   }
@@ -100,7 +100,7 @@
 
   async function fetchVersion(){
     const res=await fetch(`${CHECK_URL}?t=${Date.now()}`,{cache:'no-store',credentials:'same-origin',headers:{'Accept':'application/json'}});
-    if(!res.ok)throw new Error('Não foi possível consultar a versão do Chevalier Gestão.');
+    if(!res.ok)throw new Error('Não foi possível consultar a versão do sistema.');
     return res.json();
   }
 
@@ -189,7 +189,7 @@
       const nextUrl=await preloadFreshInterface(build);
       setProgress(94,'Aplicando a nova versão…');
       await new Promise(r=>setTimeout(r,220));
-      setProgress(100,'Atualização concluída. Reabrindo o Chevalier Gestão…');
+      setProgress(100,'Atualização concluída. Reabrindo o sistema…');
       await new Promise(r=>setTimeout(r,500));
       localStorage.removeItem(SEEN_KEY);
       nextUrl.hash=location.hash;

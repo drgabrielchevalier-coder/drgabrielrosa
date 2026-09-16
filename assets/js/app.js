@@ -78,10 +78,10 @@ const seed = {
     {id:'f2',name:'Apoio administrativo',type:'Fixo',period:'09/2026',center:'Geral',value:450,status:'A pagar'}
   ],
   prostheses:[
-    {id:'pr1',code:'CG0001',patientId:'pt3',type:'Coroa sobre implante',tooth:'26',lab:'Precisão Lab',cost:450,stage:1,labStatus:'Em produção',entry:pastDays(18),due:addDays(5),urgent:false,shade:'A2',notes:'Componente CM enviado junto.',events:[{date:pastDays(18),stage:0,note:'Trabalho cadastrado'},{date:pastDays(12),stage:1,note:'Enviado ao laboratório'}]},
-    {id:'pr2',code:'CG0002',patientId:'pt4',type:'Coroa de zircônia',tooth:'16',lab:'Ateliê Dental',cost:450,stage:3,labStatus:'Recebido — aguardando agendamento',entry:pastDays(9),due:pastDays(1),urgent:true,shade:'A3',notes:'Aguardando cimentação.',events:[{date:pastDays(9),stage:0,note:'Moldagem registrada'},{date:pastDays(7),stage:1,note:'Enviado ao laboratório'},{date:pastDays(2),stage:2,note:'Prova realizada'},{date:pastDays(1),stage:3,note:'Peça pronta na clínica'}]},
-    {id:'pr3',code:'CG0003',patientId:'pt1',type:'Protocolo superior',tooth:'Superior',lab:'OralLab',cost:1900,stage:4,labStatus:'Entregue / instalado',entry:pastDays(40),due:pastDays(10),urgent:false,shade:'BL3',notes:'Instalado e alta.',events:[{date:pastDays(40),stage:0,note:'Trabalho cadastrado'},{date:pastDays(28),stage:1,note:'Em produção'},{date:pastDays(14),stage:2,note:'Prova de dentes'},{date:pastDays(10),stage:4,note:'Instalado'}]},
-    {id:'pr4',code:'CG0004',patientId:'pt5',type:'Faceta de porcelana',tooth:'11-21',lab:'Ateliê Dental',cost:620,stage:2,labStatus:'Prova / ajustes',entry:pastDays(6),due:addDays(4),urgent:false,shade:'A1',notes:'Ajuste de borda incisal.',events:[{date:pastDays(6),stage:0,note:'Trabalho cadastrado'},{date:pastDays(4),stage:1,note:'Enviado ao laboratório'},{date:pastDays(1),stage:2,note:'Prova em boca'}]}
+    {id:'pr1',code:'GR0001',patientId:'pt3',type:'Coroa sobre implante',tooth:'26',lab:'Precisão Lab',cost:450,stage:1,labStatus:'Em produção',entry:pastDays(18),due:addDays(5),urgent:false,shade:'A2',notes:'Componente CM enviado junto.',events:[{date:pastDays(18),stage:0,note:'Trabalho cadastrado'},{date:pastDays(12),stage:1,note:'Enviado ao laboratório'}]},
+    {id:'pr2',code:'GR0002',patientId:'pt4',type:'Coroa de zircônia',tooth:'16',lab:'Ateliê Dental',cost:450,stage:3,labStatus:'Recebido — aguardando agendamento',entry:pastDays(9),due:pastDays(1),urgent:true,shade:'A3',notes:'Aguardando cimentação.',events:[{date:pastDays(9),stage:0,note:'Moldagem registrada'},{date:pastDays(7),stage:1,note:'Enviado ao laboratório'},{date:pastDays(2),stage:2,note:'Prova realizada'},{date:pastDays(1),stage:3,note:'Peça pronta na clínica'}]},
+    {id:'pr3',code:'GR0003',patientId:'pt1',type:'Protocolo superior',tooth:'Superior',lab:'OralLab',cost:1900,stage:4,labStatus:'Entregue / instalado',entry:pastDays(40),due:pastDays(10),urgent:false,shade:'BL3',notes:'Instalado e alta.',events:[{date:pastDays(40),stage:0,note:'Trabalho cadastrado'},{date:pastDays(28),stage:1,note:'Em produção'},{date:pastDays(14),stage:2,note:'Prova de dentes'},{date:pastDays(10),stage:4,note:'Instalado'}]},
+    {id:'pr4',code:'GR0004',patientId:'pt5',type:'Faceta de porcelana',tooth:'11-21',lab:'Ateliê Dental',cost:620,stage:2,labStatus:'Prova / ajustes',entry:pastDays(6),due:addDays(4),urgent:false,shade:'A1',notes:'Ajuste de borda incisal.',events:[{date:pastDays(6),stage:0,note:'Trabalho cadastrado'},{date:pastDays(4),stage:1,note:'Enviado ao laboratório'},{date:pastDays(1),stage:2,note:'Prova em boca'}]}
   ]
 };
 
@@ -342,7 +342,7 @@ function prosthDeadlineBadge(w){
 function prosthStageBadge(w){return badge(PROSTH_STAGES[Number(w.stage)]||'Etapa')}
 function nextProsthCode(){
   const n=state.prostheses.map(w=>Number(String(w.code||'').replace(/\D/g,''))||0);
-  return 'CG'+String(Math.max(0,...n)+1).padStart(4,'0');
+  return 'GR'+String(Math.max(0,...n)+1).padStart(4,'0');
 }
 function ensureProstheses(){
   if(!Array.isArray(state.prostheses)) state.prostheses=[];
@@ -351,7 +351,7 @@ function ensureProstheses(){
   state.patients.filter(p=>map[p.progress]!=null || Number(p.lab)>0).forEach((p,i)=>{
     const stage=map[p.progress]??1;
     state.prostheses.push({
-      id:uid(),code:'CG'+String(i+1).padStart(4,'0'),patientId:p.id,type:procedure(p.procedureId).name,tooth:'',lab:'Laboratório',
+      id:uid(),code:'GR'+String(i+1).padStart(4,'0'),patientId:p.id,type:procedure(p.procedureId).name,tooth:'',lab:'Laboratório',
       cost:Number(p.lab||0),stage,labStatus:LAB_STATUS[Math.min(stage,LAB_STATUS.length-1)],entry:p.date,due:p.due||addDays(10),urgent:false,shade:'',notes:'',
       events:[{date:p.date||todayISO(),stage,note:'Importado do progresso clínico'}]
     });

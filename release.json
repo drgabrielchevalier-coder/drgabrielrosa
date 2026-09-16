@@ -1,10 +1,10 @@
 {
-  "version": "1.3",
-  "name": "Tela de login com fundo em movimento",
+  "version": "1.4",
+  "name": "Marca Dr Gabriel Rosa",
   "releasedAt": "2026-09-16",
   "changes": [
-    "Nova página de login com fundo desfocado em movimento.",
-    "O sistema exige autenticação por sessão antes de abrir o painel.",
-    "Credenciais padrão configuráveis em api/config.local.php (AUTH_USER / AUTH_PASS)."
+    "Identidade visual atualizada para Dr Gabriel Rosa — Reabilitação Oral & Estética.",
+    "Logo oficial na tela de login e no menu lateral.",
+    "Mantém o fundo em movimento desfocado e o layout de acesso."
   ]
 }

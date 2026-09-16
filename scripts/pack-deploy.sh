@@ -8,7 +8,7 @@ STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
 mkdir -p "$STAGE"
-cp -a "$ROOT/.htaccess" "$ROOT/index.html" "$ROOT/index.php" "$ROOT/manifest.json" "$ROOT/release.json" "$STAGE/" 2>/dev/null || true
+cp -a "$ROOT/.htaccess" "$ROOT/index.html" "$ROOT/index.php" "$ROOT/login.php" "$ROOT/manifest.json" "$ROOT/release.json" "$STAGE/" 2>/dev/null || true
 cp -a "$ROOT/api" "$ROOT/assets" "$STAGE/"
 rm -f "$STAGE/api/config.local.php"
 
