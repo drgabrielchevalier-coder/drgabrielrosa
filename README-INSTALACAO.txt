@@ -43,16 +43,25 @@ INSTALAÇÃO MANUAL (upload zip)
 2. Entre na pasta public_html do domínio/subdomínio desejado.
 3. Faça backup do conteúdo atual antes de substituir arquivos.
 4. Envie o conteúdo desta pasta public_html preservando a estrutura:
-   - index.php (entrada principal)
+   - login.php (tela de entrada)
+   - index.php (painel — protegido por sessão)
    - index.html (redireciona para index.php)
    - .htaccess
    - release.json
-   - api/ (incluindo version.php)
-   - assets/css/app.css e assets/css/update.css
+   - api/ (incluindo version.php e auth.php)
+   - assets/css/app.css, update.css e login.css
    - assets/js/app.js e assets/js/update-manager.js
    - assets/img/favicon.svg
 5. Abra o domínio e atualize o navegador com Ctrl+F5.
    A barra no topo avisa quando uma versão nova estiver no servidor.
+
+LOGIN
+- Usuário padrão: gabriel
+- Senha padrão: chevalier
+- Para trocar, crie/edite api/config.local.php com:
+  define('AUTH_USER', 'seu_usuario');
+  define('AUTH_PASS', 'sua_senha');
+- Nunca envie config.local.php para o GitHub.
 
 Para gerar o zip localmente:
   bash scripts/pack-deploy.sh /tmp/chevalier.zip

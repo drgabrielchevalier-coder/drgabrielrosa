@@ -18,3 +18,12 @@ if (!defined('DB_USER')) {
 if (!defined('DB_PASS')) {
     define('DB_PASS', '');
 }
+
+/* Login — sobrescreva em config.local.php */
+if (!defined('AUTH_USER')) {
+    define('AUTH_USER', 'gabriel');
+}
+if (!defined('AUTH_PASS')) {
+    define('AUTH_PASS', 'chevalier');
+}
+/* Opcional: define('AUTH_PASS_HASH', password_hash('sua-senha', PASSWORD_DEFAULT)); */

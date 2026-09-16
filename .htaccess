@@ -1,5 +1,5 @@
 # Chevalier Gestão - configuração básica Hostinger/Apache
-DirectoryIndex index.php index.html
+DirectoryIndex login.php index.php index.html
 
 <Files "config.local.php">
   Require all denied
