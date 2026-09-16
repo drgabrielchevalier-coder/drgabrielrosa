@@ -65,7 +65,7 @@ header('Content-Type: text/html; charset=utf-8');
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Chevalier Gestão — MySQL</title>
+<title>Dr Gabriel Rosa — MySQL</title>
 <style>
   body{font-family:Inter,system-ui,sans-serif;background:#171816;color:#ecece6;margin:0;padding:40px 16px}
   .box{max-width:520px;margin:0 auto;background:#22231f;border:1px solid #33342f;border-radius:16px;padding:28px}
@@ -84,7 +84,7 @@ header('Content-Type: text/html; charset=utf-8');
   <?php if ($connected): ?>
     <p class="ok"><?php echo $saved ? 'Banco conectado e tabela criada.' : 'O banco ja esta conectado.'; ?></p>
     <p>Os lançamentos do sistema passam a ser gravados em <strong><?php echo htmlspecialchars(DB_NAME, ENT_QUOTES, 'UTF-8'); ?></strong>.</p>
-    <p><a href="../index.php" style="color:#d7b56d">Abrir o Chevalier Gestão</a></p>
+    <p><a href="../index.php" style="color:#d7b56d">Abrir o sistema</a></p>
   <?php else: ?>
     <p>Use a senha do banco <strong>u680963503_drgabriel</strong> (a mesma do phpMyAdmin no hPanel).</p>
     <?php if ($error): ?><p class="err"><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></p><?php endif; ?>
