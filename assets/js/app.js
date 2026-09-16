@@ -84,6 +84,61 @@ function badge(status){
 }
 function fmtDate(v){if(!v)return'—'; const [y,m,d]=v.split('-'); return `${d}/${m}/${y}`;}
 function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function td(label,html){return `<td data-label="${esc(label)}">${html}</td>`}
+function acts(edit,del){return `<div class="row-actions"><button class="btn small" onclick="${edit}">Editar</button><button class="btn small danger" onclick="${del}">Excluir</button></div>`}
+let bancoTab='materiais';
+const DENTAL_CATALOG=[
+  ['m1','Implante CM 3.5','Dérig','Implante','1 un',158,158],
+  ['m2','Mini pilar CM','Neodent','Componente','1 un',92,92],
+  ['m3','Biomaterial 0,5 g','Lumina Bone','Osso / biomaterial','1 un',198,198],
+  ['m4','Anestésico','DFL','Anestésico','50 tubetes',200,4],
+  ['m5','Campo cirúrgico','Genérico','Insumo','1 kit',35,35],
+  ['m6','Soro fisiológico 500 ml','Equiplex','Insumo','20 bolsas',279.9,13.995],
+  ['m7','Transfer HE 4.1','Implacil','Transfer','1 un',30,30],
+  ['m8','Análogo','Implacil','Análogo','1 un',45,45],
+  ['m9','Implante CM 4.0','Dérig','Implante','1 un',168,168],
+  ['m10','Implante CM 4.5','Dérig','Implante','1 un',178,178],
+  ['m11','Cicatrizador CM','Neodent','Componente','1 un',68,68],
+  ['m12','Pilar definitivo CM','Neodent','Componente','1 un',185,185],
+  ['m13','Parafuso protético','Neodent','Componente','1 un',42,42],
+  ['m14','Biomaterial 1,0 g','Lumina Bone','Osso / biomaterial','1 un',320,320],
+  ['m15','Membrana colágena 20x30','Lumina-Coat','Membrana','1 un',210,210],
+  ['m16','Fio de sutura 4-0','Shalon','Sutura','1 envelope',8.5,8.5],
+  ['m17','Agulha gengival 30G','Injex','Anestésico','100 un',45,0.45],
+  ['m18','Lâmina de bisturi nº15','Solidor','Insumo','100 un',38,0.38],
+  ['m19','Gaze estéril','Cremer','Descartável','10 pct',22,2.2],
+  ['m20','Luva cirúrgica','Descarpack','Descartável','50 pares',48,0.96],
+  ['m21','Máscara descartável','Descarpack','Descartável','50 un',18,0.36],
+  ['m22','Clorexidina 0,12%','Periogard','Medicamento','1 frasco',28,28],
+  ['m23','Broca inicial','Neodent','Broca','1 un',95,95],
+  ['m24','Broca sequencial','Neodent','Broca','1 un',88,88],
+  ['m25','Chave torque','Neodent','Instrumental','1 un',320,320],
+  ['m26','Cimento resinoso','RelyX','Cimento','1 kit',189,189],
+  ['m27','Resina composta A2','3M','Restaurador','1 seringa',62,62],
+  ['m28','Ácido fosfórico 37%','FGM','Restaurador','1 seringa',18,18],
+  ['m29','Adesivo universal','3M','Restaurador','1 frasco',145,145],
+  ['m30','Fio retrator','Ultrapak','Protético','1 unidose',9,9],
+  ['m31','Silicone de adição','Express','Moldagem','1 kit',210,210],
+  ['m32','Alginato','Jeltrate','Moldagem','1 pote',38,38],
+  ['m33','Gesso pedra','Asfer','Laboratório','1 kg',16,16],
+  ['m34','Provisório bisacrílico','Protemp','Protético','1 kit',245,245],
+  ['m35','Kit irrigação','Genérico','Insumo','1 kit',22,22],
+  ['m36','Dique de borracha','Madeitex','Isolamento','36 un',32,0.89],
+  ['m37','Broca diamantada','KG','Broca','1 un',12,12],
+  ['m38','Ionômero de vidro','GC','Restaurador','1 kit',78,78],
+  ['m39','Antibiótico (amox+clav)','Genérico','Medicamento','1 cx',24,24],
+  ['m40','Analgésico / AINE','Genérico','Medicamento','1 cx',12,12]
+];
+function ensureCatalog(force=false){
+  if(!Array.isArray(state.materials)) state.materials=[];
+  if(state.catalogReady && !force) return;
+  const have=new Set(state.materials.map(m=>m.id));
+  DENTAL_CATALOG.forEach(([id,name,brand,type,pack,price,unitCost])=>{
+    if(have.has(id)) return;
+    state.materials.push({id,name,brand,type,supplier:'Catálogo odontológico',pack,price,unitCost,stock:0,min:1,updated:todayISO()});
+  });
+  state.catalogReady=true;
+}
 
 function renderDashboard(){
   const fat=state.patients.reduce((s,p)=>s+Number(p.value||0),0);
@@ -127,7 +182,7 @@ function renderDashboard(){
   document.getElementById('clinicSummary').innerHTML=clinicSummary;
 
   document.getElementById('dashboardPatients').innerHTML=[...state.patients].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6).map(p=>`
-    <tr><td class="name-cell"><strong>${esc(p.name)}</strong><span>${fmtDate(p.date)}</span></td><td>${esc(clinic(p.clinicId).name)}</td><td>${esc(procedure(p.procedureId).name)}</td><td>${badge(p.status)}</td><td><strong>${brl.format(patientProfit(p))}</strong></td></tr>
+    <tr>${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${fmtDate(p.date)}</span>`)}${td('Origem',esc(clinic(p.clinicId).name))}${td('Procedimento',esc(procedure(p.procedureId).name))}${td('Financeiro',badge(p.status))}${td('Resultado',`<strong>${brl.format(patientProfit(p))}</strong>`)}</tr>
   `).join('');
 
   const costCats={};
@@ -151,10 +206,10 @@ function renderPatients(){
   const rows=state.patients.filter(p=>(!q||p.name.toLowerCase().includes(q)||procedure(p.procedureId).name.toLowerCase().includes(q))&&(!cf||p.clinicId===cf)&&(!sf||p.status===sf));
   document.getElementById('patientsTable').innerHTML=rows.map(p=>`
     <tr>
-      <td class="name-cell"><strong>${esc(p.name)}</strong><span>${esc(p.origin)}</span></td>
-      <td>${esc(clinic(p.clinicId).name)}</td><td>${esc(procedure(p.procedureId).name)}</td><td>${fmtDate(p.date)}</td>
-      <td>${brl.format(p.value)}</td><td>${brl.format(patientCost(p))}</td><td><strong>${brl.format(patientProfit(p))}</strong></td>
-      <td>${badge(p.status)}</td><td><button class="btn small" onclick="editPatient('${p.id}')">Editar</button></td>
+      ${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${esc(p.origin)}</span>`)}
+      ${td('Clínica',esc(clinic(p.clinicId).name))}${td('Procedimento',esc(procedure(p.procedureId).name))}${td('Data',fmtDate(p.date))}
+      ${td('Valor',brl.format(p.value))}${td('Custos',brl.format(patientCost(p)))}${td('Lucro',`<strong>${brl.format(patientProfit(p))}</strong>`)}
+      ${td('Status',badge(p.status))}<td class="actions-cell">${acts(`editPatient('${p.id}')`,`deletePatient('${p.id}')`)}</td>
     </tr>`).join('')||'<tr><td colspan="9"><div class="empty">Nenhum paciente encontrado.</div></td></tr>';
 }
 function renderClinics(){
@@ -164,14 +219,15 @@ function renderClinics(){
       <div class="clinic-top"><div class="clinic-logo">${esc(c.color)}</div><div><div class="clinic-name">${esc(c.name)}</div><div class="clinic-sub">${esc(c.type)}</div></div><div style="margin-left:auto">${badge(pct(revenue-costs,revenue)+'% margem')}</div></div>
       <div class="clinic-stats"><div class="clinic-stat"><small>Casos</small><strong>${arr.length}</strong></div><div class="clinic-stat"><small>Receita</small><strong>${brl.format(revenue)}</strong></div><div class="clinic-stat"><small>Resultado</small><strong>${brl.format(revenue-costs)}</strong></div></div>
       <div style="margin-top:14px;padding-top:13px;border-top:1px solid var(--line);font-size:10px;color:var(--muted)">Regra financeira<br><strong style="display:block;color:var(--text);font-size:11px;margin-top:4px">${esc(c.rule)}</strong></div>
+      <div class="row-actions"><button class="btn small" onclick="openClinicModal('${c.id}')">Editar</button><button class="btn small danger" onclick="deleteClinic('${c.id}')">Excluir</button></div>
     </div>`;
   }).join('');
 }
-function procedureCost(p){return p.items.reduce((s,i)=>s+material(i.materialId).unitCost*Number(i.qty||0),0)+Number(p.extra||0)}
+function procedureCost(p){return (p.items||[]).reduce((s,i)=>s+material(i.materialId).unitCost*Number(i.qty||0),0)+Number(p.extra||0)}
 function renderProcedures(){
   document.getElementById('proceduresTable').innerHTML=state.procedures.map(p=>{
     const cost=procedureCost(p), m=pct(p.price-cost,p.price);
-    return `<tr><td><strong>${esc(p.name)}</strong></td><td>${brl.format(p.price)}</td><td>${brl.format(cost)}</td><td>${badge(m+'%')}</td><td><button class="btn small" onclick="showCostSheet('${p.id}')">Ver ficha</button></td></tr>`;
+    return `<tr>${td('Procedimento',`<strong>${esc(p.name)}</strong>`)}${td('Preço',brl.format(p.price))}${td('Custo',brl.format(cost))}${td('Margem',badge(m+'%'))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="showCostSheet('${p.id}')">Ficha</button><button class="btn small" onclick="openProcedureModal('${p.id}')">Editar</button><button class="btn small danger" onclick="deleteProcedure('${p.id}')">Excluir</button></div></td></tr>`;
   }).join('');
 }
 function showCostSheet(id){
@@ -181,20 +237,21 @@ function showCostSheet(id){
   document.getElementById('costSheet').innerHTML=`
     <div class="cost-sheet">
       <div class="cost-row header"><div>Item</div><div>Qtd.</div><div>Unitário</div><div>Total</div></div>
-      ${p.items.map(i=>{const m=material(i.materialId); return `<div class="cost-row"><div>${esc(m.name)}</div><div>${i.qty}</div><div>${brl.format(m.unitCost)}</div><div><strong>${brl.format(m.unitCost*i.qty)}</strong></div></div>`}).join('')}
+      ${p.items?.length?p.items.map(i=>{const m=material(i.materialId); return `<div class="cost-row"><div>${esc(m.name)}</div><div>${i.qty}</div><div>${brl.format(m.unitCost)}</div><div><strong>${brl.format(m.unitCost*i.qty)}</strong></div></div>`}).join(''):'<div class="empty">Nenhum material nesta ficha. Edite o procedimento para incluir.</div>'}
       <div class="cost-row"><div>Laboratório / custos adicionais</div><div>1</div><div>${brl.format(p.extra)}</div><div><strong>${brl.format(p.extra)}</strong></div></div>
     </div>
-    <div class="summary-bar"><div><small>Preço base</small><strong>${brl.format(p.price)}</strong></div><div><small>Custo previsto</small><strong>${brl.format(cost)}</strong></div><div><small>Lucro projetado</small><strong>${brl.format(p.price-cost)}</strong></div><div><small>Margem</small><strong>${pct(p.price-cost,p.price)}%</strong></div></div>`;
+    <div class="summary-bar"><div><small>Preço base</small><strong>${brl.format(p.price)}</strong></div><div><small>Custo previsto</small><strong>${brl.format(cost)}</strong></div><div><small>Lucro projetado</small><strong>${brl.format(p.price-cost)}</strong></div><div><small>Margem</small><strong>${pct(p.price-cost,p.price)}%</strong></div></div>
+    <div class="row-actions" style="margin-top:12px"><button class="btn small" onclick="openProcedureModal('${id}')">Editar custos</button></div>`;
 }
 function renderService(){
   const arr=state.patients.filter(p=>p.origin==='Prestação');
   const total=arr.reduce((s,p)=>s+Number(p.value||0),0), rec=arr.reduce((s,p)=>s+Number(p.received||0),0), open=arr.reduce((s,p)=>s+balance(p),0), od=arr.filter(isOverdue).reduce((s,p)=>s+balance(p),0);
   document.getElementById('svcTotal').textContent=brl.format(total);document.getElementById('svcReceived').textContent=brl.format(rec);document.getElementById('svcOpen').textContent=brl.format(open);document.getElementById('svcOverdue').textContent=brl.format(od);
-  document.getElementById('serviceTable').innerHTML=arr.map(p=>`<tr><td><strong>${esc(p.name)}</strong></td><td>${esc(clinic(p.clinicId).name)}</td><td>${esc(procedure(p.procedureId).name)}</td><td>${brl.format(p.value)}</td><td>${brl.format(p.received)}</td><td>${fmtDate(p.due)}</td><td>${badge(isOverdue(p)?'À receber':p.status)}</td><td><button class="btn small" onclick="markReceived('${p.id}')">Receber</button></td></tr>`).join('');
+  document.getElementById('serviceTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong>`)}${td('Clínica',esc(clinic(p.clinicId).name))}${td('Procedimento',esc(procedure(p.procedureId).name))}${td('Honorário',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(isOverdue(p)?'À receber':p.status))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="markReceived('${p.id}')">Receber</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('');
 }
 function renderPrivate(){
   const arr=state.patients.filter(p=>p.clinicId==='particular'||p.origin==='Particular');
-  document.getElementById('privateTable').innerHTML=arr.map(p=>`<tr><td><strong>${esc(p.name)}</strong></td><td>${esc(procedure(p.procedureId).name)}</td><td>${brl.format(p.value)}</td><td>${brl.format(p.received)}</td><td>${brl.format(p.lab||0)}</td><td>${brl.format(p.components||0)}</td><td>${brl.format(p.clinical||0)}</td><td><strong>${brl.format(patientProfit(p))}</strong></td><td>${badge(p.progress)}</td></tr>`).join('')||'<tr><td colspan="9"><div class="empty">Sem casos particulares.</div></td></tr>';
+  document.getElementById('privateTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong>`)}${td('Procedimento',esc(procedure(p.procedureId).name))}${td('Contratado',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Lab',brl.format(p.lab||0))}${td('Componentes',brl.format(p.components||0))}${td('Clínica',brl.format(p.clinical||0))}${td('Lucro',`<strong>${brl.format(patientProfit(p))}</strong>`)}${td('Progresso',badge(p.progress))}<td class="actions-cell">${acts(`editPatient('${p.id}')`,`deletePatient('${p.id}')`)}</td></tr>`).join('')||'<tr><td colspan="10"><div class="empty">Sem casos particulares.</div></td></tr>';
 }
 const PROSTH_STAGES=['Entrada','Laboratório','Prova','Pronto / entrega','Instalado'];
 const LAB_STATUS=['Aguardando envio','Enviado ao laboratório','Em produção','Recebido — aguardando agendamento','Prova / ajustes','Retornado ao laboratório','Entregue / instalado'];
@@ -247,12 +304,12 @@ function renderTrabalhos(){
   document.getElementById('prosthTable').innerHTML=rows.map(w=>{
     const pat=patientById(w.patientId);
     return `<tr class="${w.urgent?'urgent-row':''}">
-      <td class="name-cell"><button class="row-link" onclick="openProsthesisDetail('${w.id}')"><strong>${esc(pat.name)}</strong><span>${esc(w.code)} · ${esc(w.type)}${w.tooth?' · '+esc(w.tooth):''}</span></button>${w.urgent?' <span class="badge b-red">Urgente</span>':''}</td>
-      <td>${esc(w.lab||'—')}<div class="cell-sub">${Number(w.cost)>0?brl.format(w.cost):'Custo não informado'}</div></td>
-      <td>${fmtDate(w.due)}</td>
-      <td>${prosthDeadlineBadge(w)}</td>
-      <td>${prosthStageBadge(w)}<div class="cell-sub">${esc(w.labStatus||'')}</div></td>
-      <td><button class="btn small" onclick="openProsthesisDetail('${w.id}')">Abrir</button></td>
+      ${td('Paciente',`<button class="row-link" onclick="openProsthesisDetail('${w.id}')"><strong>${esc(pat.name)}</strong><span>${esc(w.code)} · ${esc(w.type)}${w.tooth?' · '+esc(w.tooth):''}</span></button>${w.urgent?' <span class="badge b-red">Urgente</span>':''}`)}
+      ${td('Laboratório',`${esc(w.lab||'—')}<div class="cell-sub">${Number(w.cost)>0?brl.format(w.cost):'Custo não informado'}</div>`)}
+      ${td('Previsão',fmtDate(w.due))}
+      ${td('Prazo',prosthDeadlineBadge(w))}
+      ${td('Etapa',`${prosthStageBadge(w)}<div class="cell-sub">${esc(w.labStatus||'')}</div>`)}
+      <td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="openProsthesisDetail('${w.id}')">Abrir</button><button class="btn small" onclick="openProsthesisModal('${w.id}')">Editar</button><button class="btn small danger" onclick="deleteProsthesis('${w.id}')">Excluir</button></div></td>
     </tr>`;
   }).join('')||'<tr><td colspan="6"><div class="empty">Nenhum trabalho protético encontrado.</div></td></tr>';
 }
@@ -270,7 +327,7 @@ function renderEntregas(){
   const rows=state.prostheses.filter(w=>w.stage<4 && w.due && w.due<=limit).sort((a,b)=>String(a.due).localeCompare(String(b.due)));
   document.getElementById('entregasTable').innerHTML=rows.map(w=>{
     const pat=patientById(w.patientId);
-    return `<tr><td>${fmtDate(w.due)}</td><td><strong>${esc(pat.name)}</strong></td><td>${esc(w.type)}<div class="cell-sub">${esc(w.code)}</div></td><td>${esc(w.lab||'—')}</td><td>${prosthStageBadge(w)}</td><td>${prosthDeadlineBadge(w)}</td><td><button class="btn small" onclick="openProsthesisDetail('${w.id}')">Abrir</button></td></tr>`;
+    return `<tr>${td('Quando',fmtDate(w.due))}${td('Paciente',`<strong>${esc(pat.name)}</strong>`)}${td('Trabalho',`${esc(w.type)}<div class="cell-sub">${esc(w.code)}</div>`)}${td('Laboratório',esc(w.lab||'—'))}${td('Etapa',prosthStageBadge(w))}${td('Prazo',prosthDeadlineBadge(w))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="openProsthesisDetail('${w.id}')">Abrir</button><button class="btn small danger" onclick="deleteProsthesis('${w.id}')">Excluir</button></div></td></tr>`;
   }).join('')||'<tr><td colspan="7"><div class="empty">Nenhuma entrega ou prova nos próximos 14 dias.</div></td></tr>';
 }
 function renderTimeline(){
@@ -334,6 +391,7 @@ function openProsthesisDetail(id){
     <div class="form-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
       <button class="btn" onclick="closeModal();openProsthesisModal('${w.id}')">Editar</button>
       <button class="btn primary" onclick="closeModal();openAdvanceProsthesis('${w.id}')">Registrar evolução</button>
+      <button class="btn danger" onclick="closeModal();deleteProsthesis('${w.id}')">Excluir</button>
     </div>`,()=>closeModal());
   document.getElementById('modalSave').style.display='none';
 }
@@ -360,16 +418,16 @@ function setReceivableFilter(v,btn){
 }
 function renderReceivables(){
   const arr=state.patients.filter(p=>!receivableFilter||p.status===receivableFilter);
-  document.getElementById('receivablesTable').innerHTML=arr.map(p=>`<tr><td><strong>${esc(p.name)}</strong></td><td>${esc(clinic(p.clinicId).name)}</td><td>${brl.format(p.value)}</td><td>${brl.format(p.received)}</td><td><strong>${brl.format(balance(p))}</strong></td><td>${fmtDate(p.due)}</td><td>${badge(isOverdue(p)&&p.status!=='Faturado / Recebido'?'À receber':p.status)}</td><td><button class="btn small" onclick="markReceived('${p.id}')">Baixar</button></td></tr>`).join('');
+  document.getElementById('receivablesTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong>`)}${td('Origem',esc(clinic(p.clinicId).name))}${td('Valor',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Saldo',`<strong>${brl.format(balance(p))}</strong>`)}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(isOverdue(p)&&p.status!=='Faturado / Recebido'?'À receber':p.status))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="markReceived('${p.id}')">Baixar</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('');
 }
 function renderCosts(){
   const total=state.costs.reduce((s,c)=>s+Number(c.value||0),0), paid=state.costs.filter(c=>c.status==='PAGO').reduce((s,c)=>s+Number(c.value||0),0);
   const cats={};state.costs.forEach(c=>cats[c.type]=(cats[c.type]||0)+Number(c.value||0));const largest=Object.entries(cats).sort((a,b)=>b[1]-a[1])[0]?.[0]||'—';
   document.getElementById('costTotal').textContent=brl.format(total);document.getElementById('costPaid').textContent=brl.format(paid);document.getElementById('costOpen').textContent=brl.format(total-paid);document.getElementById('costLargest').textContent=largest;
-  document.getElementById('costsTable').innerHTML=state.costs.map(c=>`<tr><td><strong>${esc(c.desc)}</strong></td><td>${esc(c.type)}</td><td>${esc(c.center)}</td><td>${fmtDate(c.date)}</td><td>${fmtDate(c.due)}</td><td>${esc(c.method)}</td><td>${brl.format(c.value)}</td><td>${badge(c.status)}</td><td><button class="btn small" onclick="toggleCost('${c.id}')">${c.status==='PAGO'?'Reabrir':'Pagar'}</button></td></tr>`).join('');
+  document.getElementById('costsTable').innerHTML=state.costs.map(c=>`<tr>${td('Descrição',`<strong>${esc(c.desc)}</strong>`)}${td('Tipo',esc(c.type))}${td('Centro',esc(c.center))}${td('Data',fmtDate(c.date))}${td('Vencimento',fmtDate(c.due))}${td('Forma pg.',esc(c.method))}${td('Valor',brl.format(c.value))}${td('Status',badge(c.status))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="toggleCost('${c.id}')">${c.status==='PAGO'?'Reabrir':'Pagar'}</button><button class="btn small" onclick="openCostModal('${c.id}')">Editar</button><button class="btn small danger" onclick="deleteCost('${c.id}')">Excluir</button></div></td></tr>`).join('');
 }
 function renderPayroll(){
-  document.getElementById('payrollTable').innerHTML=state.payroll.map(f=>`<tr><td><strong>${esc(f.name)}</strong></td><td>${esc(f.type)}</td><td>${esc(f.period)}</td><td>${esc(f.center)}</td><td>${brl.format(f.value)}</td><td>${badge(f.status)}</td></tr>`).join('');
+  document.getElementById('payrollTable').innerHTML=state.payroll.map(f=>`<tr>${td('Profissional',`<strong>${esc(f.name)}</strong>`)}${td('Tipo',esc(f.type))}${td('Competência',esc(f.period))}${td('Centro',esc(f.center))}${td('Valor',brl.format(f.value))}${td('Status',badge(f.status))}<td class="actions-cell">${acts(`openPayrollModal('${f.id}')`,`deletePayroll('${f.id}')`)}</td></tr>`).join('');
   const total=state.payroll.reduce((s,f)=>s+Number(f.value||0),0), paid=state.payroll.filter(f=>f.status==='Pago').reduce((s,f)=>s+Number(f.value||0),0);
   document.getElementById('payrollSummary').innerHTML=`<div class="report-grid" style="grid-template-columns:1fr 1fr"><div class="report-tile"><small>Total da competência</small><strong>${brl.format(total)}</strong></div><div class="report-tile"><small>Em aberto</small><strong>${brl.format(total-paid)}</strong></div></div><div style="margin-top:18px;font-size:11px;color:var(--muted);line-height:1.6">A etapa seguinte poderá ratear folha por centro de custo e relacionar remuneração variável diretamente à produção de cada profissional.</div>`;
 }
@@ -382,31 +440,127 @@ function renderReports(){
   const max=Math.max(1,...procs.map(x=>x.profit));document.getElementById('reportProcedures').innerHTML=procs.map(x=>`<div style="margin-bottom:15px"><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:6px"><span>${esc(x.name)}</span><strong>${brl.format(x.profit)}</strong></div><div class="progress"><span style="width:${Math.max(0,x.profit/max*100)}%"></span></div></div>`).join('');
 }
 function renderMaterials(){
-  document.getElementById('materialsTable').innerHTML=state.materials.map(m=>`<tr><td><strong>${esc(m.name)}</strong></td><td>${esc(m.brand)}</td><td>${esc(m.type)}</td><td>${esc(m.supplier)}</td><td>${esc(m.pack)}</td><td>${brl.format(m.price)}</td><td><strong>${brl.format(m.unitCost)}</strong></td><td>${fmtDate(m.updated)}</td></tr>`).join('');
+  document.getElementById('materialsTable').innerHTML=state.materials.map(m=>`<tr>${td('Material',`<strong>${esc(m.name)}</strong>`)}${td('Marca',esc(m.brand))}${td('Tipo',esc(m.type))}${td('Fornecedor',esc(m.supplier))}${td('Embalagem',esc(m.pack))}${td('Preço',brl.format(m.price))}${td('Custo unit.',`<strong>${brl.format(m.unitCost)}</strong>`)}${td('Atualizado',fmtDate(m.updated))}<td class="actions-cell">${acts(`openMaterialModal('${m.id}')`,`deleteMaterial('${m.id}')`)}</td></tr>`).join('');
 }
 function renderStock(){
   const val=state.materials.reduce((s,m)=>s+m.stock*m.unitCost,0), low=state.materials.filter(m=>m.stock<=m.min);
   document.getElementById('stockValue').textContent=brl.format(val);document.getElementById('stockLow').textContent=low.length;document.getElementById('stockItems').textContent=state.materials.length;
-  document.getElementById('stockTable').innerHTML=state.materials.map(m=>`<tr><td><strong>${esc(m.name)}</strong></td><td>${esc(m.brand)}</td><td>${esc(m.type)}</td><td>${m.stock}</td><td>${m.min}</td><td>${brl.format(m.unitCost)}</td><td>${brl.format(m.stock*m.unitCost)}</td><td>${m.stock<=m.min?'<span class="badge b-red">Reposição</span>':'<span class="badge b-green">OK</span>'}</td></tr>`).join('');
+  document.getElementById('stockTable').innerHTML=state.materials.map(m=>`<tr>${td('Item',`<strong>${esc(m.name)}</strong>`)}${td('Marca',esc(m.brand))}${td('Tipo',esc(m.type))}${td('Atual',String(m.stock))}${td('Mínimo',String(m.min))}${td('Custo unit.',brl.format(m.unitCost))}${td('Valor',brl.format(m.stock*m.unitCost))}${td('Status',m.stock<=m.min?'<span class="badge b-red">Reposição</span>':'<span class="badge b-green">OK</span>')}<td class="actions-cell">${acts(`openMaterialModal('${m.id}')`,`deleteMaterial('${m.id}')`)}</td></tr>`).join('');
 }
-function renderAll(){ensureProstheses();renderDashboard();renderPatients();renderClinics();renderProcedures();renderService();renderPrivate();renderTrabalhos();renderLab();renderEntregas();renderTimeline();renderReceivables();renderCosts();renderPayroll();renderReports();renderMaterials();renderStock();}
+function renderAll(){ensureProstheses();renderDashboard();renderPatients();renderClinics();renderProcedures();renderService();renderPrivate();renderTrabalhos();renderLab();renderEntregas();renderTimeline();renderReceivables();renderCosts();renderPayroll();renderReports();renderMaterials();renderStock();renderBanco();}
 
 function go(page){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+page)?.classList.add('active');
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
+  document.querySelectorAll('.nav-btn').forEach(b=>{
+    const on=b.dataset.page===page && (!b.dataset.tab || b.dataset.tab===bancoTab);
+    b.classList.toggle('active',on);
+  });
   document.getElementById('sidebar').classList.remove('open');document.getElementById('overlay').classList.remove('open');
   window.scrollTo({top:0,behavior:'smooth'});
 }
-document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>go(b.dataset.page));
+document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>{
+  if(b.dataset.tab) bancoTab=b.dataset.tab;
+  go(b.dataset.page);
+  if(b.dataset.page==='banco') setBancoTab(bancoTab);
+});
 document.getElementById('mobileMenu').onclick=()=>{document.getElementById('sidebar').classList.add('open');document.getElementById('overlay').classList.add('open')};
 document.getElementById('overlay').onclick=()=>{document.getElementById('sidebar').classList.remove('open');document.getElementById('overlay').classList.remove('open')};
 
 function openModal(title,body,onSave){
+  const s=document.getElementById('modalSave');
+  s.style.display='';s.textContent='Salvar';s.classList.remove('danger');
   document.getElementById('modalTitle').textContent=title;document.getElementById('modalBody').innerHTML=body;document.getElementById('modalRoot').classList.add('open');
-  document.getElementById('modalSave').onclick=onSave;
+  s.onclick=onSave;
 }
-function closeModal(){document.getElementById('modalRoot').classList.remove('open');document.getElementById('modalSave').style.display='';}
+function closeModal(){
+  document.getElementById('modalRoot').classList.remove('open');
+  const s=document.getElementById('modalSave');
+  s.style.display='';s.textContent='Salvar';s.classList.remove('danger');
+}
+function confirmDelete(msg,fn){
+  openModal('Excluir registro',`<p>${msg}</p><p class="cell-sub">Esta ação não pode ser desfeita.</p>`,()=>{fn();closeModal();renderAll();toast('Registro excluído.');});
+  const s=document.getElementById('modalSave');s.textContent='Excluir';s.classList.add('danger');
+}
+function deletePatient(id){
+  const linked=(state.prostheses||[]).filter(w=>w.patientId===id).length;
+  confirmDelete(`Excluir este paciente${linked?` e ${linked} trabalho(s) protético(s) vinculado(s)`:''}?`,()=>{
+    state.patients=state.patients.filter(x=>x.id!==id);
+    state.prostheses=(state.prostheses||[]).filter(w=>w.patientId!==id);
+  });
+}
+function deleteClinic(id){
+  const n=state.patients.filter(p=>p.clinicId===id).length;
+  if(n){toast('Há lançamentos nesta clínica. Transfira ou exclua os pacientes antes.');return;}
+  confirmDelete('Excluir esta clínica?',()=>{state.clinics=state.clinics.filter(x=>x.id!==id);});
+}
+function deleteProcedure(id){
+  const n=state.patients.filter(p=>p.procedureId===id).length;
+  if(n){toast('Há pacientes usando este procedimento. Altere-os antes de excluir.');return;}
+  confirmDelete('Excluir este procedimento e sua ficha de custo?',()=>{state.procedures=state.procedures.filter(x=>x.id!==id);});
+}
+function deleteCost(id){confirmDelete('Excluir este custo?',()=>{state.costs=state.costs.filter(x=>x.id!==id);});}
+function deletePayroll(id){confirmDelete('Excluir este lançamento de folha?',()=>{state.payroll=state.payroll.filter(x=>x.id!==id);});}
+function deleteMaterial(id){
+  const used=state.procedures.some(p=>(p.items||[]).some(i=>i.materialId===id));
+  if(used){toast('Este material está na ficha de um procedimento. Remova-o de lá antes.');return;}
+  confirmDelete('Excluir este material do banco de custos?',()=>{state.materials=state.materials.filter(x=>x.id!==id);});
+}
+function deleteProsthesis(id){confirmDelete('Excluir este trabalho protético e o histórico?',()=>{state.prostheses=state.prostheses.filter(x=>x.id!==id);});}
+
+function materialSelect(selected=''){
+  return state.materials.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).map(m=>`<option value="${m.id}" ${m.id===selected?'selected':''}>${esc(m.name)} · ${brl.format(m.unitCost)}</option>`).join('');
+}
+function procItemRow(item={}){
+  return `<div class="proc-item"><select class="select pi-mat">${materialSelect(item.materialId||'')}</select><input class="input pi-qty" type="number" min="0" step="0.01" value="${item.qty??1}"><button type="button" class="btn small icon-x" onclick="this.parentElement.remove()">×</button></div>`;
+}
+function collectProcItems(){
+  return [...document.querySelectorAll('.proc-item')].map(row=>({materialId:row.querySelector('.pi-mat').value,qty:Number(row.querySelector('.pi-qty').value||0)})).filter(x=>x.materialId&&x.qty>0);
+}
+function setBancoTab(tab){
+  bancoTab=tab||'materiais';
+  document.querySelectorAll('.subtab').forEach(b=>b.classList.toggle('active',b.dataset.tab===bancoTab));
+  const mat=document.getElementById('bancoMateriais'), proc=document.getElementById('bancoProcedimentos');
+  if(mat) mat.hidden=bancoTab!=='materiais';
+  if(proc) proc.hidden=bancoTab!=='procedimentos';
+  const actions=document.getElementById('bancoActions');
+  if(actions){
+    actions.innerHTML=bancoTab==='materiais'
+      ? `<button class="btn" onclick="importDentalCatalog()">Importar catálogo odontológico</button><button class="btn primary" onclick="openMaterialModal()">＋ Material</button>`
+      : `<button class="btn primary" onclick="openProcedureModal()">＋ Procedimento</button>`;
+  }
+  document.querySelectorAll('.nav-btn').forEach(b=>{
+    const on=b.dataset.page==='banco' && b.dataset.tab===bancoTab;
+    if(b.dataset.page==='banco') b.classList.toggle('active',on);
+  });
+  renderBanco();
+}
+function importDentalCatalog(){
+  const before=state.materials.length;
+  ensureCatalog(true);
+  const added=state.materials.length-before;
+  save();renderAll();toast(added?`${added} materiais adicionados ao banco.`:'O catálogo já estava completo.');
+}
+function renderBanco(){
+  if(!document.getElementById('bancoMaterialsTable')) return;
+  const types=[...new Set(state.materials.map(m=>m.type).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const typeSel=document.getElementById('matDbType');
+  if(typeSel){
+    const cur=typeSel.value;
+    typeSel.innerHTML='<option value="">Todos os tipos</option>'+types.map(t=>`<option ${t===cur?'selected':''}>${esc(t)}</option>`).join('');
+    typeSel.value=cur;
+  }
+  const q=(document.getElementById('matDbSearch')?.value||'').toLowerCase();
+  const tf=document.getElementById('matDbType')?.value||'';
+  const mats=state.materials.filter(m=>(!tf||m.type===tf)&&(!q||[m.name,m.brand,m.type,m.supplier].some(v=>String(v||'').toLowerCase().includes(q)))).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+  document.getElementById('bancoMaterialsTable').innerHTML=mats.map(m=>`<tr>${td('Material',`<strong>${esc(m.name)}</strong>`)}${td('Marca',esc(m.brand||'—'))}${td('Tipo',esc(m.type||'—'))}${td('Embalagem',esc(m.pack||'—'))}${td('Preço embalagem',brl.format(m.price||0))}${td('Custo unitário',`<strong>${brl.format(m.unitCost||0)}</strong>`)}${td('Estoque',String(m.stock??0))}<td class="actions-cell">${acts(`openMaterialModal('${m.id}')`,`deleteMaterial('${m.id}')`)}</td></tr>`).join('')||'<tr><td colspan="8"><div class="empty">Nenhum material no banco.</div></td></tr>';
+  const pq=(document.getElementById('procDbSearch')?.value||'').toLowerCase();
+  const procs=state.procedures.filter(p=>!pq||p.name.toLowerCase().includes(pq));
+  document.getElementById('bancoProcTable').innerHTML=procs.map(p=>{
+    const cost=procedureCost(p), mats=(p.items||[]).length;
+    return `<tr>${td('Procedimento',`<strong>${esc(p.name)}</strong>`)}${td('Preço',brl.format(p.price))}${td('Materiais',`${mats} item(ns)`)}${td('Lab / extra',brl.format(p.extra||0))}${td('Custo total',`<strong>${brl.format(cost)}</strong>`)}${td('Margem',badge(pct(p.price-cost,p.price)+'%'))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="showCostSheet('${p.id}');go('procedimentos')">Ficha</button><button class="btn small" onclick="openProcedureModal('${p.id}')">Editar custos</button><button class="btn small danger" onclick="deleteProcedure('${p.id}')">Excluir</button></div></td></tr>`;
+  }).join('')||'<tr><td colspan="7"><div class="empty">Nenhum procedimento cadastrado.</div></td></tr>';
+}
 document.getElementById('modalRoot').addEventListener('click',e=>{if(e.target.id==='modalRoot')closeModal()});
 function getv(id){return document.getElementById(id)?.value||''}
 function num(id){return Number(getv(id)||0)}
@@ -441,16 +595,51 @@ function openPatientModal(origin='',editId=''){
     });
 }
 function editPatient(id){openPatientModal('',id)}
-function openClinicModal(){
-  openModal('Nova clínica',`<div class="form-grid"><div class="field full"><label>Nome</label><input id="cName" class="input"></div><div class="field"><label>Tipo</label><select id="cType" class="select"><option>Prestação de serviço</option><option>Próprio</option></select></div><div class="field"><label>Sigla</label><input id="cColor" class="input" maxlength="3"></div><div class="field full"><label>Regra financeira</label><textarea id="cRule" class="textarea" rows="3" placeholder="Ex.: R$ 490 por implante; materiais por minha conta..."></textarea></div></div>`,()=>{
+function openClinicModal(editId=''){
+  const c=state.clinics.find(x=>x.id===editId)||{};
+  openModal(editId?'Editar clínica':'Nova clínica',`<div class="form-grid"><div class="field full"><label>Nome</label><input id="cName" class="input" value="${esc(c.name||'')}"></div><div class="field"><label>Tipo</label><select id="cType" class="select"><option ${c.type!=='Próprio'?'selected':''}>Prestação de serviço</option><option ${c.type==='Próprio'?'selected':''}>Próprio</option></select></div><div class="field"><label>Sigla</label><input id="cColor" class="input" maxlength="3" value="${esc(c.color||'')}"></div><div class="field full"><label>Regra financeira</label><textarea id="cRule" class="textarea" rows="3" placeholder="Ex.: R$ 490 por implante; materiais por minha conta...">${esc(c.rule||'')}</textarea></div></div>`,()=>{
     if(!getv('cName'))return toast('Informe o nome da clínica.');
-    state.clinics.push({id:uid(),name:getv('cName'),type:getv('cType'),rule:getv('cRule')||'Regra não definida',color:(getv('cColor')||getv('cName').slice(0,2)).toUpperCase()});save();closeModal();renderAll();toast('Clínica adicionada.');
+    const obj={id:editId||uid(),name:getv('cName'),type:getv('cType'),rule:getv('cRule')||'Regra não definida',color:(getv('cColor')||getv('cName').slice(0,2)).toUpperCase()};
+    if(editId) state.clinics=state.clinics.map(x=>x.id===editId?obj:x); else state.clinics.push(obj);
+    save();closeModal();renderAll();toast('Clínica salva.');
   })
 }
-function openProcedureModal(){
-  openModal('Novo procedimento',`<div class="form-grid"><div class="field full"><label>Procedimento</label><input id="pName" class="input"></div><div class="field"><label>Preço base</label><input id="pPrice" type="number" class="input"></div><div class="field"><label>Custos adicionais padrão</label><input id="pExtra" type="number" class="input" value="0"></div><div class="field full"><label>Observação</label><textarea class="textarea" rows="3" placeholder="A ficha detalhada de materiais poderá ser configurada depois."></textarea></div></div>`,()=>{
+function openProcedureModal(editId=''){
+  const p=state.procedures.find(x=>x.id===editId)||{items:[],extra:0,price:0};
+  const rows=(p.items&&p.items.length?p.items:[{}]).map(procItemRow).join('');
+  openModal(editId?'Editar custos do procedimento':'Novo procedimento',`<div class="form-grid"><div class="field full"><label>Procedimento</label><input id="pName" class="input" value="${esc(p.name||'')}"></div><div class="field"><label>Preço base / honorário</label><input id="pPrice" type="number" step="0.01" class="input" value="${p.price??''}"></div><div class="field"><label>Laboratório / extra</label><input id="pExtra" type="number" step="0.01" class="input" value="${p.extra??0}"></div><div class="field full"><label>Materiais utilizados (qtd. × custo unitário)</label><div id="procItems">${rows}</div><button type="button" class="btn small" onclick="document.getElementById('procItems').insertAdjacentHTML('beforeend', procItemRow())">＋ Material</button></div></div>`,()=>{
     if(!getv('pName'))return toast('Informe o nome do procedimento.');
-    state.procedures.push({id:uid(),name:getv('pName'),price:num('pPrice'),extra:num('pExtra'),items:[]});save();closeModal();renderAll();toast('Procedimento adicionado.');
+    const obj={id:editId||uid(),name:getv('pName'),price:num('pPrice'),extra:num('pExtra'),items:collectProcItems()};
+    if(editId) state.procedures=state.procedures.map(x=>x.id===editId?obj:x); else state.procedures.push(obj);
+    save();closeModal();renderAll();if(editId) showCostSheet(editId);toast('Procedimento salvo.');
+  })
+}
+function openCostModal(editId=''){
+  const types=['IMPLANTE','LAB','BIOMATERIAL','INSUMOS','COMPONENTES','EQUIPAMENTO','ALUGUEL','Transporte','Alimentação','IMPOSTO E CRO','Consultoria'];
+  const c=state.costs.find(x=>x.id===editId)||{};
+  openModal(editId?'Editar custo':'Novo custo',`<div class="form-grid"><div class="field full"><label>Descrição</label><input id="xDesc" class="input" value="${esc(c.desc||'')}"></div><div class="field"><label>Tipo</label><select id="xType" class="select">${types.map(x=>`<option ${x===c.type?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Centro de custo</label><select id="xCenter" class="select"><option>Geral</option>${state.clinics.map(cl=>`<option ${cl.name===(c.center||'')?'selected':''}>${esc(cl.name)}</option>`).join('')}</select></div><div class="field"><label>Data</label><input id="xDate" type="date" class="input" value="${c.date||todayISO()}"></div><div class="field"><label>Vencimento</label><input id="xDue" type="date" class="input" value="${c.due||addDays(7)}"></div><div class="field"><label>Forma de pagamento</label><select id="xMethod" class="select">${['PIX','BOLETO À VISTA','BOLETO PARCELADO','CRÉDITO','DÉBITO','DINHEIRO'].map(x=>`<option ${x===c.method?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Valor</label><input id="xValue" type="number" step="0.01" class="input" value="${c.value??''}"></div><div class="field"><label>Status</label><select id="xStatus" class="select">${['À PAGAR','PAGO','PARCELADO','ATRASADO'].map(x=>`<option ${x===c.status?'selected':''}>${x}</option>`).join('')}</select></div></div>`,()=>{
+    if(!getv('xDesc'))return toast('Informe a descrição.');
+    const obj={id:editId||uid(),desc:getv('xDesc'),type:getv('xType'),center:getv('xCenter'),date:getv('xDate'),due:getv('xDue'),method:getv('xMethod'),value:num('xValue'),status:getv('xStatus')};
+    if(editId) state.costs=state.costs.map(x=>x.id===editId?obj:x); else state.costs.unshift(obj);
+    save();closeModal();renderAll();toast('Custo salvo.');
+  })
+}
+function openMaterialModal(editId=''){
+  const m=state.materials.find(x=>x.id===editId)||{};
+  openModal(editId?'Editar material':'Novo material',`<div class="form-grid"><div class="field full"><label>Material</label><input id="mName" class="input" value="${esc(m.name||'')}"></div><div class="field"><label>Marca</label><input id="mBrand" class="input" value="${esc(m.brand||'')}"></div><div class="field"><label>Tipo</label><input id="mType" class="input" value="${esc(m.type||'')}" placeholder="Implante, Componente, Insumo..."></div><div class="field"><label>Fornecedor</label><input id="mSupplier" class="input" value="${esc(m.supplier||'')}"></div><div class="field"><label>Embalagem</label><input id="mPack" class="input" value="${esc(m.pack||'')}" placeholder="Ex.: 20 unidades"></div><div class="field"><label>Preço total da embalagem</label><input id="mPrice" type="number" step="0.01" class="input" value="${m.price??''}"></div><div class="field"><label>Custo unitário de utilização</label><input id="mUnit" type="number" step="0.001" class="input" value="${m.unitCost??''}"></div><div class="field"><label>Quantidade atual</label><input id="mStock" type="number" class="input" value="${m.stock??0}"></div><div class="field"><label>Estoque mínimo</label><input id="mMin" type="number" class="input" value="${m.min??1}"></div></div>`,()=>{
+    if(!getv('mName'))return toast('Informe o material.');
+    const obj={id:editId||uid(),name:getv('mName'),brand:getv('mBrand'),type:getv('mType'),supplier:getv('mSupplier'),pack:getv('mPack'),price:num('mPrice'),unitCost:num('mUnit')||num('mPrice'),stock:num('mStock'),min:num('mMin'),updated:todayISO()};
+    if(editId) state.materials=state.materials.map(x=>x.id===editId?obj:x); else state.materials.push(obj);
+    save();closeModal();renderAll();toast('Material salvo.');
+  })
+}
+function openPayrollModal(editId=''){
+  const f=state.payroll.find(x=>x.id===editId)||{};
+  openModal(editId?'Editar folha':'Novo lançamento de folha',`<div class="form-grid"><div class="field full"><label>Profissional</label><input id="fPayName" class="input" value="${esc(f.name||'')}"></div><div class="field"><label>Tipo</label><select id="fPayType" class="select">${['Fixo','Diária','Comissão','Produção'].map(x=>`<option ${x===f.type?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Competência</label><input id="fPayPeriod" class="input" value="${esc(f.period||'09/2026')}"></div><div class="field"><label>Centro</label><select id="fPayCenter" class="select"><option>Geral</option>${state.clinics.map(c=>`<option ${c.name===f.center?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label>Valor</label><input id="fPayValue" type="number" class="input" value="${f.value??''}"></div><div class="field"><label>Status</label><select id="fPayStatus" class="select"><option ${f.status!=='Pago'?'selected':''}>A pagar</option><option ${f.status==='Pago'?'selected':''}>Pago</option></select></div></div>`,()=>{
+    if(!getv('fPayName'))return toast('Informe o profissional.');
+    const obj={id:editId||uid(),name:getv('fPayName'),type:getv('fPayType'),period:getv('fPayPeriod'),center:getv('fPayCenter'),value:num('fPayValue'),status:getv('fPayStatus')};
+    if(editId) state.payroll=state.payroll.map(x=>x.id===editId?obj:x); else state.payroll.push(obj);
+    save();closeModal();renderAll();toast('Folha salva.');
   })
 }
 function openReceivableModal(type=''){
@@ -459,29 +648,10 @@ function openReceivableModal(type=''){
     const cl=getv('rClinic'); state.patients.unshift({id:uid(),name:getv('rName'),origin:cl==='particular'?'Particular':'Prestação',clinicId:cl,procedureId:getv('rProc'),date:todayISO(),value:num('rValue'),received:num('rReceived'),due:getv('rDue'),status:getv('rStatus'),cost:0,lab:0,components:0,clinical:0,progress:'Em tratamento'});save();closeModal();renderAll();toast('Recebível lançado.');
   })
 }
-function openCostModal(){
-  const types=['IMPLANTE','LAB','BIOMATERIAL','INSUMOS','COMPONENTES','EQUIPAMENTO','ALUGUEL','Transporte','Alimentação','IMPOSTO E CRO','Consultoria'];
-  openModal('Novo custo',`<div class="form-grid"><div class="field full"><label>Descrição</label><input id="xDesc" class="input"></div><div class="field"><label>Tipo</label><select id="xType" class="select">${types.map(x=>`<option>${x}</option>`).join('')}</select></div><div class="field"><label>Centro de custo</label><select id="xCenter" class="select"><option>Geral</option>${state.clinics.map(c=>`<option>${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label>Data</label><input id="xDate" type="date" class="input" value="${todayISO()}"></div><div class="field"><label>Vencimento</label><input id="xDue" type="date" class="input" value="${addDays(7)}"></div><div class="field"><label>Forma de pagamento</label><select id="xMethod" class="select"><option>PIX</option><option>BOLETO À VISTA</option><option>BOLETO PARCELADO</option><option>CRÉDITO</option><option>DÉBITO</option><option>DINHEIRO</option></select></div><div class="field"><label>Valor</label><input id="xValue" type="number" step="0.01" class="input"></div><div class="field"><label>Status</label><select id="xStatus" class="select"><option>À PAGAR</option><option>PAGO</option><option>PARCELADO</option><option>ATRASADO</option></select></div></div>`,()=>{
-    if(!getv('xDesc'))return toast('Informe a descrição.');
-    state.costs.unshift({id:uid(),desc:getv('xDesc'),type:getv('xType'),center:getv('xCenter'),date:getv('xDate'),due:getv('xDue'),method:getv('xMethod'),value:num('xValue'),status:getv('xStatus')});save();closeModal();renderAll();toast('Custo lançado.');
-  })
-}
-function openMaterialModal(){
-  openModal('Novo material',`<div class="form-grid"><div class="field full"><label>Material</label><input id="mName" class="input"></div><div class="field"><label>Marca</label><input id="mBrand" class="input"></div><div class="field"><label>Tipo</label><input id="mType" class="input"></div><div class="field"><label>Fornecedor</label><input id="mSupplier" class="input"></div><div class="field"><label>Embalagem</label><input id="mPack" class="input" placeholder="Ex.: 20 unidades"></div><div class="field"><label>Preço total</label><input id="mPrice" type="number" step="0.01" class="input"></div><div class="field"><label>Custo unitário</label><input id="mUnit" type="number" step="0.001" class="input"></div><div class="field"><label>Quantidade atual</label><input id="mStock" type="number" class="input"></div><div class="field"><label>Estoque mínimo</label><input id="mMin" type="number" class="input"></div></div>`,()=>{
-    if(!getv('mName'))return toast('Informe o material.');
-    state.materials.push({id:uid(),name:getv('mName'),brand:getv('mBrand'),type:getv('mType'),supplier:getv('mSupplier'),pack:getv('mPack'),price:num('mPrice'),unitCost:num('mUnit')||num('mPrice'),stock:num('mStock'),min:num('mMin'),updated:todayISO()});save();closeModal();renderAll();toast('Material cadastrado.');
-  })
-}
 function openStockModal(){
   openModal('Movimentar estoque',`<div class="form-grid"><div class="field full"><label>Material</label><select id="sMaterial" class="select">${state.materials.map(m=>`<option value="${m.id}">${esc(m.name)} · saldo ${m.stock}</option>`).join('')}</select></div><div class="field"><label>Movimento</label><select id="sType" class="select"><option value="in">Entrada</option><option value="out">Saída / consumo</option></select></div><div class="field"><label>Quantidade</label><input id="sQty" type="number" class="input" value="1"></div></div>`,()=>{
     const m=state.materials.find(x=>x.id===getv('sMaterial'));if(!m)return;
     const q=num('sQty');m.stock=Math.max(0,Number(m.stock)+(getv('sType')==='in'?q:-q));save();closeModal();renderAll();toast('Estoque atualizado.');
-  })
-}
-function openPayrollModal(){
-  openModal('Novo lançamento de folha',`<div class="form-grid"><div class="field full"><label>Profissional</label><input id="fPayName" class="input"></div><div class="field"><label>Tipo</label><select id="fPayType" class="select"><option>Fixo</option><option>Diária</option><option>Comissão</option><option>Produção</option></select></div><div class="field"><label>Competência</label><input id="fPayPeriod" class="input" value="09/2026"></div><div class="field"><label>Centro</label><select id="fPayCenter" class="select"><option>Geral</option>${state.clinics.map(c=>`<option>${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label>Valor</label><input id="fPayValue" type="number" class="input"></div><div class="field"><label>Status</label><select id="fPayStatus" class="select"><option>A pagar</option><option>Pago</option></select></div></div>`,()=>{
-    if(!getv('fPayName'))return toast('Informe o profissional.');
-    state.payroll.push({id:uid(),name:getv('fPayName'),type:getv('fPayType'),period:getv('fPayPeriod'),center:getv('fPayCenter'),value:num('fPayValue'),status:getv('fPayStatus')});save();closeModal();renderAll();toast('Folha atualizada.');
   })
 }
 function openQuickModal(){
@@ -523,7 +693,9 @@ async function boot(){
       await fetch('api/state.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});
     }
   }catch(e){ /* fallback localStorage */ }
+  ensureCatalog();
   ensureProstheses();
   renderAll();
+  setBancoTab(bancoTab);
 }
 boot();

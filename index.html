@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Chevalier Gestão — Clínica & Performance</title>
 <meta name="theme-color" content="#171816">
 <meta name="description" content="Chevalier Gestão — gestão clínica, financeira, pacientes, custos, estoque e rentabilidade.">
@@ -62,6 +62,12 @@
     </div>
 
     <div class="nav-group">
+      <div class="nav-label">Banco de dados</div>
+      <button class="nav-btn" data-page="banco" data-tab="materiais"><span class="nav-icon">▣</span>Custos de materiais</button>
+      <button class="nav-btn" data-page="banco" data-tab="procedimentos"><span class="nav-icon">✦</span>Procedimentos</button>
+    </div>
+
+    <div class="nav-group">
       <div class="nav-label">Sistema</div>
       <button class="nav-btn" data-page="config"><span class="nav-icon">⚙</span>Configurações</button>
     </div>
@@ -84,7 +90,7 @@
       <div class="spacer"></div>
       <div class="top-date" id="todayLabel"></div>
       <button class="icon-btn" title="Notificações">♧</button>
-      <button class="btn primary" onclick="openQuickModal()">＋ Novo lançamento</button>
+      <button class="btn primary top-new" onclick="openQuickModal()">＋ Novo</button>
     </header>
 
     <div class="content">
@@ -225,7 +231,7 @@
             <div class="card-head"><h3>Catálogo</h3></div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Procedimento</th><th>Preço base</th><th>Custo padrão</th><th>Margem proj.</th><th>Ficha</th></tr></thead>
+                <thead><tr><th>Procedimento</th><th>Preço base</th><th>Custo padrão</th><th>Margem proj.</th><th></th></tr></thead>
                 <tbody id="proceduresTable"></tbody>
               </table>
             </div>
@@ -262,7 +268,7 @@
           <div class="page-actions"><button class="btn primary" onclick="openPatientModal('Particular')">＋ Novo caso particular</button></div>
         </div>
         <div class="card"><div class="table-wrap"><table>
-          <thead><tr><th>Paciente</th><th>Procedimento</th><th>Contratado</th><th>Recebido</th><th>Lab</th><th>Componentes</th><th>Clínica</th><th>Lucro proj.</th><th>Progresso</th></tr></thead>
+          <thead><tr><th>Paciente</th><th>Procedimento</th><th>Contratado</th><th>Recebido</th><th>Lab</th><th>Componentes</th><th>Clínica</th><th>Lucro proj.</th><th>Progresso</th><th></th></tr></thead>
           <tbody id="privateTable"></tbody>
         </table></div></div>
       </section>
@@ -402,7 +408,7 @@
         </div>
         <div class="grid layout-2">
           <div class="card"><div class="card-head"><h3>Lançamentos</h3></div><div class="table-wrap"><table>
-            <thead><tr><th>Profissional</th><th>Tipo</th><th>Competência</th><th>Centro</th><th>Valor</th><th>Status</th></tr></thead>
+            <thead><tr><th>Profissional</th><th>Tipo</th><th>Competência</th><th>Centro</th><th>Valor</th><th>Status</th><th></th></tr></thead>
             <tbody id="payrollTable"></tbody>
           </table></div></div>
           <div class="card"><div class="card-head"><h3>Resumo</h3></div><div class="card-body" id="payrollSummary"></div></div>
@@ -434,7 +440,7 @@
           <div class="page-actions"><button class="btn primary" onclick="openMaterialModal()">＋ Novo material</button></div>
         </div>
         <div class="card"><div class="table-wrap"><table>
-          <thead><tr><th>Material</th><th>Marca</th><th>Tipo</th><th>Fornecedor</th><th>Embalagem</th><th>Preço atual</th><th>Custo unit.</th><th>Atualizado</th></tr></thead>
+          <thead><tr><th>Material</th><th>Marca</th><th>Tipo</th><th>Fornecedor</th><th>Embalagem</th><th>Preço atual</th><th>Custo unit.</th><th>Atualizado</th><th></th></tr></thead>
           <tbody id="materialsTable"></tbody>
         </table></div></div>
       </section>
@@ -451,9 +457,40 @@
           <div class="kpi"><div class="label">Itens cadastrados</div><div class="value" id="stockItems">0</div></div>
         </div>
         <div class="card"><div class="table-wrap"><table>
-          <thead><tr><th>Item</th><th>Marca</th><th>Tipo</th><th>Atual</th><th>Mínimo</th><th>Custo unit.</th><th>Valor estoque</th><th>Status</th></tr></thead>
+          <thead><tr><th>Item</th><th>Marca</th><th>Tipo</th><th>Atual</th><th>Mínimo</th><th>Custo unit.</th><th>Valor estoque</th><th>Status</th><th></th></tr></thead>
           <tbody id="stockTable"></tbody>
         </table></div></div>
+      </section>
+
+      <!-- BANCO DE DADOS -->
+      <section class="page" id="page-banco">
+        <div class="page-head">
+          <div><h2>Banco de dados</h2><p>Custos unitários de materiais odontológicos e ficha de custo de cada procedimento.</p></div>
+          <div class="page-actions" id="bancoActions"></div>
+        </div>
+        <div class="subtabs" role="tablist">
+          <button class="subtab active" data-tab="materiais" onclick="setBancoTab('materiais')">Materiais</button>
+          <button class="subtab" data-tab="procedimentos" onclick="setBancoTab('procedimentos')">Procedimentos</button>
+        </div>
+        <div id="bancoMateriais">
+          <div class="toolbar">
+            <input class="input" id="matDbSearch" placeholder="Buscar material, marca, tipo..." oninput="renderBanco()">
+            <select class="select" id="matDbType" onchange="renderBanco()"><option value="">Todos os tipos</option></select>
+          </div>
+          <div class="card"><div class="table-wrap"><table>
+            <thead><tr><th>Material</th><th>Marca</th><th>Tipo</th><th>Embalagem</th><th>Preço embalagem</th><th>Custo unitário</th><th>Estoque</th><th></th></tr></thead>
+            <tbody id="bancoMaterialsTable"></tbody>
+          </table></div></div>
+        </div>
+        <div id="bancoProcedimentos" hidden>
+          <div class="toolbar">
+            <input class="input" id="procDbSearch" placeholder="Buscar procedimento..." oninput="renderBanco()">
+          </div>
+          <div class="card"><div class="table-wrap"><table>
+            <thead><tr><th>Procedimento</th><th>Preço</th><th>Materiais</th><th>Lab / extra</th><th>Custo total</th><th>Margem</th><th></th></tr></thead>
+            <tbody id="bancoProcTable"></tbody>
+          </table></div></div>
+        </div>
       </section>
 
       <!-- CONFIG -->
