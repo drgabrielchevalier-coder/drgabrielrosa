@@ -46,6 +46,12 @@ const seed = {
   payroll:[
     {id:'f1',name:'Auxiliar clínica',type:'Diária',period:'09/2026',center:'Particular',value:300,status:'Pago'},
     {id:'f2',name:'Apoio administrativo',type:'Fixo',period:'09/2026',center:'Geral',value:450,status:'A pagar'}
+  ],
+  prostheses:[
+    {id:'pr1',code:'CG0001',patientId:'pt3',type:'Coroa sobre implante',tooth:'26',lab:'Precisão Lab',cost:450,stage:1,labStatus:'Em produção',entry:pastDays(18),due:addDays(5),urgent:false,shade:'A2',notes:'Componente CM enviado junto.',events:[{date:pastDays(18),stage:0,note:'Trabalho cadastrado'},{date:pastDays(12),stage:1,note:'Enviado ao laboratório'}]},
+    {id:'pr2',code:'CG0002',patientId:'pt4',type:'Coroa de zircônia',tooth:'16',lab:'Ateliê Dental',cost:450,stage:3,labStatus:'Recebido — aguardando agendamento',entry:pastDays(9),due:pastDays(1),urgent:true,shade:'A3',notes:'Aguardando cimentação.',events:[{date:pastDays(9),stage:0,note:'Moldagem registrada'},{date:pastDays(7),stage:1,note:'Enviado ao laboratório'},{date:pastDays(2),stage:2,note:'Prova realizada'},{date:pastDays(1),stage:3,note:'Peça pronta na clínica'}]},
+    {id:'pr3',code:'CG0003',patientId:'pt1',type:'Protocolo superior',tooth:'Superior',lab:'OralLab',cost:1900,stage:4,labStatus:'Entregue / instalado',entry:pastDays(40),due:pastDays(10),urgent:false,shade:'BL3',notes:'Instalado e alta.',events:[{date:pastDays(40),stage:0,note:'Trabalho cadastrado'},{date:pastDays(28),stage:1,note:'Em produção'},{date:pastDays(14),stage:2,note:'Prova de dentes'},{date:pastDays(10),stage:4,note:'Instalado'}]},
+    {id:'pr4',code:'CG0004',patientId:'pt5',type:'Faceta de porcelana',tooth:'11-21',lab:'Ateliê Dental',cost:620,stage:2,labStatus:'Prova / ajustes',entry:pastDays(6),due:addDays(4),urgent:false,shade:'A1',notes:'Ajuste de borda incisal.',events:[{date:pastDays(6),stage:0,note:'Trabalho cadastrado'},{date:pastDays(4),stage:1,note:'Enviado ao laboratório'},{date:pastDays(1),stage:2,note:'Prova em boca'}]}
   ]
 };
 
@@ -190,12 +196,163 @@ function renderPrivate(){
   const arr=state.patients.filter(p=>p.clinicId==='particular'||p.origin==='Particular');
   document.getElementById('privateTable').innerHTML=arr.map(p=>`<tr><td><strong>${esc(p.name)}</strong></td><td>${esc(procedure(p.procedureId).name)}</td><td>${brl.format(p.value)}</td><td>${brl.format(p.received)}</td><td>${brl.format(p.lab||0)}</td><td>${brl.format(p.components||0)}</td><td>${brl.format(p.clinical||0)}</td><td><strong>${brl.format(patientProfit(p))}</strong></td><td>${badge(p.progress)}</td></tr>`).join('')||'<tr><td colspan="9"><div class="empty">Sem casos particulares.</div></td></tr>';
 }
+const PROSTH_STAGES=['Entrada','Laboratório','Prova','Pronto / entrega','Instalado'];
+const LAB_STATUS=['Aguardando envio','Enviado ao laboratório','Em produção','Recebido — aguardando agendamento','Prova / ajustes','Retornado ao laboratório','Entregue / instalado'];
+
+function patientById(id){return state.patients.find(x=>x.id===id)||{name:'Paciente não encontrado',id:''}}
+function initials(name){return String(name||'?').split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase()}
+function prosthLate(w){return Number(w.stage)<4 && w.due && w.due<todayISO()}
+function prosthDeadlineBadge(w){
+  if(Number(w.stage)===4) return '<span class="badge b-green">Concluído</span>';
+  return prosthLate(w)?'<span class="badge b-red">Atrasado</span>':'<span class="badge b-green">No prazo</span>';
+}
+function prosthStageBadge(w){return badge(PROSTH_STAGES[Number(w.stage)]||'Etapa')}
+function nextProsthCode(){
+  const n=state.prostheses.map(w=>Number(String(w.code||'').replace(/\D/g,''))||0);
+  return 'CG'+String(Math.max(0,...n)+1).padStart(4,'0');
+}
+function ensureProstheses(){
+  if(!Array.isArray(state.prostheses)) state.prostheses=[];
+  if(state.prostheses.length) return;
+  const map={'Moldagem':0,'Enviado para Laboratório':1,'Aguardando Prova':2,'Aguardando Cimentação':3,'Alta':4};
+  state.patients.filter(p=>map[p.progress]!=null || Number(p.lab)>0).forEach((p,i)=>{
+    const stage=map[p.progress]??1;
+    state.prostheses.push({
+      id:uid(),code:'CG'+String(i+1).padStart(4,'0'),patientId:p.id,type:procedure(p.procedureId).name,tooth:'',lab:'Laboratório',
+      cost:Number(p.lab||0),stage,labStatus:LAB_STATUS[Math.min(stage,LAB_STATUS.length-1)],entry:p.date,due:p.due||addDays(10),urgent:false,shade:'',notes:'',
+      events:[{date:p.date||todayISO(),stage,note:'Importado do progresso clínico'}]
+    });
+  });
+}
+function filteredProstheses(){
+  const q=(document.getElementById('prosthSearch')?.value||'').toLowerCase();
+  const f=document.getElementById('prosthFilter')?.value||'all';
+  return state.prostheses.filter(w=>{
+    const pat=patientById(w.patientId);
+    const hay=[pat.name,w.code,w.type,w.lab,w.tooth,w.shade].some(v=>String(v||'').toLowerCase().includes(q));
+    const ok=f==='all'||f==='active'&&w.stage<4||f==='late'&&prosthLate(w)||f==='urgent'&&w.urgent||String(w.stage)===f;
+    return hay&&ok;
+  }).sort((a,b)=>(Number(b.urgent)-Number(a.urgent))||(Number(prosthLate(b))-Number(prosthLate(a)))||String(a.due).localeCompare(String(b.due)));
+}
+function renderTrabalhos(){
+  const list=state.prostheses;
+  const active=list.filter(w=>w.stage<4);
+  document.getElementById('prosthActive').textContent=active.length;
+  document.getElementById('prosthLab').textContent=list.filter(w=>w.stage===1).length;
+  document.getElementById('prosthLate').textContent=active.filter(prosthLate).length;
+  document.getElementById('prosthUrgent').textContent=active.filter(w=>w.urgent).length;
+  const badgeEl=document.getElementById('badgeProtese');
+  if(badgeEl) badgeEl.textContent=active.length;
+  const rows=filteredProstheses();
+  document.getElementById('prosthTable').innerHTML=rows.map(w=>{
+    const pat=patientById(w.patientId);
+    return `<tr class="${w.urgent?'urgent-row':''}">
+      <td class="name-cell"><button class="row-link" onclick="openProsthesisDetail('${w.id}')"><strong>${esc(pat.name)}</strong><span>${esc(w.code)} · ${esc(w.type)}${w.tooth?' · '+esc(w.tooth):''}</span></button>${w.urgent?' <span class="badge b-red">Urgente</span>':''}</td>
+      <td>${esc(w.lab||'—')}<div class="cell-sub">${Number(w.cost)>0?brl.format(w.cost):'Custo não informado'}</div></td>
+      <td>${fmtDate(w.due)}</td>
+      <td>${prosthDeadlineBadge(w)}</td>
+      <td>${prosthStageBadge(w)}<div class="cell-sub">${esc(w.labStatus||'')}</div></td>
+      <td><button class="btn small" onclick="openProsthesisDetail('${w.id}')">Abrir</button></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="6"><div class="empty">Nenhum trabalho protético encontrado.</div></td></tr>';
+}
 function renderLab(){
-  const stages=['Moldagem','Enviado para Laboratório','Aguardando Prova','Aguardando Cimentação','Alta'];
-  document.getElementById('labColumns').innerHTML=stages.map(stage=>{
-    const arr=state.patients.filter(p=>(p.progress||'').includes(stage.replace('Enviado para ','').replace('Aguardando ',''))||p.progress===stage);
-    return `<div class="card"><div class="card-head"><h3>${stage}</h3><div class="right"><span class="badge b-gray">${arr.length}</span></div></div><div class="card-body list">${arr.length?arr.map(p=>`<div class="list-item"><div class="avatar">${esc(p.name.split(' ').map(x=>x[0]).join('').slice(0,2))}</div><div class="list-main"><strong>${esc(p.name)}</strong><span>${esc(procedure(p.procedureId).name)} · ${esc(clinic(p.clinicId).name)}</span></div><div class="list-value">${brl.format(p.lab||0)}</div></div>`).join(''):'<div class="empty">Nenhum trabalho.</div>'}</div></div>`;
+  document.getElementById('labColumns').innerHTML=PROSTH_STAGES.map((stage,i)=>{
+    const arr=state.prostheses.filter(w=>Number(w.stage)===i);
+    return `<div class="card"><div class="card-head"><h3>${stage}</h3><div class="right"><span class="badge b-gray">${arr.length}</span></div></div><div class="card-body list">${arr.length?arr.map(w=>{
+      const pat=patientById(w.patientId);
+      return `<button class="list-item kanban-item" onclick="openProsthesisDetail('${w.id}')"><div class="avatar">${esc(initials(pat.name))}</div><div class="list-main"><strong>${esc(pat.name)}</strong><span>${esc(w.type)} · ${esc(w.lab||'Lab')}</span></div><div class="list-value">${prosthLate(w)?'<span class="badge b-red">Atraso</span>':fmtDate(w.due)}</div></button>`;
+    }).join(''):'<div class="empty">Nenhum trabalho.</div>'}</div></div>`;
   }).join('');
+}
+function renderEntregas(){
+  const limit=addDays(14);
+  const rows=state.prostheses.filter(w=>w.stage<4 && w.due && w.due<=limit).sort((a,b)=>String(a.due).localeCompare(String(b.due)));
+  document.getElementById('entregasTable').innerHTML=rows.map(w=>{
+    const pat=patientById(w.patientId);
+    return `<tr><td>${fmtDate(w.due)}</td><td><strong>${esc(pat.name)}</strong></td><td>${esc(w.type)}<div class="cell-sub">${esc(w.code)}</div></td><td>${esc(w.lab||'—')}</td><td>${prosthStageBadge(w)}</td><td>${prosthDeadlineBadge(w)}</td><td><button class="btn small" onclick="openProsthesisDetail('${w.id}')">Abrir</button></td></tr>`;
+  }).join('')||'<tr><td colspan="7"><div class="empty">Nenhuma entrega ou prova nos próximos 14 dias.</div></td></tr>';
+}
+function renderTimeline(){
+  const events=state.prostheses.flatMap(w=>(w.events||[]).map(e=>({...e,w}))).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  document.getElementById('prosthTimeline').innerHTML=events.length?`<div class="timeline">${events.map(e=>{
+    const pat=patientById(e.w.patientId);
+    return `<div class="timeline-item"><span class="timeline-dot"></span><div><strong>${esc(pat.name)} · ${esc(e.w.type)}</strong><span>${fmtDate(e.date)} · ${esc(PROSTH_STAGES[e.stage]||'Movimentação')} · ${esc(e.w.code)}</span><p>${esc(e.note||'Etapa atualizada')}</p></div></div>`;
+  }).join('')}</div>`:'<div class="empty">Ainda não há movimentações registradas.</div>';
+}
+function lookupProsthesis(){
+  const raw=(document.getElementById('lookupCode')?.value||'').trim().toUpperCase();
+  const box=document.getElementById('lookupResult');
+  if(!raw){box.innerHTML='<div class="empty">Informe um código.</div>';return;}
+  const w=state.prostheses.find(x=>String(x.code).toUpperCase()===raw||x.id===raw);
+  if(!w){box.innerHTML='<div class="empty">Código não encontrado.</div>';return;}
+  const pat=patientById(w.patientId);
+  box.innerHTML=`<div class="lookup-card"><strong>${esc(pat.name)}</strong><span class="code">${esc(w.code)}</span><p>${esc(w.type)} · ${esc(w.lab||'Lab')} · ${esc(PROSTH_STAGES[w.stage])}</p><p>Previsão ${fmtDate(w.due)} · ${w.labStatus||''}</p><button class="btn primary" onclick="openProsthesisDetail('${w.id}')">Abrir ficha</button></div>`;
+}
+function openProsthesisModal(editId=''){
+  if(!state.patients.length){toast('Cadastre um paciente antes.');return;}
+  const w=state.prostheses.find(x=>x.id===editId)||{};
+  openModal(editId?'Editar trabalho protético':'Novo trabalho protético',`
+    <div class="form-grid">
+      <div class="field full"><label>Paciente</label><select id="wPatient" class="select">${state.patients.map(p=>`<option value="${p.id}" ${p.id===(w.patientId||'')?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
+      <div class="field"><label>Tipo de trabalho</label><input id="wType" class="input" value="${esc(w.type||'')}" placeholder="Ex.: Coroa sobre implante"></div>
+      <div class="field"><label>Dente / região</label><input id="wTooth" class="input" value="${esc(w.tooth||'')}" placeholder="Ex.: 16 ou arcada superior"></div>
+      <div class="field"><label>Laboratório</label><input id="wLab" class="input" value="${esc(w.lab||'')}" placeholder="Nome do laboratório"></div>
+      <div class="field"><label>Custo do laboratório (R$)</label><input id="wCost" type="number" step="0.01" class="input" value="${w.cost??''}"></div>
+      <div class="field"><label>Cor / escala</label><input id="wShade" class="input" value="${esc(w.shade||'')}" placeholder="Ex.: A2"></div>
+      <div class="field"><label>Etapa atual</label><select id="wStage" class="select">${PROSTH_STAGES.map((s,i)=>`<option value="${i}" ${Number(w.stage)===i?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label>Status laboratorial</label><select id="wLabStatus" class="select">${LAB_STATUS.map(s=>`<option ${s===(w.labStatus||'Aguardando envio')?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label>Início</label><input id="wEntry" type="date" class="input" value="${w.entry||todayISO()}"></div>
+      <div class="field"><label>Previsão de entrega</label><input id="wDue" type="date" class="input" value="${w.due||addDays(14)}"></div>
+      <div class="field full"><label class="check-row"><input type="checkbox" id="wUrgent" ${w.urgent?'checked':''}> <strong>URGENTE</strong> — prioriza este trabalho</label></div>
+      <div class="field full"><label>Observações</label><textarea id="wNotes" class="textarea" rows="3">${esc(w.notes||'')}</textarea></div>
+    </div>`,()=>{
+      if(!getv('wType')) return toast('Informe o tipo de trabalho.');
+      if(!getv('wLab')) return toast('Informe o laboratório.');
+      const stage=Number(getv('wStage')||0);
+      if(editId){
+        const found=state.prostheses.find(x=>x.id===editId); if(!found)return;
+        Object.assign(found,{patientId:getv('wPatient'),type:getv('wType'),tooth:getv('wTooth'),lab:getv('wLab'),cost:num('wCost'),shade:getv('wShade'),stage,labStatus:getv('wLabStatus'),entry:getv('wEntry'),due:getv('wDue'),urgent:document.getElementById('wUrgent').checked,notes:getv('wNotes')});
+      }else{
+        state.prostheses.unshift({id:uid(),code:nextProsthCode(),patientId:getv('wPatient'),type:getv('wType'),tooth:getv('wTooth'),lab:getv('wLab'),cost:num('wCost'),shade:getv('wShade'),stage,labStatus:getv('wLabStatus'),entry:getv('wEntry'),due:getv('wDue'),urgent:document.getElementById('wUrgent').checked,notes:getv('wNotes'),events:[{date:getv('wEntry')||todayISO(),stage,note:'Trabalho cadastrado'}]});
+      }
+      save();closeModal();renderAll();toast('Trabalho protético salvo.');
+    });
+}
+function openProsthesisDetail(id){
+  const w=state.prostheses.find(x=>x.id===id); if(!w)return;
+  const pat=patientById(w.patientId);
+  const flow=PROSTH_STAGES.map((s,i)=>`<div class="workflow-step ${Number(w.stage)===i?'current':''} ${i<Number(w.stage)?'done':''}"><span>${i+1}</span><div><strong>${s}</strong></div></div>`).join('');
+  const hist=(w.events||[]).slice().reverse().map(e=>`<div class="detail-event"><span class="event-dot"></span><div><strong>${esc(PROSTH_STAGES[e.stage]||'Movimentação')}</strong><p>${fmtDate(e.date)}${e.note?' · '+esc(e.note):''}</p></div></div>`).join('');
+  openModal('Ficha do trabalho',`
+    <div class="detail-top"><div><h3 style="margin:0 0 4px">${esc(pat.name)}</h3><span class="code">${esc(w.code)}</span> ${w.urgent?'<span class="badge b-red">Urgente</span>':''} ${prosthDeadlineBadge(w)}</div></div>
+    <div class="detail-grid">${[['Tipo',w.type],['Dente / região',w.tooth||'—'],['Laboratório',w.lab||'—'],['Cor',w.shade||'—'],['Custo',Number(w.cost)?brl.format(w.cost):'—'],['Etapa',PROSTH_STAGES[w.stage]],['Status lab',w.labStatus||'—'],['Previsão',fmtDate(w.due)]].map(([k,v])=>`<div><span>${k}</span><strong>${esc(v)}</strong></div>`).join('')}</div>
+    ${prosthLate(w)?'<div class="warning-banner">Este trabalho está atrasado. A previsão foi ultrapassada e o caso ainda não foi instalado.</div>':''}
+    <h3 class="section-title">Fluxo protético</h3><div class="workflow-stepper">${flow}</div>
+    ${w.notes?`<h3 class="section-title">Observações</h3><p class="note-text">${esc(w.notes)}</p>`:''}
+    <h3 class="section-title">Histórico</h3><div class="detail-timeline">${hist||'<div class="empty">Sem movimentações.</div>'}</div>
+    <div class="form-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+      <button class="btn" onclick="closeModal();openProsthesisModal('${w.id}')">Editar</button>
+      <button class="btn primary" onclick="closeModal();openAdvanceProsthesis('${w.id}')">Registrar evolução</button>
+    </div>`,()=>closeModal());
+  document.getElementById('modalSave').style.display='none';
+}
+function openAdvanceProsthesis(id){
+  const w=state.prostheses.find(x=>x.id===id); if(!w)return;
+  const next=Math.min(4,Number(w.stage)+1);
+  openModal('Registrar evolução',`
+    <div class="form-grid">
+      <div class="field full"><label>Próxima etapa</label><select id="aStage" class="select">${PROSTH_STAGES.map((s,i)=>`<option value="${i}" ${i===next?'selected':''}>${i===Number(w.stage)?'Manter em · ':''}${s}</option>`).join('')}</select></div>
+      <div class="field full"><label>Status laboratorial</label><select id="aLabStatus" class="select">${LAB_STATUS.map(s=>`<option ${s===w.labStatus?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label>Data</label><input id="aDate" type="date" class="input" value="${todayISO()}"></div>
+      <div class="field full"><label>Observação</label><textarea id="aNote" class="textarea" rows="3" placeholder="Ex.: prova insatisfatória, alterar cor, retornar ao laboratório..."></textarea></div>
+    </div>`,()=>{
+      const stage=Number(getv('aStage')||0);
+      w.stage=stage; w.labStatus=getv('aLabStatus');
+      if(stage===4) w.labStatus='Entregue / instalado';
+      w.events=w.events||[]; w.events.push({date:getv('aDate')||todayISO(),stage,note:getv('aNote')||'Etapa atualizada'});
+      save();closeModal();renderAll();openProsthesisDetail(id);toast('Movimentação registrada.');
+    });
 }
 function setReceivableFilter(v,btn){
   receivableFilter=v;
@@ -232,7 +389,7 @@ function renderStock(){
   document.getElementById('stockValue').textContent=brl.format(val);document.getElementById('stockLow').textContent=low.length;document.getElementById('stockItems').textContent=state.materials.length;
   document.getElementById('stockTable').innerHTML=state.materials.map(m=>`<tr><td><strong>${esc(m.name)}</strong></td><td>${esc(m.brand)}</td><td>${esc(m.type)}</td><td>${m.stock}</td><td>${m.min}</td><td>${brl.format(m.unitCost)}</td><td>${brl.format(m.stock*m.unitCost)}</td><td>${m.stock<=m.min?'<span class="badge b-red">Reposição</span>':'<span class="badge b-green">OK</span>'}</td></tr>`).join('');
 }
-function renderAll(){renderDashboard();renderPatients();renderClinics();renderProcedures();renderService();renderPrivate();renderLab();renderReceivables();renderCosts();renderPayroll();renderReports();renderMaterials();renderStock();}
+function renderAll(){ensureProstheses();renderDashboard();renderPatients();renderClinics();renderProcedures();renderService();renderPrivate();renderTrabalhos();renderLab();renderEntregas();renderTimeline();renderReceivables();renderCosts();renderPayroll();renderReports();renderMaterials();renderStock();}
 
 function go(page){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -249,7 +406,7 @@ function openModal(title,body,onSave){
   document.getElementById('modalTitle').textContent=title;document.getElementById('modalBody').innerHTML=body;document.getElementById('modalRoot').classList.add('open');
   document.getElementById('modalSave').onclick=onSave;
 }
-function closeModal(){document.getElementById('modalRoot').classList.remove('open')}
+function closeModal(){document.getElementById('modalRoot').classList.remove('open');document.getElementById('modalSave').style.display='';}
 document.getElementById('modalRoot').addEventListener('click',e=>{if(e.target.id==='modalRoot')closeModal()});
 function getv(id){return document.getElementById(id)?.value||''}
 function num(id){return Number(getv(id)||0)}
@@ -328,7 +485,7 @@ function openPayrollModal(){
   })
 }
 function openQuickModal(){
-  openModal('Novo lançamento',`<div class="grid layout-3"><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openPatientModal()">Paciente</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openReceivableModal()">Recebível</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openCostModal()">Custo</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openMaterialModal()">Material</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openStockModal()">Estoque</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openPayrollModal()">Folha</button></div>`,()=>closeModal());
+  openModal('Novo lançamento',`<div class="grid layout-3"><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openPatientModal()">Paciente</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openProsthesisModal()">Trabalho protético</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openReceivableModal()">Recebível</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openCostModal()">Custo</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openMaterialModal()">Material</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openStockModal()">Estoque</button></div>`,()=>closeModal());
   document.getElementById('modalSave').style.display='none';
   setTimeout(()=>document.getElementById('modalSave').style.display='',0);
 }
@@ -344,6 +501,8 @@ function exportData(){
 }
 document.getElementById('globalSearch').addEventListener('input',e=>{
   const q=e.target.value.toLowerCase().trim();if(!q)return;
+  const work=state.prostheses.find(w=>String(w.code).toLowerCase().includes(q)||String(w.type).toLowerCase().includes(q)||patientById(w.patientId).name.toLowerCase().includes(q));
+  if(work){go('trabalhos');const s=document.getElementById('prosthSearch');if(s)s.value=q;renderTrabalhos();return;}
   const p=state.patients.find(x=>x.name.toLowerCase().includes(q)||procedure(x.procedureId).name.toLowerCase().includes(q));
   if(p){go('pacientes');document.getElementById('patientSearch').value=q;renderPatients();}
 });
@@ -364,6 +523,7 @@ async function boot(){
       await fetch('api/state.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});
     }
   }catch(e){ /* fallback localStorage */ }
+  ensureProstheses();
   renderAll();
 }
 boot();

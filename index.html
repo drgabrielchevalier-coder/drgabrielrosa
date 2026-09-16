@@ -36,7 +36,15 @@
       <div class="nav-label">Operação</div>
       <button class="nav-btn" data-page="prestacao"><span class="nav-icon">↗</span>Prestação de serviço <span class="nav-badge" id="badgeReceber">0</span></button>
       <button class="nav-btn" data-page="particular"><span class="nav-icon">◇</span>Particular</button>
-      <button class="nav-btn" data-page="protese"><span class="nav-icon">⌁</span>Prótese / Lab</button>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Acompanhamento protético</div>
+      <button class="nav-btn" data-page="trabalhos"><span class="nav-icon">♙</span>Trabalhos <span class="nav-badge" id="badgeProtese">0</span></button>
+      <button class="nav-btn" data-page="protese"><span class="nav-icon">⌁</span>Fluxo</button>
+      <button class="nav-btn" data-page="entregas"><span class="nav-icon">◷</span>Agenda de entregas</button>
+      <button class="nav-btn" data-page="timeline"><span class="nav-icon">≋</span>Timeline</button>
+      <button class="nav-btn" data-page="consulta"><span class="nav-icon">⌕</span>Consultar código</button>
     </div>
 
     <div class="nav-group">
@@ -259,13 +267,94 @@
         </table></div></div>
       </section>
 
-      <!-- PROTESE -->
+      <!-- TRABALHOS PROTÉTICOS -->
+      <section class="page" id="page-trabalhos">
+        <div class="page-head">
+          <div><h2>Trabalhos protéticos</h2><p>Paciente, tipo, laboratório, prazo e etapa — no mesmo fluxo do Prótea.</p></div>
+          <div class="page-actions"><button class="btn primary" onclick="openProsthesisModal()">＋ Novo trabalho</button></div>
+        </div>
+        <div class="grid kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+          <div class="kpi"><div class="label">Em acompanhamento</div><div class="value" id="prosthActive">0</div></div>
+          <div class="kpi"><div class="label">No laboratório</div><div class="value" id="prosthLab">0</div></div>
+          <div class="kpi"><div class="label">Atrasados</div><div class="value" id="prosthLate">0</div></div>
+          <div class="kpi"><div class="label">Urgentes</div><div class="value" id="prosthUrgent">0</div></div>
+        </div>
+        <div class="toolbar">
+          <input class="input" id="prosthSearch" placeholder="Buscar paciente, código, lab..." oninput="renderTrabalhos()">
+          <select class="select" id="prosthFilter" onchange="renderTrabalhos()">
+            <option value="all">Todos</option>
+            <option value="active">Em andamento</option>
+            <option value="late">Atrasados</option>
+            <option value="urgent">Urgentes</option>
+            <option value="0">Entrada</option>
+            <option value="1">Laboratório</option>
+            <option value="2">Prova</option>
+            <option value="3">Pronto / entrega</option>
+            <option value="4">Instalado</option>
+          </select>
+        </div>
+        <div class="card"><div class="table-wrap"><table>
+          <thead><tr><th>Paciente / trabalho</th><th>Laboratório</th><th>Previsão</th><th>Prazo</th><th>Etapa atual</th><th></th></tr></thead>
+          <tbody id="prosthTable"></tbody>
+        </table></div></div>
+      </section>
+
+      <!-- PROTESE FLUXO -->
       <section class="page" id="page-protese">
         <div class="page-head">
-          <div><h2>Prótese / Laboratório</h2><p>Acompanhamento clínico-protético e custos laboratoriais vinculados ao paciente.</p></div>
-          <div class="page-actions"><button class="btn primary" onclick="toast('Use o cadastro do paciente para criar um novo trabalho protético.')">＋ Novo trabalho</button></div>
+          <div><h2>Fluxo de produção</h2><p>Do cadastro à instalação: entrada, laboratório, prova, entrega e alta.</p></div>
+          <div class="page-actions"><button class="btn primary" onclick="openProsthesisModal()">＋ Novo trabalho</button></div>
         </div>
-        <div class="grid layout-3" id="labColumns"></div>
+        <div class="lab-board" id="labColumns"></div>
+      </section>
+
+      <!-- ENTREGAS -->
+      <section class="page" id="page-entregas">
+        <div class="page-head">
+          <div><h2>Agenda de entregas</h2><p>Trabalhos prontos, provas e prazos dos próximos 14 dias.</p></div>
+        </div>
+        <div class="card"><div class="table-wrap"><table>
+          <thead><tr><th>Quando</th><th>Paciente</th><th>Trabalho</th><th>Laboratório</th><th>Etapa</th><th>Prazo</th><th></th></tr></thead>
+          <tbody id="entregasTable"></tbody>
+        </table></div></div>
+      </section>
+
+      <!-- TIMELINE -->
+      <section class="page" id="page-timeline">
+        <div class="page-head">
+          <div><h2>Timeline</h2><p>Histórico visual de cada movimentação protética.</p></div>
+        </div>
+        <div class="card"><div class="card-body" id="prosthTimeline"></div></div>
+      </section>
+
+      <!-- CONSULTAR CÓDIGO -->
+      <section class="page" id="page-consulta">
+        <div class="page-head">
+          <div><h2>Consultar código</h2><p>Localize um trabalho pelo código impresso na ficha ou na etiqueta.</p></div>
+        </div>
+        <div class="grid layout-2">
+          <div class="card">
+            <div class="card-head"><h3>Consultar pelo código</h3></div>
+            <div class="card-body">
+              <p class="lookup-lead">Digite o código do trabalho (ex.: CG0001) para abrir a ficha completa.</p>
+              <div class="lookup-row">
+                <input class="input" id="lookupCode" placeholder="Ex.: CG0001" maxlength="40" onkeydown="if(event.key==='Enter')lookupProsthesis()">
+                <button class="btn primary" onclick="lookupProsthesis()">Consultar</button>
+              </div>
+              <div id="lookupResult" class="lookup-result"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Do código ao cuidado</h3></div>
+            <div class="card-body">
+              <ol class="lookup-steps">
+                <li><strong>Cadastre o trabalho.</strong><span>Cada caso recebe um código exclusivo.</span></li>
+                <li><strong>Acompanhe a etapa.</strong><span>Laboratório, prova, prazo e urgência ficam na ficha.</span></li>
+                <li><strong>Consulte quando precisar.</strong><span>Use o código para achar o paciente e o histórico.</span></li>
+              </ol>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- RECEBIVEIS -->
