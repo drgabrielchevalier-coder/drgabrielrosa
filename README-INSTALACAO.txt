@@ -12,10 +12,16 @@ COMO INSTALAR NA HOSTINGER
    - assets/img/favicon.svg
 5. Abra o domínio e atualize o navegador com Ctrl+F5.
 
+BANCO MYSQL (Hostinger)
+- Banco: u680963503_drgabriel
+- Usuário: u680963503_drgabriel
+- Depois do upload, abra /api/setup.php e informe a senha do phpMyAdmin.
+- Isso cria a tabela app_state e passa a gravar os lançamentos no MySQL.
+- Enquanto a senha não for informada, o sistema continua no localStorage do navegador.
+
 IMPORTANTE
-- Esta V1 é funcional e usa localStorage do navegador.
-- Os dados ficam no dispositivo/navegador em que foram lançados.
-- Ainda não há banco MySQL, login multiusuário ou sincronização entre dispositivos.
+- Esta V1 é funcional. Com o setup do MySQL, os dados ficam no servidor.
+- Ainda não há login multiusuário.
 - Antes de uso clínico/financeiro definitivo, a próxima fase deve migrar persistência para backend/banco,
   implementar autenticação, auditoria e backup de servidor.
 
