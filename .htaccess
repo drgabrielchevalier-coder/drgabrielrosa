@@ -1,5 +1,9 @@
 # Chevalier Gestão - configuração básica Hostinger/Apache
-DirectoryIndex index.html
+DirectoryIndex index.php index.html
+
+<Files "config.local.php">
+  Require all denied
+</Files>
 
 <IfModule mod_headers.c>
   Header set X-Content-Type-Options "nosniff"

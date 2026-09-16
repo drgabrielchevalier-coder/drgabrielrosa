@@ -1,0 +1,7 @@
+# Segredos locais — nunca versionar
+api/config.local.php
+
+# Empacotamento / artefatos locais
+*.zip
+.DS_Store
+Thumbs.db

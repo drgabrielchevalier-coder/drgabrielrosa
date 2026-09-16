@@ -1,0 +1,56 @@
+#update-root{position:fixed;left:var(--sidebar-w,270px);right:0;top:0;z-index:90;pointer-events:none}
+.protea-update-bar{min-height:62px;background:#171816;color:#fff;box-shadow:0 8px 28px rgba(23,24,22,.18);display:flex;align-items:center;justify-content:space-between;gap:20px;padding:10px 28px;pointer-events:auto;border-bottom:1px solid rgba(255,255,255,.12);animation:protea-update-in .2s ease-out}
+.protea-update-message{display:flex;align-items:center;gap:12px;min-width:0}
+.protea-update-message strong{display:block;font-size:14px;font-weight:650}
+.protea-update-message small{display:block;margin-top:1px;color:#c4c4bc;font-size:11px}
+.protea-update-dot{width:10px;height:10px;border-radius:50%;background:#c4b086;box-shadow:0 0 0 5px rgba(196,176,134,.18);flex:0 0 auto}
+.protea-update-spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.25);border-top-color:#c4b086;border-radius:50%;animation:protea-update-spin .7s linear infinite;flex:0 0 auto}
+.protea-update-button{flex:0 0 auto;background:#8e7d5b!important;border-color:#b7a47c!important;color:#fff!important}
+.protea-update-progress-wrap{display:flex;align-items:center;gap:10px;width:min(390px,42vw)}
+.protea-update-progress{height:8px;background:rgba(255,255,255,.16);border-radius:999px;overflow:hidden;flex:1}
+.protea-update-progress span{display:block;height:100%;background:#c4b086;border-radius:inherit;transition:width .2s ease}
+.protea-update-progress-wrap>strong{font-size:12px;font-variant-numeric:tabular-nums;width:38px;text-align:right}
+.protea-update-bar.error{background:#4b2e30}
+.protea-update-bar.error small{color:#ead6d7}
+#update-root .button{
+  border:1px solid rgba(255,255,255,.2);background:#2a2b28;color:#fff;height:36px;border-radius:11px;
+  padding:0 12px;cursor:pointer;font:inherit;display:inline-flex;align-items:center
+}
+@keyframes protea-update-in{from{transform:translateY(-100%);opacity:.3}to{transform:none;opacity:1}}
+@keyframes protea-update-spin{to{transform:rotate(360deg)}}
+@media print{#update-root{display:none!important}}
+.protea-update-bar{align-items:flex-start;min-height:0;padding-top:12px;padding-bottom:12px}
+.protea-update-message{align-items:flex-start;flex:1;min-width:0}
+.protea-update-copy{min-width:0;max-width:980px}
+.protea-update-copy>strong{font-weight:560}
+.protea-update-copy>small{font-size:11px;line-height:1.35;margin-top:2px}
+.protea-update-changes{margin:7px 0 0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 22px;color:#d8d8d0;font-size:11px;line-height:1.35}
+.protea-update-changes li{position:relative;padding-left:12px;min-width:0}
+.protea-update-changes li:before{content:"";position:absolute;left:0;top:.55em;width:4px;height:4px;border-radius:50%;background:#c4b086}
+.protea-update-button,.protea-update-dismiss{flex:0 0 auto;align-self:center}
+.protea-update-check{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:#edf7f1;color:#2f7d5b;font-size:13px;font-weight:650;flex:0 0 auto}
+.protea-update-bar.success{background:#f7fbf9;color:#1d1f1c;border-bottom-color:#dce9e3;box-shadow:0 8px 28px rgba(23,24,22,.12)}
+.protea-update-bar.success .protea-update-copy>small{color:#73786f}
+.protea-update-bar.success .protea-update-changes{color:#526a72}
+.protea-update-bar.success .protea-update-changes li:before{background:#4b9b81}
+.protea-update-dismiss{background:#fff;border-color:#d7e2e4;color:#40565f}
+body.protea-update-available .topbar,
+body.protea-update-installing .topbar,
+body.protea-update-installed .topbar{margin-top:var(--protea-update-offset,0px)}
+body.protea-update-installed #update-root,
+body.protea-update-available #update-root,
+body.protea-update-installing #update-root{display:block}
+@media(max-width:900px){
+  #update-root{left:0}
+  .protea-update-changes{grid-template-columns:1fr;gap:3px}
+  .protea-update-bar{padding:10px 14px;gap:10px}
+}
+@media(max-width:700px){
+  .protea-update-bar{display:grid;grid-template-columns:1fr auto;gap:10px 8px;padding:10px 12px}
+  .protea-update-message{grid-column:1/-1}
+  .protea-update-message small{display:block}
+  .protea-update-changes{font-size:10.5px;margin-top:6px}
+  .protea-update-button,.protea-update-dismiss{grid-column:2;justify-self:end;align-self:end}
+  .protea-update-progress-wrap{grid-column:1/-1;width:100%}
+  .protea-update-bar.installing .protea-update-message{max-width:none}
+}
