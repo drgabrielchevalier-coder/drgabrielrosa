@@ -522,7 +522,7 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
           </div>
           <div class="toolbar">
             <input class="input" id="matDbSearch" placeholder="Buscar material, marca, tipo..." oninput="renderBanco()">
-            <select class="select" id="matDbType" onchange="renderBanco()"><option value="">Todos os tipos</option></select>
+            <select class="select" id="matDbType" onchange="renderBanco()"><option value="">Todas as categorias</option></select>
             <button class="btn" onclick="recalcAllUnitCosts()">Recalcular fracionados</button>
           </div>
           <div class="card"><div class="table-wrap"><table>
@@ -584,6 +584,7 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
 <div class="toast" id="toast"></div>
 
 <script src="<?= chevalier_asset_url('assets/js/scan-tools.js') ?>"></script>
+<script src="<?= chevalier_asset_url('assets/js/dental-catalog.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/app.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/update-manager.js') ?>" defer></script>
 </body>
