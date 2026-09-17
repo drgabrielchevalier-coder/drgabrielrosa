@@ -1,11 +1,11 @@
 {
-  "version": "1.6",
-  "name": "Leitor de boletos e código de barras",
+  "version": "1.7",
+  "name": "Leitura retangular de boleto e PDF",
   "releasedAt": "2026-09-17",
   "changes": [
-    "Escanear boleto em Custos: câmera, foto ou linha digitável com leitura de valor, vencimento, beneficiário e parcela.",
-    "Alerta de conflito se já existir custo parecido — você decide se prossegue.",
-    "Leitor de código de barras em Materiais e Estoque (câmera ou leitor USB) para localizar o produto e movimentar estoque.",
-    "Campo de código de barras no cadastro de materiais."
+    "Guia de leitura retangular para o código de barras do boleto (ITF), não quadrado.",
+    "Câmera inicia automaticamente e identifica o código; depois pede confirmação para lançar.",
+    "Importação de foto ou PDF do boleto, com fallback OCR da linha digitável.",
+    "Correções de estabilidade do leitor (câmera após preview e boot sem MySQL)."
   ]
 }

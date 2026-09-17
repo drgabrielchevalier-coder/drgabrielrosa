@@ -408,13 +408,13 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
             <button class="btn primary" onclick="openCostModal()">＋ Novo custo</button>
           </div>
         </div>
-        <div class="ai-banner scan-banner">
-          <div>
-            <strong>Leitor de boletos</strong>
-            <p>Fotografe ou envie o boleto, ou cole a linha digitável. Extraímos beneficiário, vencimento, valor e parcela; alertamos se já existir lançamento parecido.</p>
+          <div class="ai-banner scan-banner">
+            <div>
+              <strong>Leitor de boletos</strong>
+              <p>Leitura automática do código de barras (faixa retangular). Importe foto ou PDF, confira os dados e confirme para lançar em Custos — com alerta se já existir lançamento parecido.</p>
+            </div>
+            <button class="btn primary" onclick="openBoletoScanModal()">Escanear agora</button>
           </div>
-          <button class="btn primary" onclick="openBoletoScanModal()">Escanear agora</button>
-        </div>
         <div class="grid kpi-grid" style="grid-template-columns:repeat(4,1fr)">
           <div class="kpi"><div class="label">Total lançado</div><div class="value" id="costTotal">R$ 0</div></div>
           <div class="kpi"><div class="label">Pago</div><div class="value" id="costPaid">R$ 0</div></div>
