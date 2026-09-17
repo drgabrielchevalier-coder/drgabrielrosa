@@ -3,6 +3,8 @@ const todayISO = () => new Date().toISOString().slice(0,10);
 const addDays = n => { const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
 const pastDays = n => { const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); };
 const uid = () => Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
+// Expostos para planning-calendar.js (const/let não viram window.*)
+Object.assign(window, { todayISO, addDays, pastDays, uid, brl });
 
 const seed = {
   clinics:[
@@ -90,6 +92,13 @@ const seed = {
 let state = JSON.parse(localStorage.getItem('chevalier_gestao_v1')||'null') || structuredClone(seed);
 let persistReady = false;
 let receivableFilter = '';
+// planning-calendar.js lê window.state — `let` não cria propriedade global
+function bindGlobalState(next){
+  state = next;
+  window.state = state;
+  return state;
+}
+bindGlobalState(state);
 
 function csrfToken(){return String(window.CHEVALIER_CSRF||'');}
 function csrfHeaders(extra={}){
@@ -885,9 +894,13 @@ function renderStock(){
 function renderAll(){
   ensureSettings();
   ensureProstheses();
-  if(window.ChevalierPlan){ChevalierPlan.ensureCollections();ChevalierPlan.seedDefaults();ChevalierPlan.bindUi();}
+  try{
+    if(window.ChevalierPlan){ChevalierPlan.ensureCollections();ChevalierPlan.seedDefaults();ChevalierPlan.bindUi();}
+  }catch(e){ console.warn('ChevalierPlan init', e); }
   renderDashboard();renderPatients();renderClinics();renderProcedures();renderService();renderPrivate();renderTrabalhos();renderLab();renderEntregas();renderTimeline();renderReceivables();renderCosts();renderPayroll();renderReports();renderMaterials();renderStock();renderBanco();renderSettings();
-  if(window.ChevalierPlan){ChevalierPlan.renderCalendario();ChevalierPlan.renderPlanejamento();}
+  try{
+    if(window.ChevalierPlan){ChevalierPlan.renderCalendario();ChevalierPlan.renderPlanejamento();}
+  }catch(e){ console.warn('ChevalierPlan render', e); }
   updateNotifBadge();
   syncMobileNav();
 }
@@ -1661,7 +1674,17 @@ function openBarcodeScanModal(){
 }
 
 function openQuickModal(){
-  openModal('Novo lançamento',`<div class="grid layout-3"><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openPatientModal()">Paciente</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();ChevalierPlan.openReminderModal()">Lembrete</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();go('planejamento')">Planejamento</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openProsthesisModal()">Trabalho protético</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openReceivableModal()">Recebível</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openCostModal()">Custo</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBoletoScanModal()">Escanear boleto</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBarcodeScanModal()">Código de barras</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openMaterialModal()">Material</button></div>`,()=>closeModal());
+  openModal('Novo lançamento',`<div class="grid layout-3">
+    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openPatientModal()">Paciente</button>
+    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();go('calendario');ChevalierPlan.openReminderModal()">Lembrete</button>
+    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();go('planejamento')">Planejamento</button>
+    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openProsthesisModal()">Trabalho protético</button>
+    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openReceivableModal()">Recebível</button>
+    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openCostModal()">Custo</button>
+    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBoletoScanModal()">Escanear boleto</button>
+    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBarcodeScanModal()">Código de barras</button>
+    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openMaterialModal()">Material</button>
+  </div>`,()=>closeModal());
   const s=document.getElementById('modalSave');
   if(s) s.style.display='none';
 }
@@ -1694,7 +1717,7 @@ async function boot(){
       const data=await r.json();
       applyCsrfFromResponse(data);
       if(data.ok && data.state){
-        state=data.state;
+        bindGlobalState(data.state);
         persistReady=true;
         localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
       }else if(data.ok && !data.state){
@@ -1712,13 +1735,14 @@ async function boot(){
   const catalogAdded=ensureCatalog()||0;
   ensureProstheses();
   ensureClinicPrices();
-  if(window.ChevalierPlan){
-    ChevalierPlan.ensureCollections();
-    const seeded=ChevalierPlan.seedDefaults();
-    if(seeded||catalogAdded) save();
-  }else if(catalogAdded){
-    save();
-  }
+  let seeded=false;
+  try{
+    if(window.ChevalierPlan){
+      ChevalierPlan.ensureCollections();
+      seeded=!!ChevalierPlan.seedDefaults();
+    }
+  }catch(e){ console.warn('ChevalierPlan boot', e); }
+  if(seeded||catalogAdded) save();
   renderAll();
   setBancoTab(bancoTab);
 }

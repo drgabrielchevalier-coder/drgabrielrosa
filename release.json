@@ -1,11 +1,9 @@
 {
-  "version": "2.1.0",
-  "name": "Revisão funcional e segurança",
+  "version": "2.1.1",
+  "name": "Correção Novo e Lembrete",
   "releasedAt": "2026-09-17",
   "changes": [
-    "Botões de notificações, exportação CSV e preferências passam a funcionar e gravar no estado.",
-    "Exclusões e sincronizações persistem no MySQL; CSRF em todas as APIs mutáveis.",
-    "Login com rate-limit, cookies seguros, auditoria e headers HTTP de proteção.",
-    "Uploads de planejamento com MIME allowlist e bloqueio de execução de scripts."
+    "Corrige botão ＋ Novo e ＋ Lembrete: o calendário passa a enxergar o estado global da aplicação.",
+    "Abertura de lembrete pelo menu Novo também navega para a agenda."
   ]
 }
