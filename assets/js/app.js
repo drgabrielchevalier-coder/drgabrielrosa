@@ -1157,6 +1157,7 @@ async function processBoletoDocument(file){
     const guide=document.querySelector('#boletoScan .scan-frame');
     const result=await ChevalierScan.readBoletoFromFile(file,{wrapEl:wrap,guideEl:guide});
     if(result.parsed && (result.parsed.value!=null || result.parsed.linha || result.parsed.barcode)){
+      ChevalierScan.playScanBeep();
       fillBoletoForm(result.parsed);
       if(st) st.textContent='Dados identificados — confirme para lançar.';
       askBoletoProceed(result.parsed);
@@ -1265,11 +1266,12 @@ function openBoletoScanModal(prefill=null){
         <div class="scan-guide-label">Alinhe o código de barras (faixa retangular)</div>
       </div>
       <div class="row-actions">
-        <button type="button" class="btn primary" id="bStartCam">Abrir câmera</button>
+        <button type="button" class="btn primary" id="bStartCam">Ler automaticamente</button>
+        <button type="button" class="btn" id="bFlash" disabled>Flash</button>
         <label class="btn" style="cursor:pointer">Importar foto / PDF<input type="file" id="bFile" accept="image/*,application/pdf,.pdf" capture="environment" hidden></label>
         <button type="button" class="btn" id="bStopCam">Parar</button>
       </div>
-      <p class="scan-status" id="bScanStatus">A leitura é automática: aponte a faixa retangular para o código de barras do boleto, ou importe foto/PDF.</p>
+      <p class="scan-status" id="bScanStatus">Abrindo câmera… a leitura do código de barras é automática.</p>
       <div id="bResultPreview" class="boleto-result" hidden></div>
       <div class="form-grid">
         <div class="field full"><label>Linha digitável</label><input id="bLinha" class="input" placeholder="00000.00000 00000.000000 ..."><div class="row-actions" style="margin-top:8px"><button type="button" class="btn small" id="bParseLinha">Ler linha</button></div></div>
@@ -1304,16 +1306,26 @@ function openBoletoScanModal(prefill=null){
   }
 
   let scanning=false;
-  let busy=false;
   const scanOpts=()=>({
+    mode:'boleto',
+    wide:true,
     wrapEl:document.querySelector('#boletoScan .scan-video-wrap'),
     guideEl:document.getElementById('bGuide')
   });
 
+  const syncFlashBtn=()=>{
+    const btn=document.getElementById('bFlash');
+    if(!btn) return;
+    const ok=ChevalierScan.torchSupported();
+    btn.disabled=!ok;
+    btn.textContent=ChevalierScan.getTorchOn()?'Flash ligado':'Flash';
+    btn.classList.toggle('primary', !!ChevalierScan.getTorchOn());
+    if(!ok) btn.title='Flash indisponível neste aparelho/navegador';
+  };
+
   const onCodeFound=(parsed)=>{
     if(!parsed) return;
     scanning=false;
-    ChevalierScan.stopCamera();
     fillBoletoForm(parsed);
     const preview=document.getElementById('bResultPreview');
     if(preview){
@@ -1328,49 +1340,49 @@ function openBoletoScanModal(prefill=null){
     askBoletoProceed(parsed);
   };
 
-  const loop=async()=>{
-    if(!scanning) return;
-    const video=document.getElementById('bVideo');
-    if(video && video.readyState>=2 && !busy){
-      busy=true;
-      try{
-        const codes=await ChevalierScan.detectBarcodeFromVideo(video,scanOpts());
-        if(codes?.length){
-          for(const c of codes){
-            const parsed=ChevalierScan.parseBoletoDigits(c.raw);
-            if(parsed){ onCodeFound(parsed); busy=false; return; }
-          }
-        }
-      }catch(_){}
-      busy=false;
-    }
-    setTimeout(loop, 280);
-  };
-
   const startCam=async()=>{
     try{
       const video=document.getElementById('bVideo');
       const preview=document.getElementById('bPreview');
       if(preview) preview.hidden=true;
       if(video) video.hidden=false;
-      await ChevalierScan.startCamera(video,{wide:true});
       scanning=true;
-      document.getElementById('bScanStatus').textContent='Câmera ativa — alinhe a faixa retangular no código de barras.';
-      loop();
+      document.getElementById('bScanStatus').textContent='Lendo automaticamente… alinhe a faixa retangular no código de barras.';
+      await ChevalierScan.startContinuousScan(video,{
+        ...scanOpts(),
+        onCode:(hit)=>{
+          const parsed=ChevalierScan.parseBoletoDigits(hit.raw);
+          if(parsed) onCodeFound(parsed);
+          else{
+            document.getElementById('bScanStatus').textContent='Código detectado, mas não parece boleto. Aproxime a faixa e toque em “Ler automaticamente”.';
+            syncFlashBtn();
+          }
+        }
+      });
+      syncFlashBtn();
     }catch(err){
+      scanning=false;
       document.getElementById('bScanStatus').textContent='Sem acesso à câmera. Importe foto/PDF ou cole a linha digitável.';
       toast('Permita a câmera ou importe um documento.');
+      syncFlashBtn();
     }
   };
 
   document.getElementById('bStartCam')?.addEventListener('click',startCam);
+  document.getElementById('bFlash')?.addEventListener('click',async()=>{
+    const next=!ChevalierScan.getTorchOn();
+    const ok=await ChevalierScan.setTorch(next);
+    if(!ok) toast('Flash indisponível neste aparelho.');
+    syncFlashBtn();
+  });
   document.getElementById('bStopCam')?.addEventListener('click',()=>{
     scanning=false; ChevalierScan.stopCamera();
     document.getElementById('bScanStatus').textContent='Câmera parada.';
+    syncFlashBtn();
   });
   document.getElementById('bFile')?.addEventListener('change',async e=>{
     const file=e.target.files?.[0]; if(!file) return;
-    scanning=false; ChevalierScan.stopCamera();
+    scanning=false; ChevalierScan.stopCamera(); syncFlashBtn();
     const isPdf=/pdf$/i.test(file.type)||/\.pdf$/i.test(file.name);
     const wrap=document.querySelector('#boletoScan .scan-video-wrap');
     const video=document.getElementById('bVideo');
@@ -1386,23 +1398,24 @@ function openBoletoScanModal(prefill=null){
   });
   document.getElementById('bParseLinha')?.addEventListener('click',async()=>{
     const parsed=await applyBoletoDigits(getv('bLinha'));
-    if(parsed) askBoletoProceed(parsed);
+    if(parsed){ ChevalierScan.playScanBeep(); askBoletoProceed(parsed); }
   });
   document.getElementById('bLinha')?.addEventListener('change',async()=>{
     const parsed=await applyBoletoDigits(getv('bLinha'));
-    if(parsed) askBoletoProceed(parsed);
+    if(parsed){ ChevalierScan.playScanBeep(); askBoletoProceed(parsed); }
   });
   ['bBeneficiary','bValue','bDue'].forEach(id=>{
     document.getElementById(id)?.addEventListener('input',()=>renderBoletoConflictBox(boletoDraftFromFields()));
   });
 
-  // Auto-start camera for immediate rectangular barcode reading
-  setTimeout(startCam, 200);
+  // Auto-start continuous rectangular barcode reading
+  setTimeout(startCam, 150);
 }
 
-function handleBarcodeLookup(code){
+function handleBarcodeLookup(code, opts={}){
   const raw=String(code||'').trim();
   if(!raw) return;
+  if(opts.beep!==false) ChevalierScan.playScanBeep();
   const hit=ChevalierScan.findMaterialByBarcode(raw,state.materials);
   const box=document.getElementById('bcHit');
   const st=document.getElementById('bcStatus');
@@ -1437,64 +1450,78 @@ function handleBarcodeLookup(code){
 function openBarcodeScanModal(){
   if(!window.ChevalierScan) return toast('Ferramenta de leitura indisponível.');
   openModal('Código de barras — estoque',`
-    <div class="scan-stage">
-      <div class="scan-video-wrap"><video id="bcVideo" playsinline muted></video><div class="scan-frame"></div></div>
+    <div class="scan-stage" id="barcodeScan">
+      <div class="scan-video-wrap boleto-cam">
+        <video id="bcVideo" playsinline muted></video>
+        <div class="scan-frame" id="bcGuide"></div>
+        <div class="scan-guide-label">Alinhe o código de barras (leitura automática)</div>
+      </div>
       <div class="row-actions">
-        <button type="button" class="btn" id="bcStartCam">Abrir câmera</button>
+        <button type="button" class="btn primary" id="bcStartCam">Ler automaticamente</button>
+        <button type="button" class="btn" id="bcFlash" disabled>Flash</button>
         <button type="button" class="btn" id="bcStopCam">Parar</button>
       </div>
-      <p class="scan-status" id="bcStatus">Aponte para o EAN do produto ou use um leitor USB no campo abaixo.</p>
+      <p class="scan-status" id="bcStatus">Abrindo câmera… leitura automática do código.</p>
       <div class="field full"><label>Código</label><input id="bcCode" class="input" placeholder="Escaneie ou digite e pressione Enter" autofocus></div>
       <div class="barcode-hit" id="bcHit" hidden></div>
-      <p class="field-hint">Dica: leitores USB funcionam como teclado — foque o campo e escaneie.</p>
+      <p class="field-hint">Dica: leitores USB também funcionam — foque o campo e escaneie.</p>
     </div>
   `,()=>{
     const code=getv('bcCode');
     if(!code) return toast('Informe um código.');
     const hit=ChevalierScan.findMaterialByBarcode(code,state.materials);
     if(hit){ closeModal(); openStockModal(hit.id); }
-    else handleBarcodeLookup(code);
+    else handleBarcodeLookup(code,{beep:false});
   });
   document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
   document.getElementById('modalSave').textContent='Abrir estoque';
 
-  let scanning=false;
-  const loop=async()=>{
-    if(!scanning) return;
-    const video=document.getElementById('bcVideo');
-    if(video && video.readyState>=2){
-      try{
-        const codes=await ChevalierScan.detectBarcodeFromVideo(video);
-        if(codes?.length){
-          const code=codes[0].raw;
-          document.getElementById('bcCode').value=code;
-          handleBarcodeLookup(code);
-          scanning=false;
-          ChevalierScan.stopCamera();
-        }
-      }catch(_){}
-    }
-    requestAnimationFrame(loop);
+  const syncFlashBtn=()=>{
+    const btn=document.getElementById('bcFlash');
+    if(!btn) return;
+    const ok=ChevalierScan.torchSupported();
+    btn.disabled=!ok;
+    btn.textContent=ChevalierScan.getTorchOn()?'Flash ligado':'Flash';
+    btn.classList.toggle('primary', !!ChevalierScan.getTorchOn());
   };
-  document.getElementById('bcStartCam')?.addEventListener('click',async()=>{
+
+  const startCam=async()=>{
     try{
-      await ChevalierScan.startCamera(document.getElementById('bcVideo'));
-      scanning=true;
-      document.getElementById('bcStatus').textContent='Câmera ativa — alinhe o código de barras.';
-      loop();
+      document.getElementById('bcStatus').textContent='Lendo automaticamente… alinhe o código na faixa.';
+      await ChevalierScan.startContinuousScan(document.getElementById('bcVideo'),{
+        mode:'product',
+        wide:true,
+        wrapEl:document.querySelector('#barcodeScan .scan-video-wrap'),
+        guideEl:document.getElementById('bcGuide'),
+        onCode:(hit)=>{
+          document.getElementById('bcCode').value=hit.raw;
+          handleBarcodeLookup(hit.raw,{beep:false}); // beep already played by scanner
+          syncFlashBtn();
+        }
+      });
+      syncFlashBtn();
     }catch{
       document.getElementById('bcStatus').textContent='Sem câmera. Use leitor USB ou digite o código.';
       toast('Permita a câmera ou digite o código.');
+      syncFlashBtn();
     }
+  };
+
+  document.getElementById('bcStartCam')?.addEventListener('click',startCam);
+  document.getElementById('bcFlash')?.addEventListener('click',async()=>{
+    const ok=await ChevalierScan.setTorch(!ChevalierScan.getTorchOn());
+    if(!ok) toast('Flash indisponível neste aparelho.');
+    syncFlashBtn();
   });
   document.getElementById('bcStopCam')?.addEventListener('click',()=>{
-    scanning=false; ChevalierScan.stopCamera();
+    ChevalierScan.stopCamera();
     document.getElementById('bcStatus').textContent='Câmera parada.';
+    syncFlashBtn();
   });
   document.getElementById('bcCode')?.addEventListener('keydown',e=>{
     if(e.key==='Enter'){ e.preventDefault(); handleBarcodeLookup(getv('bcCode')); }
   });
-  setTimeout(()=>document.getElementById('bcCode')?.focus(),50);
+  setTimeout(startCam, 150);
 }
 
 function openQuickModal(){

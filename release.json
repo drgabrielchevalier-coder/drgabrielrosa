@@ -1,11 +1,11 @@
 {
-  "version": "1.7",
-  "name": "Leitura retangular de boleto e PDF",
+  "version": "1.7.1",
+  "name": "Bip, flash e leitura automática",
   "releasedAt": "2026-09-17",
   "changes": [
-    "Guia de leitura retangular para o código de barras do boleto (ITF), não quadrado.",
-    "Câmera inicia automaticamente e identifica o código; depois pede confirmação para lançar.",
-    "Importação de foto ou PDF do boleto, com fallback OCR da linha digitável.",
-    "Correções de estabilidade do leitor (câmera após preview e boot sem MySQL)."
+    "Leitura automática contínua do código de barras (boleto e estoque).",
+    "Bip suave ao reconhecer o código, estilo caixa.",
+    "Botão de flash/lanterna quando o aparelho permitir.",
+    "Guia retangular + importação de foto/PDF mantidos."
   ]
 }
