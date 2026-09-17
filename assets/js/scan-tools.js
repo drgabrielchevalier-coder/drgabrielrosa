@@ -77,8 +77,6 @@
     const campo3 = b.slice(34, 44);
     const dv = b.slice(4, 5);
     const fatorValor = b.slice(5, 19);
-    const withDv = (campo) => campo; // DVs de campo omitidos na montagem simplificada a partir do barcode
-    // Montagem completa exige DVs dos campos — reconstruímos a partir do barcode padrão
     function mod10(num) {
       let sum = 0;
       let mult = 2;

@@ -1090,6 +1090,7 @@ function openStockModal(prefillId=''){
 }
 
 function boletoDraftFromFields(){
+  if(!window.ChevalierScan) return null;
   const linha=ChevalierScan.onlyDigits(getv('bLinha'));
   const parsed=linha?ChevalierScan.parseBoletoDigits(linha):null;
   return {
@@ -1184,6 +1185,7 @@ async function processBoletoImage(file){
 let __boletoPendingDraft=null;
 function saveBoletoAsCost(force=false){
   const draft=force && __boletoPendingDraft ? __boletoPendingDraft : boletoDraftFromFields();
+  if(!draft) return toast('Ferramenta de leitura indisponível.');
   if(!draft.desc) return toast('Informe o beneficiário / descrição.');
   if(!(draft.value>0)) return toast('Informe o valor do boleto.');
   const conflicts=ChevalierScan.findCostConflicts(draft,state.costs);
@@ -1223,8 +1225,8 @@ function openBoletoScanModal(){
   if(!window.ChevalierScan) return toast('Ferramenta de leitura indisponível.');
   const types=['BOLETO','IMPLANTE','LAB','BIOMATERIAL','INSUMOS','COMPONENTES','EQUIPAMENTO','ALUGUEL','IMPOSTO E CRO','Consultoria'];
   openModal('Escanear boleto',`
-    <div class="scan-stage">
-      <div class="scan-video-wrap"><video id="bVideo" playsinline muted></video><div class="scan-frame"></div></div>
+    <div class="scan-stage" id="boletoScan">
+      <div class="scan-video-wrap"><video id="bVideo" playsinline muted></video><img id="bPreview" alt="Boleto" hidden><div class="scan-frame"></div></div>
       <div class="row-actions">
         <button type="button" class="btn" id="bStartCam">Abrir câmera</button>
         <label class="btn" style="cursor:pointer">Enviar foto<input type="file" id="bFile" accept="image/*" capture="environment" hidden></label>
@@ -1276,6 +1278,9 @@ function openBoletoScanModal(){
   document.getElementById('bStartCam')?.addEventListener('click',async()=>{
     try{
       const video=document.getElementById('bVideo');
+      const preview=document.getElementById('bPreview');
+      if(preview) preview.hidden=true;
+      if(video) video.hidden=false;
       await ChevalierScan.startCamera(video);
       scanning=true;
       document.getElementById('bScanStatus').textContent='Câmera ativa — alinhe o código do boleto.';
@@ -1291,10 +1296,21 @@ function openBoletoScanModal(){
   });
   document.getElementById('bFile')?.addEventListener('change',async e=>{
     const file=e.target.files?.[0]; if(!file) return;
+    scanning=false; ChevalierScan.stopCamera();
     const url=URL.createObjectURL(file);
-    const wrap=document.querySelector('.scan-video-wrap');
-    if(wrap){
-      wrap.innerHTML=`<img src="${url}" alt="Boleto"><div class="scan-frame"></div>`;
+    const wrap=document.querySelector('#boletoScan .scan-video-wrap');
+    const video=document.getElementById('bVideo');
+    let preview=document.getElementById('bPreview');
+    if(wrap && video){
+      if(!preview){
+        preview=document.createElement('img');
+        preview.id='bPreview';
+        preview.alt='Boleto';
+        wrap.insertBefore(preview, wrap.firstChild);
+      }
+      preview.src=url;
+      preview.hidden=false;
+      video.hidden=true;
     }
     await processBoletoImage(file);
   });
@@ -1431,14 +1447,16 @@ document.getElementById('todayLabel').textContent=now.toLocaleDateString('pt-BR'
 async function boot(){
   try{
     const r=await fetch('api/state.php',{cache:'no-store'});
-    const data=await r.json();
-    if(data.ok && data.state){
-      state=data.state;
-      persistReady=true;
-      localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
-    }else if(data.ok && !data.state){
-      persistReady=true;
-      await fetch('api/state.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});
+    if(r.ok){
+      const data=await r.json();
+      if(data.ok && data.state){
+        state=data.state;
+        persistReady=true;
+        localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
+      }else if(data.ok && !data.state){
+        persistReady=true;
+        await fetch('api/state.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});
+      }
     }
   }catch(e){ /* fallback localStorage */ }
   ensureCatalog();
