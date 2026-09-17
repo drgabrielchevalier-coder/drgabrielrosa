@@ -317,7 +317,17 @@ async function openPriceSyncModal(){
         const units=parsePackUnits(r.pack);
         const best=r.bestPrice;
         const unit=best!=null?unitCostFromPack(best,r.pack):null;
-        const offers=(r.offers||[]).map(o=>`<div>${esc(o.supplier)}: ${o.suggested!=null?brl.format(o.suggested):(o.ok?'sem preço claro':'bloqueado')} · <a href="${esc(o.url)}" target="_blank" rel="noopener">abrir busca</a></div>`).join('');
+        const offers=(r.offers||[]).map(o=>{
+          let status;
+          if(o.suggested!=null){
+            status=brl.format(o.suggested)+(o.matchTitle?` · ${esc(o.matchTitle)}`:'');
+          }else if(o.ok){
+            status='sem resultado na busca';
+          }else{
+            status='indisponível'+(o.error?` (${esc(o.error)})`:'');
+          }
+          return `<div>${esc(o.supplier)}: ${status} · <a href="${esc(o.url||o.searchUrl||'#')}" target="_blank" rel="noopener">abrir busca</a></div>`;
+        }).join('');
         return `<div class="sync-row" data-id="${esc(r.id)}">
           <div class="sync-row-head">
             <div><strong>${esc(r.name)}</strong><div class="cell-sub">${esc(r.brand||'—')} · embalagem ${esc(r.pack||'—')} (${units} un.) · atual ${brl.format(r.currentPrice||0)}</div></div>
