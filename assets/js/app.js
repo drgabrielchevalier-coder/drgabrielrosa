@@ -12,14 +12,14 @@ const seed = {
     {id:'particular',name:'Particular',type:'Próprio',rule:'Receita integral do paciente',color:'PT'}
   ],
   materials:[
-    {id:'m1',name:'Implante CM 3.5',brand:'Dérig',type:'CM',supplier:'Dental fornecedor',pack:'1 un',price:158,unitCost:158,stock:8,min:3,updated:todayISO()},
-    {id:'m2',name:'Mini pilar CM',brand:'Neodent',type:'Componente',supplier:'Dental fornecedor',pack:'1 un',price:92,unitCost:92,stock:4,min:3,updated:todayISO()},
-    {id:'m3',name:'Biomaterial 0,5 g',brand:'Lumina Bone',type:'Osso',supplier:'Dental fornecedor',pack:'1 un',price:198,unitCost:198,stock:2,min:2,updated:pastDays(5)},
-    {id:'m4',name:'Anestésico',brand:'DFL',type:'Insumo',supplier:'Dental fornecedor',pack:'50 tubetes',price:200,unitCost:4,stock:31,min:10,updated:pastDays(2)},
-    {id:'m5',name:'Campo cirúrgico',brand:'Genérico',type:'Insumo',supplier:'Distribuidora',pack:'1 kit',price:35,unitCost:35,stock:5,min:3,updated:pastDays(8)},
-    {id:'m6',name:'Soro fisiológico 500 ml',brand:'Equiplex',type:'Insumo',supplier:'Distribuidora',pack:'20 bolsas',price:279.90,unitCost:13.995,stock:12,min:5,updated:pastDays(12)},
-    {id:'m7',name:'Transfer HE 4.1',brand:'Implacil',type:'Transfer',supplier:'Dental fornecedor',pack:'1 un',price:30,unitCost:30,stock:2,min:2,updated:pastDays(7)},
-    {id:'m8',name:'Análogo',brand:'Implacil',type:'Análogo',supplier:'Dental fornecedor',pack:'1 un',price:45,unitCost:45,stock:3,min:2,updated:pastDays(7)}
+    {id:'m1',name:'Implante CM 3.5',brand:'Dérig',type:'CM',supplier:'Dental fornecedor',pack:'1 un',price:158,unitCost:158,stock:8,min:3,barcode:'7891000000001',updated:todayISO()},
+    {id:'m2',name:'Mini pilar CM',brand:'Neodent',type:'Componente',supplier:'Dental fornecedor',pack:'1 un',price:92,unitCost:92,stock:4,min:3,barcode:'7891000000002',updated:todayISO()},
+    {id:'m3',name:'Biomaterial 0,5 g',brand:'Lumina Bone',type:'Osso',supplier:'Dental fornecedor',pack:'1 un',price:198,unitCost:198,stock:2,min:2,barcode:'7891000000003',updated:pastDays(5)},
+    {id:'m4',name:'Anestésico',brand:'DFL',type:'Insumo',supplier:'Dental fornecedor',pack:'50 tubetes',price:200,unitCost:4,stock:31,min:10,barcode:'7891000000004',updated:pastDays(2)},
+    {id:'m5',name:'Campo cirúrgico',brand:'Genérico',type:'Insumo',supplier:'Distribuidora',pack:'1 kit',price:35,unitCost:35,stock:5,min:3,barcode:'7891000000005',updated:pastDays(8)},
+    {id:'m6',name:'Soro fisiológico 500 ml',brand:'Equiplex',type:'Insumo',supplier:'Distribuidora',pack:'20 bolsas',price:279.90,unitCost:13.995,stock:12,min:5,barcode:'7891000000006',updated:pastDays(12)},
+    {id:'m7',name:'Transfer HE 4.1',brand:'Implacil',type:'Transfer',supplier:'Dental fornecedor',pack:'1 un',price:30,unitCost:30,stock:2,min:2,barcode:'7891000000007',updated:pastDays(7)},
+    {id:'m8',name:'Análogo',brand:'Implacil',type:'Análogo',supplier:'Dental fornecedor',pack:'1 un',price:45,unitCost:45,stock:3,min:2,barcode:'7891000000008',updated:pastDays(7)}
   ],
   procedures:[
     {id:'p1',name:'Implante unitário',price:1500,items:[{materialId:'m1',qty:1},{materialId:'m4',qty:4},{materialId:'m5',qty:1},{materialId:'m6',qty:1}],extra:44,clinicPrices:[
@@ -200,7 +200,13 @@ function ensureCatalog(force=false){
   const have=new Set(state.materials.map(m=>m.id));
   DENTAL_CATALOG.forEach(([id,name,brand,type,pack,price,unitCost])=>{
     if(have.has(id)) return;
-    state.materials.push({id,name,brand,type,supplier:'Catálogo odontológico',pack,price,unitCost,stock:0,min:1,updated:todayISO()});
+    const barcode='789'+String(id.replace(/\D/g,'')||'0').padStart(10,'0').slice(-10);
+    state.materials.push({id,name,brand,type,supplier:'Catálogo odontológico',pack,price,unitCost,stock:0,min:1,barcode,updated:todayISO()});
+  });
+  state.materials.forEach(m=>{
+    if(!m.barcode){
+      m.barcode='789'+String(m.id.replace(/\D/g,'')||'0').padStart(10,'0').slice(-10);
+    }
   });
   state.catalogReady=true;
 }
@@ -727,7 +733,10 @@ function renderCosts(){
   const total=state.costs.reduce((s,c)=>s+Number(c.value||0),0), paid=state.costs.filter(c=>c.status==='PAGO').reduce((s,c)=>s+Number(c.value||0),0);
   const cats={};state.costs.forEach(c=>cats[c.type]=(cats[c.type]||0)+Number(c.value||0));const largest=Object.entries(cats).sort((a,b)=>b[1]-a[1])[0]?.[0]||'—';
   document.getElementById('costTotal').textContent=brl.format(total);document.getElementById('costPaid').textContent=brl.format(paid);document.getElementById('costOpen').textContent=brl.format(total-paid);document.getElementById('costLargest').textContent=largest;
-  document.getElementById('costsTable').innerHTML=state.costs.map(c=>`<tr>${td('Descrição',`<strong>${esc(c.desc)}</strong>`)}${td('Tipo',esc(c.type))}${td('Centro',esc(c.center))}${td('Data',fmtDate(c.date))}${td('Vencimento',fmtDate(c.due))}${td('Forma pg.',esc(c.method))}${td('Valor',brl.format(c.value))}${td('Status',badge(c.status))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="toggleCost('${c.id}')">${c.status==='PAGO'?'Reabrir':'Pagar'}</button><button class="btn small" onclick="openCostModal('${c.id}')">Editar</button><button class="btn small danger" onclick="deleteCost('${c.id}')">Excluir</button></div></td></tr>`).join('');
+  document.getElementById('costsTable').innerHTML=state.costs.map(c=>{
+    const sub=[c.installment?`Parcela ${c.installment}`:'',c.boletoLine?'Boleto escaneado':''].filter(Boolean).join(' · ');
+    return `<tr>${td('Descrição',`<strong>${esc(c.desc)}</strong>${sub?`<span class="cell-sub">${esc(sub)}</span>`:''}`)}${td('Tipo',esc(c.type))}${td('Centro',esc(c.center))}${td('Data',fmtDate(c.date))}${td('Vencimento',fmtDate(c.due))}${td('Forma pg.',esc(c.method))}${td('Valor',brl.format(c.value))}${td('Status',badge(c.status))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="toggleCost('${c.id}')">${c.status==='PAGO'?'Reabrir':'Pagar'}</button><button class="btn small" onclick="openCostModal('${c.id}')">Editar</button><button class="btn small danger" onclick="deleteCost('${c.id}')">Excluir</button></div></td></tr>`;
+  }).join('');
 }
 function renderPayroll(){
   document.getElementById('payrollTable').innerHTML=state.payroll.map(f=>`<tr>${td('Profissional',`<strong>${esc(f.name)}</strong>`)}${td('Tipo',esc(f.type))}${td('Competência',esc(f.period))}${td('Centro',esc(f.center))}${td('Valor',brl.format(f.value))}${td('Status',badge(f.status))}<td class="actions-cell">${acts(`openPayrollModal('${f.id}')`,`deletePayroll('${f.id}')`)}</td></tr>`).join('');
@@ -743,7 +752,7 @@ function renderReports(){
   const max=Math.max(1,...procs.map(x=>x.profit));document.getElementById('reportProcedures').innerHTML=procs.map(x=>`<div style="margin-bottom:15px"><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:6px"><span>${esc(x.name)}</span><strong>${brl.format(x.profit)}</strong></div><div class="progress"><span style="width:${Math.max(0,x.profit/max*100)}%"></span></div></div>`).join('');
 }
 function renderMaterials(){
-  document.getElementById('materialsTable').innerHTML=state.materials.map(m=>`<tr>${td('Material',`<strong>${esc(m.name)}</strong>`)}${td('Marca',esc(m.brand))}${td('Tipo',esc(m.type))}${td('Fornecedor',esc(m.supplier))}${td('Embalagem',esc(m.pack))}${td('Preço',brl.format(m.price))}${td('Custo unit.',`<strong>${brl.format(m.unitCost)}</strong>`)}${td('Atualizado',fmtDate(m.updated))}<td class="actions-cell">${acts(`openMaterialModal('${m.id}')`,`deleteMaterial('${m.id}')`)}</td></tr>`).join('');
+  document.getElementById('materialsTable').innerHTML=state.materials.map(m=>`<tr>${td('Material',`<strong>${esc(m.name)}</strong>`)}${td('Código de barras',esc(m.barcode||'—'))}${td('Marca',esc(m.brand))}${td('Tipo',esc(m.type))}${td('Fornecedor',esc(m.supplier))}${td('Embalagem',esc(m.pack))}${td('Preço',brl.format(m.price))}${td('Custo unit.',`<strong>${brl.format(m.unitCost)}</strong>`)}${td('Atualizado',fmtDate(m.updated))}<td class="actions-cell">${acts(`openMaterialModal('${m.id}')`,`deleteMaterial('${m.id}')`)}</td></tr>`).join('');
 }
 function renderStock(){
   const val=state.materials.reduce((s,m)=>s+m.stock*m.unitCost,0), low=state.materials.filter(m=>m.stock<=m.min);
@@ -778,6 +787,7 @@ function openModal(title,body,onSave){
   s.onclick=onSave;
 }
 function closeModal(){
+  if(window.ChevalierScan) ChevalierScan.stopCamera();
   document.getElementById('modalRoot').classList.remove('open');
   const s=document.getElementById('modalSave');
   s.style.display='';s.textContent='Salvar';s.classList.remove('danger');
@@ -1031,21 +1041,21 @@ function wireHonorariumAutosuggest(clinicId,procId){
   procEl.addEventListener('change',syncPatientHonorarium);
 }
 function openCostModal(editId=''){
-  const types=['IMPLANTE','LAB','BIOMATERIAL','INSUMOS','COMPONENTES','EQUIPAMENTO','ALUGUEL','Transporte','Alimentação','IMPOSTO E CRO','Consultoria'];
+  const types=['IMPLANTE','LAB','BIOMATERIAL','INSUMOS','COMPONENTES','EQUIPAMENTO','ALUGUEL','Transporte','Alimentação','IMPOSTO E CRO','Consultoria','BOLETO'];
   const c=state.costs.find(x=>x.id===editId)||{};
-  openModal(editId?'Editar custo':'Novo custo',`<div class="form-grid"><div class="field full"><label>Descrição</label><input id="xDesc" class="input" value="${esc(c.desc||'')}"></div><div class="field"><label>Tipo</label><select id="xType" class="select">${types.map(x=>`<option ${x===c.type?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Centro de custo</label><select id="xCenter" class="select"><option>Geral</option>${state.clinics.map(cl=>`<option ${cl.name===(c.center||'')?'selected':''}>${esc(cl.name)}</option>`).join('')}</select></div><div class="field"><label>Data</label><input id="xDate" type="date" class="input" value="${c.date||todayISO()}"></div><div class="field"><label>Vencimento</label><input id="xDue" type="date" class="input" value="${c.due||addDays(7)}"></div><div class="field"><label>Forma de pagamento</label><select id="xMethod" class="select">${['PIX','BOLETO À VISTA','BOLETO PARCELADO','CRÉDITO','DÉBITO','DINHEIRO'].map(x=>`<option ${x===c.method?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Valor</label><input id="xValue" type="number" step="0.01" class="input" value="${c.value??''}"></div><div class="field"><label>Status</label><select id="xStatus" class="select">${['À PAGAR','PAGO','PARCELADO','ATRASADO'].map(x=>`<option ${x===c.status?'selected':''}>${x}</option>`).join('')}</select></div></div>`,()=>{
+  openModal(editId?'Editar custo':'Novo custo',`<div class="form-grid"><div class="field full"><label>Descrição / beneficiário</label><input id="xDesc" class="input" value="${esc(c.desc||'')}"></div><div class="field"><label>Tipo</label><select id="xType" class="select">${types.map(x=>`<option ${x===c.type?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Centro de custo</label><select id="xCenter" class="select"><option>Geral</option>${state.clinics.map(cl=>`<option ${cl.name===(c.center||'')?'selected':''}>${esc(cl.name)}</option>`).join('')}</select></div><div class="field"><label>Data</label><input id="xDate" type="date" class="input" value="${c.date||todayISO()}"></div><div class="field"><label>Vencimento</label><input id="xDue" type="date" class="input" value="${c.due||addDays(7)}"></div><div class="field"><label>Forma de pagamento</label><select id="xMethod" class="select">${['PIX','BOLETO À VISTA','BOLETO PARCELADO','CRÉDITO','DÉBITO','DINHEIRO'].map(x=>`<option ${x===c.method?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Valor</label><input id="xValue" type="number" step="0.01" class="input" value="${c.value??''}"></div><div class="field"><label>Parcela</label><input id="xInstallment" class="input" value="${esc(c.installment||'')}" placeholder="Ex.: 2/6"></div><div class="field"><label>Status</label><select id="xStatus" class="select">${['À PAGAR','PAGO','PARCELADO','ATRASADO'].map(x=>`<option ${x===c.status?'selected':''}>${x}</option>`).join('')}</select></div>${c.boletoLine?`<div class="field full"><label>Linha digitável</label><input class="input" value="${esc(c.boletoLine)}" disabled></div>`:''}</div>`,()=>{
     if(!getv('xDesc'))return toast('Informe a descrição.');
-    const obj={id:editId||uid(),desc:getv('xDesc'),type:getv('xType'),center:getv('xCenter'),date:getv('xDate'),due:getv('xDue'),method:getv('xMethod'),value:num('xValue'),status:getv('xStatus')};
+    const obj={id:editId||uid(),desc:getv('xDesc'),type:getv('xType'),center:getv('xCenter'),date:getv('xDate'),due:getv('xDue'),method:getv('xMethod'),value:num('xValue'),status:getv('xStatus'),installment:getv('xInstallment'),boletoLine:c.boletoLine||''};
     if(editId) state.costs=state.costs.map(x=>x.id===editId?obj:x); else state.costs.unshift(obj);
     save();closeModal();renderAll();toast('Custo salvo.');
   })
 }
 function openMaterialModal(editId=''){
   const m=state.materials.find(x=>x.id===editId)||{};
-  openModal(editId?'Editar material':'Novo material',`<div class="form-grid"><div class="field full"><label>Material</label><input id="mName" class="input" value="${esc(m.name||'')}"></div><div class="field"><label>Marca</label><input id="mBrand" class="input" value="${esc(m.brand||'')}"></div><div class="field"><label>Tipo</label><input id="mType" class="input" value="${esc(m.type||'')}" placeholder="Implante, Componente, Insumo..."></div><div class="field"><label>Fornecedor</label><input id="mSupplier" class="input" value="${esc(m.supplier||'')}"></div><div class="field"><label>Embalagem</label><input id="mPack" class="input" value="${esc(m.pack||'')}" placeholder="Ex.: 50 tubetes" oninput="document.getElementById('mUnit').value=unitCostFromPack(Number(document.getElementById('mPrice').value||0),this.value)"></div><div class="field"><label>Preço total da embalagem</label><input id="mPrice" type="number" step="0.01" class="input" value="${m.price??''}" oninput="document.getElementById('mUnit').value=unitCostFromPack(Number(this.value||0),document.getElementById('mPack').value)"></div><div class="field"><label>Custo unitário fracionado</label><input id="mUnit" type="number" step="0.001" class="input" value="${m.unitCost??''}"><small class="field-hint">Calculado automaticamente: preço ÷ unidades da embalagem.</small></div><div class="field"><label>Quantidade atual</label><input id="mStock" type="number" class="input" value="${m.stock??0}"></div><div class="field"><label>Estoque mínimo</label><input id="mMin" type="number" class="input" value="${m.min??1}"></div></div>`,()=>{
+  openModal(editId?'Editar material':'Novo material',`<div class="form-grid"><div class="field full"><label>Material</label><input id="mName" class="input" value="${esc(m.name||'')}"></div><div class="field"><label>Marca</label><input id="mBrand" class="input" value="${esc(m.brand||'')}"></div><div class="field"><label>Tipo</label><input id="mType" class="input" value="${esc(m.type||'')}" placeholder="Implante, Componente, Insumo..."></div><div class="field"><label>Fornecedor</label><input id="mSupplier" class="input" value="${esc(m.supplier||'')}"></div><div class="field full"><label>Código de barras (EAN / interno)</label><input id="mBarcode" class="input" value="${esc(m.barcode||'')}" placeholder="Escaneie ou digite o código"><small class="field-hint">Usado pelo leitor para localizar o material no estoque.</small></div><div class="field"><label>Embalagem</label><input id="mPack" class="input" value="${esc(m.pack||'')}" placeholder="Ex.: 50 tubetes" oninput="document.getElementById('mUnit').value=unitCostFromPack(Number(document.getElementById('mPrice').value||0),this.value)"></div><div class="field"><label>Preço total da embalagem</label><input id="mPrice" type="number" step="0.01" class="input" value="${m.price??''}" oninput="document.getElementById('mUnit').value=unitCostFromPack(Number(this.value||0),document.getElementById('mPack').value)"></div><div class="field"><label>Custo unitário fracionado</label><input id="mUnit" type="number" step="0.001" class="input" value="${m.unitCost??''}"><small class="field-hint">Calculado automaticamente: preço ÷ unidades da embalagem.</small></div><div class="field"><label>Quantidade atual</label><input id="mStock" type="number" class="input" value="${m.stock??0}"></div><div class="field"><label>Estoque mínimo</label><input id="mMin" type="number" class="input" value="${m.min??1}"></div></div>`,()=>{
     if(!getv('mName'))return toast('Informe o material.');
     const pack=getv('mPack'); const price=num('mPrice');
-    const obj={id:editId||uid(),name:getv('mName'),brand:getv('mBrand'),type:getv('mType'),supplier:getv('mSupplier'),pack,price,unitCost:num('mUnit')||unitCostFromPack(price,pack)||price,stock:num('mStock'),min:num('mMin'),updated:todayISO()};
+    const obj={id:editId||uid(),name:getv('mName'),brand:getv('mBrand'),type:getv('mType'),supplier:getv('mSupplier'),barcode:getv('mBarcode').trim(),pack,price,unitCost:num('mUnit')||unitCostFromPack(price,pack)||price,stock:num('mStock'),min:num('mMin'),updated:todayISO()};
     if(editId) state.materials=state.materials.map(x=>x.id===editId?obj:x); else state.materials.push(obj);
     save();closeModal();renderAll();toast('Material salvo.');
   })
@@ -1071,14 +1081,345 @@ function openReceivableModal(type=''){
   wireHonorariumAutosuggest('rClinic','rProc');
   syncPatientHonorarium();
 }
-function openStockModal(){
-  openModal('Movimentar estoque',`<div class="form-grid"><div class="field full"><label>Material</label><select id="sMaterial" class="select">${state.materials.map(m=>`<option value="${m.id}">${esc(m.name)} · saldo ${m.stock}</option>`).join('')}</select></div><div class="field"><label>Movimento</label><select id="sType" class="select"><option value="in">Entrada</option><option value="out">Saída / consumo</option></select></div><div class="field"><label>Quantidade</label><input id="sQty" type="number" class="input" value="1"></div></div>`,()=>{
+function openStockModal(prefillId=''){
+  const selected=prefillId||(state.materials[0]?.id||'');
+  openModal('Movimentar estoque',`<div class="form-grid"><div class="field full"><label>Material</label><select id="sMaterial" class="select">${state.materials.map(m=>`<option value="${m.id}" ${m.id===selected?'selected':''}>${esc(m.name)} · saldo ${m.stock}${m.barcode?' · '+esc(m.barcode):''}</option>`).join('')}</select></div><div class="field"><label>Movimento</label><select id="sType" class="select"><option value="in">Entrada</option><option value="out">Saída / consumo</option></select></div><div class="field"><label>Quantidade</label><input id="sQty" type="number" class="input" value="1"></div></div>`,()=>{
     const m=state.materials.find(x=>x.id===getv('sMaterial'));if(!m)return;
     const q=num('sQty');m.stock=Math.max(0,Number(m.stock)+(getv('sType')==='in'?q:-q));save();closeModal();renderAll();toast('Estoque atualizado.');
   })
 }
+
+function boletoDraftFromFields(){
+  if(!window.ChevalierScan) return null;
+  const linha=ChevalierScan.onlyDigits(getv('bLinha'));
+  const parsed=linha?ChevalierScan.parseBoletoDigits(linha):null;
+  return {
+    desc:getv('bBeneficiary')||parsed?.beneficiary||'Boleto',
+    beneficiary:getv('bBeneficiary')||parsed?.beneficiary||'',
+    value:num('bValue')||parsed?.value||0,
+    due:getv('bDue')||parsed?.due||'',
+    installment:getv('bInstallment'),
+    boletoLine:parsed?.linha||linha,
+    type:getv('bType')||'BOLETO',
+    center:getv('bCenter')||'Geral',
+    method:getv('bMethod')||'BOLETO À VISTA',
+    status:getv('bStatus')||'À PAGAR',
+    date:todayISO()
+  };
+}
+function renderBoletoConflictBox(draft){
+  const box=document.getElementById('bConflict');
+  if(!box||!window.ChevalierScan) return [];
+  const conflicts=ChevalierScan.findCostConflicts(draft,state.costs);
+  if(!conflicts.length){
+    box.hidden=true; box.innerHTML='';
+    return [];
+  }
+  box.hidden=false;
+  box.innerHTML=`<strong>Possível duplicata encontrada</strong>
+    Já existe ${conflicts.length} lançamento(s) parecido(s) em Custos:
+    <ul>${conflicts.slice(0,4).map(c=>`<li>${esc(c.desc)} · ${brl.format(c.value)} · venc. ${fmtDate(c.due)} · ${esc(c.status)}</li>`).join('')}</ul>
+    Revise antes de continuar.`;
+  return conflicts;
+}
+function fillBoletoForm(data){
+  if(!data) return;
+  if(data.linha||data.barcode){
+    const line=data.linha||data.barcode;
+    const el=document.getElementById('bLinha');
+    if(el) el.value=ChevalierScan.formatLinha(line);
+  }
+  if(data.beneficiary!=null && document.getElementById('bBeneficiary')) document.getElementById('bBeneficiary').value=data.beneficiary;
+  if(data.bankName && !data.beneficiary && document.getElementById('bBeneficiary')) document.getElementById('bBeneficiary').value=data.bankName;
+  if(data.value!=null && document.getElementById('bValue')) document.getElementById('bValue').value=data.value;
+  if(data.due && document.getElementById('bDue')) document.getElementById('bDue').value=data.due;
+  if(data.installment && document.getElementById('bInstallment')) document.getElementById('bInstallment').value=data.installment;
+  if(Number(data.value)>0 && data.installment){
+    const method=document.getElementById('bMethod');
+    if(method) method.value='BOLETO PARCELADO';
+  }
+  const st=document.getElementById('bScanStatus');
+  if(st) st.textContent=`Lido: ${data.bankName||data.beneficiary||'boleto'} · ${brl.format(data.value||0)} · venc. ${data.due?fmtDate(data.due):'—'}`;
+  renderBoletoConflictBox(boletoDraftFromFields());
+}
+async function applyBoletoDigits(raw){
+  const parsed=ChevalierScan.parseBoletoDigits(raw);
+  if(!parsed){ toast('Linha digitável inválida.'); return; }
+  fillBoletoForm(parsed);
+  toast('Dados do boleto preenchidos.');
+}
+async function processBoletoImage(file){
+  const st=document.getElementById('bScanStatus');
+  if(st) st.textContent='Analisando imagem do boleto…';
+  try{
+    let filled=false;
+    if('BarcodeDetector' in window && file){
+      try{
+        const bmp=await createImageBitmap(file);
+        const detector=new BarcodeDetector({formats:['itf','code_128','codabar','code_39']});
+        const codes=await detector.detect(bmp);
+        bmp.close?.();
+        for(const c of codes||[]){
+          const parsed=ChevalierScan.parseBoletoDigits(c.rawValue);
+          if(parsed){ fillBoletoForm(parsed); filled=true; break; }
+        }
+      }catch(_){ /* fallback OCR */ }
+    }
+    const text=await ChevalierScan.ocrImage(file);
+    const extracted=ChevalierScan.extractFromText(text);
+    if(extracted.linha){
+      const parsed=ChevalierScan.parseBoletoDigits(extracted.linha);
+      fillBoletoForm({...(parsed||{}), ...extracted, beneficiary:extracted.beneficiary||parsed?.beneficiary, value:extracted.value??parsed?.value, due:extracted.due||parsed?.due});
+      filled=true;
+    }else if(extracted.value!=null || extracted.due || extracted.beneficiary){
+      fillBoletoForm(extracted);
+      filled=true;
+    }
+    if(st) st.textContent=filled?'Leitura concluída — revise e salve.':'Não li o código automaticamente. Cole a linha digitável.';
+    if(!filled) toast('Não foi possível ler o boleto automaticamente.');
+  }catch(err){
+    if(st) st.textContent=err.message||'Falha na leitura.';
+    toast(err.message||'Falha ao analisar o boleto.');
+  }
+}
+let __boletoPendingDraft=null;
+function saveBoletoAsCost(force=false){
+  const draft=force && __boletoPendingDraft ? __boletoPendingDraft : boletoDraftFromFields();
+  if(!draft) return toast('Ferramenta de leitura indisponível.');
+  if(!draft.desc) return toast('Informe o beneficiário / descrição.');
+  if(!(draft.value>0)) return toast('Informe o valor do boleto.');
+  const conflicts=ChevalierScan.findCostConflicts(draft,state.costs);
+  if(conflicts.length && !force){
+    __boletoPendingDraft=draft;
+    if(window.ChevalierScan) ChevalierScan.stopCamera();
+    openModal('Boleto parecido já lançado',`
+      <div class="conflict-box">
+        <strong>Encontramos lançamento(s) semelhante(s)</strong>
+        <ul>${conflicts.slice(0,5).map(c=>`<li>${esc(c.desc)} · ${brl.format(c.value)} · venc. ${fmtDate(c.due)} · ${esc(c.status)}</li>`).join('')}</ul>
+      </div>
+      <p>Deseja prosseguir mesmo assim e lançar este boleto como novo custo?</p>
+    `,()=>saveBoletoAsCost(true));
+    document.getElementById('modalSave').textContent='Prosseguir mesmo assim';
+    return;
+  }
+  const method=draft.installment?'BOLETO PARCELADO':(draft.method||'BOLETO À VISTA');
+  const status=draft.installment?'PARCELADO':(draft.status||'À PAGAR');
+  state.costs.unshift({
+    id:uid(),
+    desc:draft.desc,
+    type:draft.type||'BOLETO',
+    center:draft.center||'Geral',
+    date:draft.date||todayISO(),
+    due:draft.due||addDays(7),
+    method,
+    value:draft.value,
+    status,
+    installment:draft.installment||'',
+    boletoLine:draft.boletoLine||''
+  });
+  __boletoPendingDraft=null;
+  save();closeModal();renderAll();go('custos');
+  toast('Boleto lançado em Custos.');
+}
+function openBoletoScanModal(){
+  if(!window.ChevalierScan) return toast('Ferramenta de leitura indisponível.');
+  const types=['BOLETO','IMPLANTE','LAB','BIOMATERIAL','INSUMOS','COMPONENTES','EQUIPAMENTO','ALUGUEL','IMPOSTO E CRO','Consultoria'];
+  openModal('Escanear boleto',`
+    <div class="scan-stage" id="boletoScan">
+      <div class="scan-video-wrap"><video id="bVideo" playsinline muted></video><img id="bPreview" alt="Boleto" hidden><div class="scan-frame"></div></div>
+      <div class="row-actions">
+        <button type="button" class="btn" id="bStartCam">Abrir câmera</button>
+        <label class="btn" style="cursor:pointer">Enviar foto<input type="file" id="bFile" accept="image/*" capture="environment" hidden></label>
+        <button type="button" class="btn" id="bStopCam">Parar câmera</button>
+      </div>
+      <p class="scan-status" id="bScanStatus">Aponte para o código do boleto, envie uma foto ou cole a linha digitável.</p>
+      <div class="form-grid">
+        <div class="field full"><label>Linha digitável</label><input id="bLinha" class="input" placeholder="00000.00000 00000.000000 ..."><div class="row-actions" style="margin-top:8px"><button type="button" class="btn small" id="bParseLinha">Ler linha</button></div></div>
+        <div class="field full"><label>Beneficiário / entidade</label><input id="bBeneficiary" class="input" placeholder="Quem vai receber"></div>
+        <div class="field"><label>Valor</label><input id="bValue" type="number" step="0.01" class="input"></div>
+        <div class="field"><label>Vencimento</label><input id="bDue" type="date" class="input"></div>
+        <div class="field"><label>Parcela</label><input id="bInstallment" class="input" placeholder="Ex.: 1/3"></div>
+        <div class="field"><label>Tipo</label><select id="bType" class="select">${types.map(t=>`<option>${t}</option>`).join('')}</select></div>
+        <div class="field"><label>Centro</label><select id="bCenter" class="select"><option>Geral</option>${state.clinics.map(c=>`<option>${esc(c.name)}</option>`).join('')}</select></div>
+        <div class="field"><label>Forma</label><select id="bMethod" class="select"><option>BOLETO À VISTA</option><option>BOLETO PARCELADO</option><option>PIX</option></select></div>
+        <div class="field"><label>Status</label><select id="bStatus" class="select"><option>À PAGAR</option><option>PARCELADO</option><option>PAGO</option></select></div>
+      </div>
+      <div class="conflict-box" id="bConflict" hidden></div>
+    </div>
+  `,()=>saveBoletoAsCost(false));
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  document.getElementById('modalSave').textContent='Lançar em custos';
+
+  let scanning=false;
+  const loop=async()=>{
+    if(!scanning) return;
+    const video=document.getElementById('bVideo');
+    if(video && video.readyState>=2){
+      try{
+        const codes=await ChevalierScan.detectBarcodeFromVideo(video);
+        if(codes?.length){
+          for(const c of codes){
+            const parsed=ChevalierScan.parseBoletoDigits(c.raw);
+            if(parsed){
+              fillBoletoForm(parsed);
+              scanning=false;
+              ChevalierScan.stopCamera();
+              toast('Código do boleto lido.');
+              return;
+            }
+          }
+        }
+      }catch(_){}
+    }
+    scanLoopId=requestAnimationFrame(loop);
+  };
+  let scanLoopId=0;
+
+  document.getElementById('bStartCam')?.addEventListener('click',async()=>{
+    try{
+      const video=document.getElementById('bVideo');
+      const preview=document.getElementById('bPreview');
+      if(preview) preview.hidden=true;
+      if(video) video.hidden=false;
+      await ChevalierScan.startCamera(video);
+      scanning=true;
+      document.getElementById('bScanStatus').textContent='Câmera ativa — alinhe o código do boleto.';
+      loop();
+    }catch(err){
+      document.getElementById('bScanStatus').textContent='Sem acesso à câmera. Use foto ou linha digitável.';
+      toast('Permita o uso da câmera ou envie uma foto.');
+    }
+  });
+  document.getElementById('bStopCam')?.addEventListener('click',()=>{
+    scanning=false; ChevalierScan.stopCamera();
+    document.getElementById('bScanStatus').textContent='Câmera parada.';
+  });
+  document.getElementById('bFile')?.addEventListener('change',async e=>{
+    const file=e.target.files?.[0]; if(!file) return;
+    scanning=false; ChevalierScan.stopCamera();
+    const url=URL.createObjectURL(file);
+    const wrap=document.querySelector('#boletoScan .scan-video-wrap');
+    const video=document.getElementById('bVideo');
+    let preview=document.getElementById('bPreview');
+    if(wrap && video){
+      if(!preview){
+        preview=document.createElement('img');
+        preview.id='bPreview';
+        preview.alt='Boleto';
+        wrap.insertBefore(preview, wrap.firstChild);
+      }
+      preview.src=url;
+      preview.hidden=false;
+      video.hidden=true;
+    }
+    await processBoletoImage(file);
+  });
+  document.getElementById('bParseLinha')?.addEventListener('click',()=>applyBoletoDigits(getv('bLinha')));
+  document.getElementById('bLinha')?.addEventListener('change',()=>applyBoletoDigits(getv('bLinha')));
+  ['bBeneficiary','bValue','bDue'].forEach(id=>{
+    document.getElementById(id)?.addEventListener('input',()=>renderBoletoConflictBox(boletoDraftFromFields()));
+  });
+}
+
+function handleBarcodeLookup(code){
+  const raw=String(code||'').trim();
+  if(!raw) return;
+  const hit=ChevalierScan.findMaterialByBarcode(raw,state.materials);
+  const box=document.getElementById('bcHit');
+  const st=document.getElementById('bcStatus');
+  if(hit){
+    if(st) st.textContent=`Encontrado: ${hit.name}`;
+    if(box){
+      box.hidden=false;
+      box.innerHTML=`<div><strong>${esc(hit.name)}</strong><div class="cell-sub">${esc(hit.brand||'')} · estoque ${hit.stock} · ${esc(hit.barcode||'')}</div></div>
+        <div class="row-actions">
+          <button type="button" class="btn small" onclick="closeModal();openMaterialModal('${hit.id}')">Editar</button>
+          <button type="button" class="btn small primary" onclick="closeModal();openStockModal('${hit.id}')">Movimentar</button>
+        </div>`;
+    }
+    document.getElementById('bcCode').value=raw;
+    toast(`Material: ${hit.name}`);
+  }else{
+    if(st) st.textContent='Código não cadastrado.';
+    if(box){
+      box.hidden=false;
+      box.innerHTML=`<div><strong>Nenhum material com este código</strong><div class="cell-sub">${esc(raw)}</div></div>
+        <div class="row-actions">
+          <button type="button" class="btn small primary" id="bcCreate">Cadastrar material</button>
+        </div>`;
+      document.getElementById('bcCreate')?.addEventListener('click',()=>{
+        closeModal();
+        openMaterialModal();
+        setTimeout(()=>{ const el=document.getElementById('mBarcode'); if(el) el.value=raw; },0);
+      });
+    }
+  }
+}
+function openBarcodeScanModal(){
+  if(!window.ChevalierScan) return toast('Ferramenta de leitura indisponível.');
+  openModal('Código de barras — estoque',`
+    <div class="scan-stage">
+      <div class="scan-video-wrap"><video id="bcVideo" playsinline muted></video><div class="scan-frame"></div></div>
+      <div class="row-actions">
+        <button type="button" class="btn" id="bcStartCam">Abrir câmera</button>
+        <button type="button" class="btn" id="bcStopCam">Parar</button>
+      </div>
+      <p class="scan-status" id="bcStatus">Aponte para o EAN do produto ou use um leitor USB no campo abaixo.</p>
+      <div class="field full"><label>Código</label><input id="bcCode" class="input" placeholder="Escaneie ou digite e pressione Enter" autofocus></div>
+      <div class="barcode-hit" id="bcHit" hidden></div>
+      <p class="field-hint">Dica: leitores USB funcionam como teclado — foque o campo e escaneie.</p>
+    </div>
+  `,()=>{
+    const code=getv('bcCode');
+    if(!code) return toast('Informe um código.');
+    const hit=ChevalierScan.findMaterialByBarcode(code,state.materials);
+    if(hit){ closeModal(); openStockModal(hit.id); }
+    else handleBarcodeLookup(code);
+  });
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  document.getElementById('modalSave').textContent='Abrir estoque';
+
+  let scanning=false;
+  const loop=async()=>{
+    if(!scanning) return;
+    const video=document.getElementById('bcVideo');
+    if(video && video.readyState>=2){
+      try{
+        const codes=await ChevalierScan.detectBarcodeFromVideo(video);
+        if(codes?.length){
+          const code=codes[0].raw;
+          document.getElementById('bcCode').value=code;
+          handleBarcodeLookup(code);
+          scanning=false;
+          ChevalierScan.stopCamera();
+        }
+      }catch(_){}
+    }
+    requestAnimationFrame(loop);
+  };
+  document.getElementById('bcStartCam')?.addEventListener('click',async()=>{
+    try{
+      await ChevalierScan.startCamera(document.getElementById('bcVideo'));
+      scanning=true;
+      document.getElementById('bcStatus').textContent='Câmera ativa — alinhe o código de barras.';
+      loop();
+    }catch{
+      document.getElementById('bcStatus').textContent='Sem câmera. Use leitor USB ou digite o código.';
+      toast('Permita a câmera ou digite o código.');
+    }
+  });
+  document.getElementById('bcStopCam')?.addEventListener('click',()=>{
+    scanning=false; ChevalierScan.stopCamera();
+    document.getElementById('bcStatus').textContent='Câmera parada.';
+  });
+  document.getElementById('bcCode')?.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){ e.preventDefault(); handleBarcodeLookup(getv('bcCode')); }
+  });
+  setTimeout(()=>document.getElementById('bcCode')?.focus(),50);
+}
+
 function openQuickModal(){
-  openModal('Novo lançamento',`<div class="grid layout-3"><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openPatientModal()">Paciente</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openProsthesisModal()">Trabalho protético</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openReceivableModal()">Recebível</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openCostModal()">Custo</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openMaterialModal()">Material</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openStockModal()">Estoque</button></div>`,()=>closeModal());
+  openModal('Novo lançamento',`<div class="grid layout-3"><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openPatientModal()">Paciente</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openProsthesisModal()">Trabalho protético</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openReceivableModal()">Recebível</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openCostModal()">Custo</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBoletoScanModal()">Escanear boleto</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBarcodeScanModal()">Código de barras</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openMaterialModal()">Material</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openStockModal()">Estoque</button></div>`,()=>closeModal());
   document.getElementById('modalSave').style.display='none';
   setTimeout(()=>document.getElementById('modalSave').style.display='',0);
 }
@@ -1106,14 +1447,16 @@ document.getElementById('todayLabel').textContent=now.toLocaleDateString('pt-BR'
 async function boot(){
   try{
     const r=await fetch('api/state.php',{cache:'no-store'});
-    const data=await r.json();
-    if(data.ok && data.state){
-      state=data.state;
-      persistReady=true;
-      localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
-    }else if(data.ok && !data.state){
-      persistReady=true;
-      await fetch('api/state.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});
+    if(r.ok){
+      const data=await r.json();
+      if(data.ok && data.state){
+        state=data.state;
+        persistReady=true;
+        localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
+      }else if(data.ok && !data.state){
+        persistReady=true;
+        await fetch('api/state.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});
+      }
     }
   }catch(e){ /* fallback localStorage */ }
   ensureCatalog();

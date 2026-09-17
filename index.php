@@ -403,7 +403,17 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
       <section class="page" id="page-custos">
         <div class="page-head">
           <div><h2>Custos</h2><p>Despesas operacionais por categoria, vencimento e centro de custo.</p></div>
-          <div class="page-actions"><button class="btn primary" onclick="openCostModal()">＋ Novo custo</button></div>
+          <div class="page-actions">
+            <button class="btn" onclick="openBoletoScanModal()">⎙ Escanear boleto</button>
+            <button class="btn primary" onclick="openCostModal()">＋ Novo custo</button>
+          </div>
+        </div>
+        <div class="ai-banner scan-banner">
+          <div>
+            <strong>Leitor de boletos</strong>
+            <p>Fotografe ou envie o boleto, ou cole a linha digitável. Extraímos beneficiário, vencimento, valor e parcela; alertamos se já existir lançamento parecido.</p>
+          </div>
+          <button class="btn primary" onclick="openBoletoScanModal()">Escanear agora</button>
         </div>
         <div class="grid kpi-grid" style="grid-template-columns:repeat(4,1fr)">
           <div class="kpi"><div class="label">Total lançado</div><div class="value" id="costTotal">R$ 0</div></div>
@@ -454,10 +464,13 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
       <section class="page" id="page-materiais">
         <div class="page-head">
           <div><h2>Materiais e banco de preços</h2><p>Marca, fornecedor, embalagem, preço atual e histórico de compra.</p></div>
-          <div class="page-actions"><button class="btn primary" onclick="openMaterialModal()">＋ Novo material</button></div>
+          <div class="page-actions">
+            <button class="btn" onclick="openBarcodeScanModal()">▮▮ Escanear código</button>
+            <button class="btn primary" onclick="openMaterialModal()">＋ Novo material</button>
+          </div>
         </div>
         <div class="card"><div class="table-wrap"><table>
-          <thead><tr><th>Material</th><th>Marca</th><th>Tipo</th><th>Fornecedor</th><th>Embalagem</th><th>Preço atual</th><th>Custo unit.</th><th>Atualizado</th><th></th></tr></thead>
+          <thead><tr><th>Material</th><th>Código de barras</th><th>Marca</th><th>Tipo</th><th>Fornecedor</th><th>Embalagem</th><th>Preço atual</th><th>Custo unit.</th><th>Atualizado</th><th></th></tr></thead>
           <tbody id="materialsTable"></tbody>
         </table></div></div>
       </section>
@@ -466,7 +479,17 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
       <section class="page" id="page-estoque">
         <div class="page-head">
           <div><h2>Estoque</h2><p>Saldo, estoque mínimo e valor financeiro imobilizado em materiais.</p></div>
-          <div class="page-actions"><button class="btn primary" onclick="openStockModal()">＋ Movimentar estoque</button></div>
+          <div class="page-actions">
+            <button class="btn" onclick="openBarcodeScanModal()">▮▮ Escanear código</button>
+            <button class="btn primary" onclick="openStockModal()">＋ Movimentar estoque</button>
+          </div>
+        </div>
+        <div class="ai-banner scan-banner">
+          <div>
+            <strong>Leitor de código de barras</strong>
+            <p>Use a câmera do celular ou um leitor USB. O código busca o material cadastrado e abre a movimentação de estoque.</p>
+          </div>
+          <button class="btn primary" onclick="openBarcodeScanModal()">Escanear material</button>
         </div>
         <div class="grid kpi-grid" style="grid-template-columns:repeat(3,1fr)">
           <div class="kpi"><div class="label">Valor em estoque</div><div class="value" id="stockValue">R$ 0</div></div>
@@ -539,6 +562,8 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
               <div class="settings-row"><div class="desc"><strong>Notion</strong><span>Fonte atual para migração de pacientes, custos, honorários e estoque.</span></div><span class="badge b-green">Referência conectada</span></div>
               <div class="settings-row"><div class="desc"><strong>Banco de preços</strong><span>Assistente busca Dental Cremer, Dental Speed e Surya Dental e calcula custo fracionado.</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>Consumo automático</strong><span>Ao lançar procedimento, materiais da ficha preenchem o custo (editável).</span></div><span class="badge b-green">Ativo</span></div>
+              <div class="settings-row"><div class="desc"><strong>Leitor de boletos</strong><span>Escaneia boleto (câmera/arquivo/linha digitável), lança em Custos e alerta duplicatas.</span></div><span class="badge b-green">Ativo</span></div>
+              <div class="settings-row"><div class="desc"><strong>Código de barras</strong><span>Lê EAN/código do material para localizar e movimentar estoque.</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>IA gerencial</strong><span>Consultas como “qual clínica me deu maior lucro nos últimos 90 dias?”.</span></div><span class="badge b-blue">Fase 5</span></div>
               <div class="settings-row"><div class="desc"><strong>Backup local</strong><span>Baixe os dados do protótipo em JSON.</span></div><button class="btn small" onclick="exportData()">Exportar JSON</button></div>
             </div>
@@ -558,6 +583,7 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
 </div>
 <div class="toast" id="toast"></div>
 
+<script src="<?= chevalier_asset_url('assets/js/scan-tools.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/app.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/update-manager.js') ?>" defer></script>
 </body>
