@@ -1,11 +1,11 @@
 {
-  "version": "1.5",
-  "name": "Assistente de materiais e dashboard",
+  "version": "1.6",
+  "name": "Leitor de boletos e código de barras",
   "releasedAt": "2026-09-17",
   "changes": [
-    "Assistente de preços na aba Materiais: busca Dental Cremer, Dental Speed e Surya Dental.",
-    "Cálculo automático do custo unitário fracionado (preço da embalagem ÷ unidades).",
-    "Ao lançar procedimento/paciente, consumo de materiais é preenchido pela ficha (editável) e baixa estoque.",
-    "Dashboard com gráficos de lucro bruto × custos por mês, caixa recebido × a receber e top procedimentos."
+    "Escanear boleto em Custos: câmera, foto ou linha digitável com leitura de valor, vencimento, beneficiário e parcela.",
+    "Alerta de conflito se já existir custo parecido — você decide se prossegue.",
+    "Leitor de código de barras em Materiais e Estoque (câmera ou leitor USB) para localizar o produto e movimentar estoque.",
+    "Campo de código de barras no cadastro de materiais."
   ]
 }
