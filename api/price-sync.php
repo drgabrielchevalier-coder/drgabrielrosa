@@ -187,7 +187,7 @@ function chevalier_rank_products(array $products, string $name, string $brand): 
             }
         }
         $need = max(1, count($nameTokens) <= 2 ? count($nameTokens) : count($nameTokens) - 1);
-        if ($matched < $need) {
+        if ($matched < $need || $score < 6) {
             continue;
         }
         $scored[] = [
