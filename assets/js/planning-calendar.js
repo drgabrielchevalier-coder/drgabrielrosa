@@ -3,6 +3,9 @@
  */
 (function (global) {
   function S() {
+    if (!global.state || typeof global.state !== 'object') {
+      global.state = { reminders: [], plans: [], patients: [], materials: [], clinics: [], procedures: [], costs: [], payroll: [], prostheses: [] };
+    }
     return global.state;
   }
   function ensureCollections() {
