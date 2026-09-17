@@ -21,12 +21,13 @@
   };
 
   let activeStream = null;
-  let scanLoop = null;
+  let scanTimer = null;
+  let zxingReader = null;
 
   function stopCamera() {
-    if (scanLoop) {
-      cancelAnimationFrame(scanLoop);
-      scanLoop = null;
+    if (scanTimer) {
+      clearTimeout(scanTimer);
+      scanTimer = null;
     }
     if (activeStream) {
       activeStream.getTracks().forEach((t) => t.stop());
@@ -38,17 +39,21 @@
     return String(s || '').replace(/\D/g, '');
   }
 
-  function pad(n, len) {
-    return String(n).padStart(len, '0');
-  }
-
-  /** Fator de vencimento FEBRABAN (base 07/10/1997). */
+  /** Fator de vencimento FEBRABAN (base 07/10/1997; novo ciclo 22/02/2025). */
   function dueFromFactor(factor) {
     const f = Number(factor);
     if (!Number.isFinite(f) || f <= 0) return '';
-    const base = new Date(1997, 9, 7);
-    base.setDate(base.getDate() + f);
-    return base.toISOString().slice(0, 10);
+    const classic = new Date(1997, 9, 7);
+    classic.setDate(classic.getDate() + f);
+    const candidates = [classic];
+    if (f >= 1000) {
+      const neu = new Date(2025, 1, 22);
+      neu.setDate(neu.getDate() + (f - 1000));
+      candidates.push(neu);
+    }
+    const today = new Date();
+    candidates.sort((a, b) => Math.abs(a - today) - Math.abs(b - today));
+    return candidates[0].toISOString().slice(0, 10);
   }
 
   function formatLinha(digits) {
@@ -62,7 +67,6 @@
     return d;
   }
 
-  /** Converte linha digitável (47) → código de barras (44). */
   function linhaToBarcode(linha) {
     const d = onlyDigits(linha);
     if (d.length !== 47) return d.length === 44 ? d : '';
@@ -77,8 +81,6 @@
     const campo3 = b.slice(34, 44);
     const dv = b.slice(4, 5);
     const fatorValor = b.slice(5, 19);
-    const withDv = (campo) => campo; // DVs de campo omitidos na montagem simplificada a partir do barcode
-    // Montagem completa exige DVs dos campos — reconstruímos a partir do barcode padrão
     function mod10(num) {
       let sum = 0;
       let mult = 2;
@@ -91,10 +93,7 @@
       const r = sum % 10;
       return r === 0 ? 0 : 10 - r;
     }
-    const f1 = campo1 + String(mod10(campo1));
-    const f2 = campo2 + String(mod10(campo2));
-    const f3 = campo3 + String(mod10(campo3));
-    return f1 + f2 + f3 + dv + fatorValor;
+    return campo1 + String(mod10(campo1)) + campo2 + String(mod10(campo2)) + campo3 + String(mod10(campo3)) + dv + fatorValor;
   }
 
   function parseBankBoleto(digits) {
@@ -105,7 +104,7 @@
     const factor = d.slice(5, 9);
     const cents = d.slice(9, 19);
     const value = Number(cents) / 100;
-    const due = dueFromFactor(factor);
+    const due = dueFromFactor(Number(factor));
     return {
       kind: 'bancario',
       bank,
@@ -122,10 +121,12 @@
   function parseConvenioBoleto(digits) {
     const d = onlyDigits(digits);
     if (d.length !== 48 && d.length !== 44) return null;
-    // Arrecadação: valor geralmente nos dígitos finais (últimos 11 do bloco) — heurística
-    const raw = d.length === 48 ? d : d;
-    const valueBlock = raw.slice(-11);
-    const value = Number(valueBlock.slice(0, 9) + '.' + valueBlock.slice(9)) || Number(raw.slice(4, 15)) / 100;
+    const raw = d;
+    let value = 0;
+    if (raw.length >= 15) {
+      const cents = raw.slice(4, 15);
+      value = Number(cents) / 100;
+    }
     return {
       kind: 'arrecadacao',
       bank: raw.slice(0, 3),
@@ -142,6 +143,13 @@
     const d = onlyDigits(raw);
     if (d.length === 47 || d.length === 44) return parseBankBoleto(d);
     if (d.length === 48) return parseConvenioBoleto(d);
+    // Aceita códigos longos com ruído — tenta extrair 44/47/48 consecutivos
+    const m44 = d.match(/\d{44}/);
+    const m47 = d.match(/\d{47}/);
+    const m48 = d.match(/\d{48}/);
+    if (m47) return parseBankBoleto(m47[0]);
+    if (m44) return parseBankBoleto(m44[0]);
+    if (m48) return parseConvenioBoleto(m48[0]);
     return null;
   }
 
@@ -157,7 +165,7 @@
     };
 
     const linhaMatch = t.match(
-      /(\d{5}[.\s]?\d{5}\s?\d{5}[.\s]?\d{6}\s?\d{5}[.\s]?\d{6}\s?\d\s?\d{14})|(\d{47,48})/
+      /(\d{5}[.\s]?\d{5}\s?\d{5}[.\s]?\d{6}\s?\d{5}[.\s]?\d{6}\s?\d\s?\d{14})|(\d{44,48})/
     );
     if (linhaMatch) {
       const digits = onlyDigits(linhaMatch[0]);
@@ -178,15 +186,17 @@
       result.value = Number(valMatch[1].replace(/\./g, '').replace(',', '.'));
     }
 
-    const dueMatch = t.match(/(?:venc(?:imento)?|vencto)[^\d]{0,12}(\d{2}\/\d{2}\/\d{4})/i)
-      || t.match(/\b(\d{2}\/\d{2}\/\d{4})\b/);
+    const dueMatch =
+      t.match(/(?:venc(?:imento)?|vencto)[^\d]{0,12}(\d{2}\/\d{2}\/\d{4})/i) ||
+      t.match(/\b(\d{2}\/\d{2}\/\d{4})\b/);
     if (dueMatch && !result.due) {
       const [dd, mm, yyyy] = dueMatch[1].split('/');
       result.due = `${yyyy}-${mm}-${dd}`;
     }
 
-    const parc = t.match(/parcela\s*(\d{1,2})\s*\/\s*(\d{1,2})/i)
-      || t.match(/(\d{1,2})\s*\/\s*(\d{1,2})\s*(?:parcela|prest)/i);
+    const parc =
+      t.match(/parcela\s*(\d{1,2})\s*\/\s*(\d{1,2})/i) ||
+      t.match(/(\d{1,2})\s*\/\s*(\d{1,2})\s*(?:parcela|prest)/i);
     if (parc) result.installment = `${parc[1]}/${parc[2]}`;
 
     const ben = t.match(/(?:benefici[aá]rio|cedente|favorecido)\s*[:\-]?\s*([^\n\r]{3,80})/i);
@@ -197,50 +207,264 @@
     return result;
   }
 
-  async function loadTesseract() {
-    if (global.Tesseract) return global.Tesseract;
-    await new Promise((resolve, reject) => {
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      if ([...document.scripts].some((s) => s.src === src)) {
+        resolve();
+        return;
+      }
       const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-      s.onload = resolve;
-      s.onerror = () => reject(new Error('Não foi possível carregar o OCR.'));
+      s.src = src;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('Falha ao carregar ' + src));
       document.head.appendChild(s);
     });
+  }
+
+  async function loadTesseract() {
+    if (global.Tesseract) return global.Tesseract;
+    await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
     return global.Tesseract;
+  }
+
+  async function loadZXing() {
+    if (global.ZXing) return global.ZXing;
+    await loadScript('https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js');
+    return global.ZXing;
+  }
+
+  async function loadPdfJs() {
+    if (global.pdfjsLib) return global.pdfjsLib;
+    await loadScript('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js');
+    if (global.pdfjsLib) {
+      global.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+    }
+    return global.pdfjsLib;
   }
 
   async function ocrImage(source) {
     const Tesseract = await loadTesseract();
-    const { data } = await Tesseract.recognize(source, 'por', {
-      logger: () => {},
-    });
+    const { data } = await Tesseract.recognize(source, 'por', { logger: () => {} });
     return data?.text || '';
   }
 
-  async function detectBarcodeFromVideo(video) {
-    if (!('BarcodeDetector' in global)) return null;
-    const formats = ['itf', 'code_128', 'ean_13', 'ean_8', 'code_39', 'upc_a', 'upc_e', 'qr_code', 'data_matrix'];
-    let detector;
-    try {
-      detector = new global.BarcodeDetector({ formats });
-    } catch {
-      detector = new global.BarcodeDetector();
+  /** Recorta a faixa retangular do guia (código de barras do boleto). */
+  function cropGuideRegion(videoOrCanvas, guideEl, wrapEl) {
+    const canvas = document.createElement('canvas');
+    const w = videoOrCanvas.videoWidth || videoOrCanvas.width;
+    const h = videoOrCanvas.videoHeight || videoOrCanvas.height;
+    if (!w || !h) return null;
+
+    let sx = 0;
+    let sy = Math.floor(h * 0.28);
+    let sw = w;
+    let sh = Math.floor(h * 0.44);
+
+    if (guideEl && wrapEl) {
+      const wr = wrapEl.getBoundingClientRect();
+      const gr = guideEl.getBoundingClientRect();
+      if (wr.width && wr.height) {
+        const scaleX = w / wr.width;
+        const scaleY = h / wr.height;
+        sx = Math.max(0, Math.floor((gr.left - wr.left) * scaleX));
+        sy = Math.max(0, Math.floor((gr.top - wr.top) * scaleY));
+        sw = Math.min(w - sx, Math.floor(gr.width * scaleX));
+        sh = Math.min(h - sy, Math.floor(gr.height * scaleY));
+      }
     }
-    const codes = await detector.detect(video);
-    if (!codes?.length) return null;
-    return codes.map((c) => ({ raw: c.rawValue, format: c.format }));
+
+    canvas.width = Math.max(1, sw);
+    canvas.height = Math.max(1, sh);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoOrCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+    return canvas;
   }
 
-  async function startCamera(videoEl) {
+  async function detectWithBarcodeDetector(source) {
+    if (!('BarcodeDetector' in global)) return [];
+    let detector;
+    try {
+      detector = new global.BarcodeDetector({
+        formats: ['itf', 'code_128', 'codabar', 'code_39'],
+      });
+    } catch {
+      try {
+        detector = new global.BarcodeDetector();
+      } catch {
+        return [];
+      }
+    }
+    try {
+      const codes = await detector.detect(source);
+      return (codes || []).map((c) => ({ raw: c.rawValue, format: c.format || 'unknown' }));
+    } catch {
+      return [];
+    }
+  }
+
+  async function detectWithZXing(canvas) {
+    try {
+      const ZXing = await loadZXing();
+      if (!zxingReader) {
+        const hints = new Map();
+        const formats = [
+          ZXing.BarcodeFormat.ITF,
+          ZXing.BarcodeFormat.CODE_128,
+          ZXing.BarcodeFormat.CODE_39,
+          ZXing.BarcodeFormat.CODABAR,
+        ];
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        zxingReader = new ZXing.BrowserMultiFormatReader(hints);
+      }
+      const result = await zxingReader.decodeFromCanvas(canvas);
+      if (result?.getText) {
+        return [{ raw: result.getText(), format: String(result.getBarcodeFormat?.() || 'zxing') }];
+      }
+    } catch {
+      /* no code */
+    }
+    return [];
+  }
+
+  async function detectBarcodeFromSource(source, opts = {}) {
+    const wrap = opts.wrapEl;
+    const guide = opts.guideEl;
+    const cropped = cropGuideRegion(source, guide, wrap) || (() => {
+      const c = document.createElement('canvas');
+      const w = source.videoWidth || source.width;
+      const h = source.videoHeight || source.height;
+      c.width = w;
+      c.height = h;
+      c.getContext('2d').drawImage(source, 0, 0);
+      return c;
+    })();
+
+    let codes = await detectWithBarcodeDetector(cropped);
+    if (!codes.length) codes = await detectWithBarcodeDetector(source);
+    if (!codes.length) codes = await detectWithZXing(cropped);
+    if (!codes.length) {
+      // tenta full frame com contraste
+      const full = document.createElement('canvas');
+      const w = source.videoWidth || source.width;
+      const h = source.videoHeight || source.height;
+      full.width = w;
+      full.height = h;
+      const ctx = full.getContext('2d');
+      ctx.drawImage(source, 0, 0);
+      const img = ctx.getImageData(0, 0, w, h);
+      for (let i = 0; i < img.data.length; i += 4) {
+        const g = img.data[i] * 0.3 + img.data[i + 1] * 0.59 + img.data[i + 2] * 0.11;
+        const v = g > 140 ? 255 : 0;
+        img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+      }
+      ctx.putImageData(img, 0, 0);
+      codes = await detectWithZXing(full);
+    }
+    return codes;
+  }
+
+  async function detectBarcodeFromVideo(video, opts) {
+    if (!video || video.readyState < 2) return null;
+    const codes = await detectBarcodeFromSource(video, opts || {});
+    return codes.length ? codes : null;
+  }
+
+  async function detectBarcodeFromBlob(blob, opts) {
+    const bmp = await createImageBitmap(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = bmp.width;
+    canvas.height = bmp.height;
+    canvas.getContext('2d').drawImage(bmp, 0, 0);
+    bmp.close?.();
+    return detectBarcodeFromSource(canvas, opts || {});
+  }
+
+  async function startCamera(videoEl, opts = {}) {
     stopCamera();
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+    const constraints = {
       audio: false,
-    });
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: opts.wide ? 1920 : 1280 },
+        height: { ideal: opts.wide ? 1080 : 720 },
+        focusMode: { ideal: 'continuous' },
+      },
+    };
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    }
     activeStream = stream;
     videoEl.srcObject = stream;
+    videoEl.setAttribute('playsinline', 'true');
+    videoEl.muted = true;
     await videoEl.play();
     return stream;
+  }
+
+  async function pdfFirstPageToCanvas(file) {
+    const pdfjsLib = await loadPdfJs();
+    if (!pdfjsLib) throw new Error('Leitor de PDF indisponível.');
+    const data = new Uint8Array(await file.arrayBuffer());
+    const pdf = await pdfjsLib.getDocument({ data }).promise;
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 2.5 });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    return canvas;
+  }
+
+  async function readBoletoFromFile(file, opts = {}) {
+    const name = String(file.name || '').toLowerCase();
+    const type = String(file.type || '');
+    let canvas = null;
+    let text = '';
+
+    if (type === 'application/pdf' || name.endsWith('.pdf')) {
+      canvas = await pdfFirstPageToCanvas(file);
+    } else {
+      const bmp = await createImageBitmap(file);
+      canvas = document.createElement('canvas');
+      canvas.width = bmp.width;
+      canvas.height = bmp.height;
+      canvas.getContext('2d').drawImage(bmp, 0, 0);
+      bmp.close?.();
+    }
+
+    let codes = await detectBarcodeFromSource(canvas, opts);
+    for (const c of codes) {
+      const parsed = parseBoletoDigits(c.raw);
+      if (parsed) return { parsed, source: 'barcode', codes };
+    }
+
+    text = await ocrImage(canvas);
+    const extracted = extractFromText(text);
+    if (extracted.linha) {
+      const parsed = parseBoletoDigits(extracted.linha);
+      if (parsed) {
+        return {
+          parsed: {
+            ...parsed,
+            beneficiary: extracted.beneficiary || parsed.beneficiary,
+            installment: extracted.installment || '',
+            due: extracted.due || parsed.due,
+            value: extracted.value ?? parsed.value,
+          },
+          source: 'ocr',
+          text,
+        };
+      }
+    }
+    if (extracted.value != null || extracted.due || extracted.beneficiary) {
+      return { parsed: extracted, source: 'ocr-partial', text };
+    }
+    return { parsed: null, source: 'none', text, codes };
   }
 
   function daysBetween(a, b) {
@@ -279,8 +503,7 @@
       if (draft.boletoLine && c.boletoLine && onlyDigits(c.boletoLine) === onlyDigits(draft.boletoLine)) return true;
       const sameValue = Math.abs(Number(c.value || 0) - Number(draft.value || 0)) < 0.02;
       if (!sameValue) return false;
-      const dueClose =
-        c.due && draft.due ? Math.abs(daysBetween(c.due, draft.due)) <= 3 : false;
+      const dueClose = c.due && draft.due ? Math.abs(daysBetween(c.due, draft.due)) <= 3 : false;
       const descClose = similar(c.desc, draft.desc) >= 0.55 || similar(c.desc, draft.beneficiary) >= 0.55;
       return dueClose || descClose;
     });
@@ -304,7 +527,10 @@
     extractFromText,
     ocrImage,
     detectBarcodeFromVideo,
+    detectBarcodeFromBlob,
+    detectBarcodeFromSource,
     startCamera,
+    readBoletoFromFile,
     findCostConflicts,
     findMaterialByBarcode,
     BANK_NAMES,

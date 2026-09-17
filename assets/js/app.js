@@ -788,6 +788,7 @@ function openModal(title,body,onSave){
 }
 function closeModal(){
   if(window.ChevalierScan) ChevalierScan.stopCamera();
+  document.getElementById('bEditAgain')?.remove();
   document.getElementById('modalRoot').classList.remove('open');
   const s=document.getElementById('modalSave');
   s.style.display='';s.textContent='Salvar';s.classList.remove('danger');
@@ -1090,6 +1091,7 @@ function openStockModal(prefillId=''){
 }
 
 function boletoDraftFromFields(){
+  if(!window.ChevalierScan) return null;
   const linha=ChevalierScan.onlyDigits(getv('bLinha'));
   const parsed=linha?ChevalierScan.parseBoletoDigits(linha):null;
   return {
@@ -1143,61 +1145,93 @@ function fillBoletoForm(data){
 }
 async function applyBoletoDigits(raw){
   const parsed=ChevalierScan.parseBoletoDigits(raw);
-  if(!parsed){ toast('Linha digitável inválida.'); return; }
+  if(!parsed){ toast('Linha digitável inválida.'); return null; }
   fillBoletoForm(parsed);
-  toast('Dados do boleto preenchidos.');
+  return parsed;
 }
-async function processBoletoImage(file){
+async function processBoletoDocument(file){
   const st=document.getElementById('bScanStatus');
-  if(st) st.textContent='Analisando imagem do boleto…';
+  if(st) st.textContent='Lendo documento do boleto…';
   try{
-    let filled=false;
-    if('BarcodeDetector' in window && file){
-      try{
-        const bmp=await createImageBitmap(file);
-        const detector=new BarcodeDetector({formats:['itf','code_128','codabar','code_39']});
-        const codes=await detector.detect(bmp);
-        bmp.close?.();
-        for(const c of codes||[]){
-          const parsed=ChevalierScan.parseBoletoDigits(c.rawValue);
-          if(parsed){ fillBoletoForm(parsed); filled=true; break; }
-        }
-      }catch(_){ /* fallback OCR */ }
+    const wrap=document.querySelector('#boletoScan .scan-video-wrap');
+    const guide=document.querySelector('#boletoScan .scan-frame');
+    const result=await ChevalierScan.readBoletoFromFile(file,{wrapEl:wrap,guideEl:guide});
+    if(result.parsed && (result.parsed.value!=null || result.parsed.linha || result.parsed.barcode)){
+      fillBoletoForm(result.parsed);
+      if(st) st.textContent='Dados identificados — confirme para lançar.';
+      askBoletoProceed(result.parsed);
+      return;
     }
-    const text=await ChevalierScan.ocrImage(file);
-    const extracted=ChevalierScan.extractFromText(text);
-    if(extracted.linha){
-      const parsed=ChevalierScan.parseBoletoDigits(extracted.linha);
-      fillBoletoForm({...(parsed||{}), ...extracted, beneficiary:extracted.beneficiary||parsed?.beneficiary, value:extracted.value??parsed?.value, due:extracted.due||parsed?.due});
-      filled=true;
-    }else if(extracted.value!=null || extracted.due || extracted.beneficiary){
-      fillBoletoForm(extracted);
-      filled=true;
-    }
-    if(st) st.textContent=filled?'Leitura concluída — revise e salve.':'Não li o código automaticamente. Cole a linha digitável.';
-    if(!filled) toast('Não foi possível ler o boleto automaticamente.');
+    if(st) st.textContent='Não encontrei o código automaticamente. Cole a linha digitável ou tente outra foto/PDF.';
+    toast('Não foi possível ler o boleto automaticamente.');
   }catch(err){
     if(st) st.textContent=err.message||'Falha na leitura.';
     toast(err.message||'Falha ao analisar o boleto.');
   }
 }
+function askBoletoProceed(parsed){
+  if(!parsed) return;
+  const draft=boletoDraftFromFields()||{
+    desc:parsed.beneficiary||parsed.bankName||'Boleto',
+    beneficiary:parsed.beneficiary||parsed.bankName||'',
+    value:parsed.value||0,
+    due:parsed.due||'',
+    installment:parsed.installment||'',
+    boletoLine:parsed.linha||parsed.barcode||'',
+    type:'BOLETO',
+    center:'Geral',
+    method:parsed.installment?'BOLETO PARCELADO':'BOLETO À VISTA',
+    status:parsed.installment?'PARCELADO':'À PAGAR',
+    date:todayISO()
+  };
+  const conflicts=ChevalierScan.findCostConflicts(draft,state.costs);
+  __boletoPendingDraft=draft;
+  if(window.ChevalierScan) ChevalierScan.stopCamera();
+  openModal('Boleto identificado — prosseguir?',`
+    <div class="boleto-result">
+      <h4>Dados lidos automaticamente</h4>
+      <dl>
+        <dt>Beneficiário</dt><dd>${esc(draft.desc||'—')}</dd>
+        <dt>Valor</dt><dd>${brl.format(draft.value||0)}</dd>
+        <dt>Vencimento</dt><dd>${draft.due?fmtDate(draft.due):'—'}</dd>
+        <dt>Parcela</dt><dd>${esc(draft.installment||'—')}</dd>
+        <dt>Linha</dt><dd style="font-weight:400;word-break:break-all">${esc(ChevalierScan.formatLinha(draft.boletoLine||'')||'—')}</dd>
+      </dl>
+    </div>
+    ${conflicts.length?`<div class="conflict-box"><strong>Possível duplicata</strong><ul>${conflicts.slice(0,4).map(c=>`<li>${esc(c.desc)} · ${brl.format(c.value)} · venc. ${fmtDate(c.due)}</li>`).join('')}</ul></div>`:''}
+    <p class="field-hint" style="margin-top:12px">Deseja lançar este boleto em Custos?</p>
+  `,()=>saveBoletoAsCost(true));
+  document.getElementById('modalSave').textContent=conflicts.length?'Prosseguir mesmo assim':'Prosseguir e lançar';
+  const foot=document.querySelector('#modalRoot .modal-foot');
+  if(foot && !document.getElementById('bEditAgain')){
+    const edit=document.createElement('button');
+    edit.id='bEditAgain';
+    edit.className='btn';
+    edit.type='button';
+    edit.textContent='Revisar dados';
+    edit.onclick=()=>{
+      closeModal();
+      openBoletoScanModal(draft);
+    };
+    foot.insertBefore(edit, foot.firstChild);
+  }
+}
 let __boletoPendingDraft=null;
 function saveBoletoAsCost(force=false){
   const draft=force && __boletoPendingDraft ? __boletoPendingDraft : boletoDraftFromFields();
+  if(!draft) return toast('Ferramenta de leitura indisponível.');
   if(!draft.desc) return toast('Informe o beneficiário / descrição.');
   if(!(draft.value>0)) return toast('Informe o valor do boleto.');
   const conflicts=ChevalierScan.findCostConflicts(draft,state.costs);
   if(conflicts.length && !force){
-    __boletoPendingDraft=draft;
-    if(window.ChevalierScan) ChevalierScan.stopCamera();
-    openModal('Boleto parecido já lançado',`
-      <div class="conflict-box">
-        <strong>Encontramos lançamento(s) semelhante(s)</strong>
-        <ul>${conflicts.slice(0,5).map(c=>`<li>${esc(c.desc)} · ${brl.format(c.value)} · venc. ${fmtDate(c.due)} · ${esc(c.status)}</li>`).join('')}</ul>
-      </div>
-      <p>Deseja prosseguir mesmo assim e lançar este boleto como novo custo?</p>
-    `,()=>saveBoletoAsCost(true));
-    document.getElementById('modalSave').textContent='Prosseguir mesmo assim';
+    askBoletoProceed({
+      beneficiary:draft.desc,
+      bankName:draft.desc,
+      value:draft.value,
+      due:draft.due,
+      installment:draft.installment,
+      linha:draft.boletoLine
+    });
     return;
   }
   const method=draft.installment?'BOLETO PARCELADO':(draft.method||'BOLETO À VISTA');
@@ -1219,18 +1253,24 @@ function saveBoletoAsCost(force=false){
   save();closeModal();renderAll();go('custos');
   toast('Boleto lançado em Custos.');
 }
-function openBoletoScanModal(){
+function openBoletoScanModal(prefill=null){
   if(!window.ChevalierScan) return toast('Ferramenta de leitura indisponível.');
   const types=['BOLETO','IMPLANTE','LAB','BIOMATERIAL','INSUMOS','COMPONENTES','EQUIPAMENTO','ALUGUEL','IMPOSTO E CRO','Consultoria'];
   openModal('Escanear boleto',`
-    <div class="scan-stage">
-      <div class="scan-video-wrap"><video id="bVideo" playsinline muted></video><div class="scan-frame"></div></div>
-      <div class="row-actions">
-        <button type="button" class="btn" id="bStartCam">Abrir câmera</button>
-        <label class="btn" style="cursor:pointer">Enviar foto<input type="file" id="bFile" accept="image/*" capture="environment" hidden></label>
-        <button type="button" class="btn" id="bStopCam">Parar câmera</button>
+    <div class="scan-stage" id="boletoScan">
+      <div class="scan-video-wrap boleto-cam">
+        <video id="bVideo" playsinline muted></video>
+        <img id="bPreview" alt="Boleto" hidden>
+        <div class="scan-frame" id="bGuide"></div>
+        <div class="scan-guide-label">Alinhe o código de barras (faixa retangular)</div>
       </div>
-      <p class="scan-status" id="bScanStatus">Aponte para o código do boleto, envie uma foto ou cole a linha digitável.</p>
+      <div class="row-actions">
+        <button type="button" class="btn primary" id="bStartCam">Abrir câmera</button>
+        <label class="btn" style="cursor:pointer">Importar foto / PDF<input type="file" id="bFile" accept="image/*,application/pdf,.pdf" capture="environment" hidden></label>
+        <button type="button" class="btn" id="bStopCam">Parar</button>
+      </div>
+      <p class="scan-status" id="bScanStatus">A leitura é automática: aponte a faixa retangular para o código de barras do boleto, ou importe foto/PDF.</p>
+      <div id="bResultPreview" class="boleto-result" hidden></div>
       <div class="form-grid">
         <div class="field full"><label>Linha digitável</label><input id="bLinha" class="input" placeholder="00000.00000 00000.000000 ..."><div class="row-actions" style="margin-top:8px"><button type="button" class="btn small" id="bParseLinha">Ler linha</button></div></div>
         <div class="field full"><label>Beneficiário / entidade</label><input id="bBeneficiary" class="input" placeholder="Quem vai receber"></div>
@@ -1244,65 +1284,120 @@ function openBoletoScanModal(){
       </div>
       <div class="conflict-box" id="bConflict" hidden></div>
     </div>
-  `,()=>saveBoletoAsCost(false));
+  `,()=>{
+    const draft=boletoDraftFromFields();
+    if(!draft?.value) return toast('Escaneie o boleto ou preencha o valor.');
+    askBoletoProceed(draft);
+  });
   document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
-  document.getElementById('modalSave').textContent='Lançar em custos';
+  document.getElementById('modalSave').textContent='Confirmar leitura';
+
+  if(prefill){
+    fillBoletoForm({
+      beneficiary:prefill.desc||prefill.beneficiary,
+      bankName:prefill.desc||prefill.beneficiary,
+      value:prefill.value,
+      due:prefill.due,
+      installment:prefill.installment,
+      linha:prefill.boletoLine||prefill.linha
+    });
+  }
 
   let scanning=false;
+  let busy=false;
+  const scanOpts=()=>({
+    wrapEl:document.querySelector('#boletoScan .scan-video-wrap'),
+    guideEl:document.getElementById('bGuide')
+  });
+
+  const onCodeFound=(parsed)=>{
+    if(!parsed) return;
+    scanning=false;
+    ChevalierScan.stopCamera();
+    fillBoletoForm(parsed);
+    const preview=document.getElementById('bResultPreview');
+    if(preview){
+      preview.hidden=false;
+      preview.innerHTML=`<h4>Código lido</h4><dl>
+        <dt>Beneficiário</dt><dd>${esc(parsed.beneficiary||parsed.bankName||'—')}</dd>
+        <dt>Valor</dt><dd>${brl.format(parsed.value||0)}</dd>
+        <dt>Vencimento</dt><dd>${parsed.due?fmtDate(parsed.due):'—'}</dd>
+      </dl>`;
+    }
+    document.getElementById('bScanStatus').textContent='Código de barras identificado.';
+    askBoletoProceed(parsed);
+  };
+
   const loop=async()=>{
     if(!scanning) return;
     const video=document.getElementById('bVideo');
-    if(video && video.readyState>=2){
+    if(video && video.readyState>=2 && !busy){
+      busy=true;
       try{
-        const codes=await ChevalierScan.detectBarcodeFromVideo(video);
+        const codes=await ChevalierScan.detectBarcodeFromVideo(video,scanOpts());
         if(codes?.length){
           for(const c of codes){
             const parsed=ChevalierScan.parseBoletoDigits(c.raw);
-            if(parsed){
-              fillBoletoForm(parsed);
-              scanning=false;
-              ChevalierScan.stopCamera();
-              toast('Código do boleto lido.');
-              return;
-            }
+            if(parsed){ onCodeFound(parsed); busy=false; return; }
           }
         }
       }catch(_){}
+      busy=false;
     }
-    scanLoopId=requestAnimationFrame(loop);
+    setTimeout(loop, 280);
   };
-  let scanLoopId=0;
 
-  document.getElementById('bStartCam')?.addEventListener('click',async()=>{
+  const startCam=async()=>{
     try{
       const video=document.getElementById('bVideo');
-      await ChevalierScan.startCamera(video);
+      const preview=document.getElementById('bPreview');
+      if(preview) preview.hidden=true;
+      if(video) video.hidden=false;
+      await ChevalierScan.startCamera(video,{wide:true});
       scanning=true;
-      document.getElementById('bScanStatus').textContent='Câmera ativa — alinhe o código do boleto.';
+      document.getElementById('bScanStatus').textContent='Câmera ativa — alinhe a faixa retangular no código de barras.';
       loop();
     }catch(err){
-      document.getElementById('bScanStatus').textContent='Sem acesso à câmera. Use foto ou linha digitável.';
-      toast('Permita o uso da câmera ou envie uma foto.');
+      document.getElementById('bScanStatus').textContent='Sem acesso à câmera. Importe foto/PDF ou cole a linha digitável.';
+      toast('Permita a câmera ou importe um documento.');
     }
-  });
+  };
+
+  document.getElementById('bStartCam')?.addEventListener('click',startCam);
   document.getElementById('bStopCam')?.addEventListener('click',()=>{
     scanning=false; ChevalierScan.stopCamera();
     document.getElementById('bScanStatus').textContent='Câmera parada.';
   });
   document.getElementById('bFile')?.addEventListener('change',async e=>{
     const file=e.target.files?.[0]; if(!file) return;
-    const url=URL.createObjectURL(file);
-    const wrap=document.querySelector('.scan-video-wrap');
-    if(wrap){
-      wrap.innerHTML=`<img src="${url}" alt="Boleto"><div class="scan-frame"></div>`;
+    scanning=false; ChevalierScan.stopCamera();
+    const isPdf=/pdf$/i.test(file.type)||/\.pdf$/i.test(file.name);
+    const wrap=document.querySelector('#boletoScan .scan-video-wrap');
+    const video=document.getElementById('bVideo');
+    const preview=document.getElementById('bPreview');
+    if(!isPdf && wrap && video && preview){
+      preview.src=URL.createObjectURL(file);
+      preview.hidden=false;
+      video.hidden=true;
+    }else if(preview){
+      preview.hidden=true;
     }
-    await processBoletoImage(file);
+    await processBoletoDocument(file);
   });
-  document.getElementById('bParseLinha')?.addEventListener('click',()=>applyBoletoDigits(getv('bLinha')));
-  document.getElementById('bLinha')?.addEventListener('change',()=>applyBoletoDigits(getv('bLinha')));
+  document.getElementById('bParseLinha')?.addEventListener('click',async()=>{
+    const parsed=await applyBoletoDigits(getv('bLinha'));
+    if(parsed) askBoletoProceed(parsed);
+  });
+  document.getElementById('bLinha')?.addEventListener('change',async()=>{
+    const parsed=await applyBoletoDigits(getv('bLinha'));
+    if(parsed) askBoletoProceed(parsed);
+  });
   ['bBeneficiary','bValue','bDue'].forEach(id=>{
     document.getElementById(id)?.addEventListener('input',()=>renderBoletoConflictBox(boletoDraftFromFields()));
   });
+
+  // Auto-start camera for immediate rectangular barcode reading
+  setTimeout(startCam, 200);
 }
 
 function handleBarcodeLookup(code){
@@ -1431,14 +1526,16 @@ document.getElementById('todayLabel').textContent=now.toLocaleDateString('pt-BR'
 async function boot(){
   try{
     const r=await fetch('api/state.php',{cache:'no-store'});
-    const data=await r.json();
-    if(data.ok && data.state){
-      state=data.state;
-      persistReady=true;
-      localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
-    }else if(data.ok && !data.state){
-      persistReady=true;
-      await fetch('api/state.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});
+    if(r.ok){
+      const data=await r.json();
+      if(data.ok && data.state){
+        state=data.state;
+        persistReady=true;
+        localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
+      }else if(data.ok && !data.state){
+        persistReady=true;
+        await fetch('api/state.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});
+      }
     }
   }catch(e){ /* fallback localStorage */ }
   ensureCatalog();
