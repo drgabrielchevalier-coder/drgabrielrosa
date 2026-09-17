@@ -23,16 +23,83 @@
   let activeStream = null;
   let scanTimer = null;
   let zxingReader = null;
+  let zxingControls = null;
+  let torchOn = false;
+  let audioCtx = null;
 
   function stopCamera() {
     if (scanTimer) {
       clearTimeout(scanTimer);
       scanTimer = null;
     }
+    if (zxingControls) {
+      try {
+        zxingControls.stop();
+      } catch (_) {}
+      zxingControls = null;
+    }
+    if (zxingReader) {
+      try {
+        zxingReader.reset();
+      } catch (_) {}
+    }
     if (activeStream) {
+      try {
+        const track = activeStream.getVideoTracks()[0];
+        if (track?.getCapabilities?.().torch) {
+          track.applyConstraints({ advanced: [{ torch: false }] }).catch(() => {});
+        }
+      } catch (_) {}
       activeStream.getTracks().forEach((t) => t.stop());
       activeStream = null;
     }
+    torchOn = false;
+  }
+
+  /** Bip suave estilo caixa (menos agressivo). */
+  function playScanBeep() {
+    try {
+      const AC = global.AudioContext || global.webkitAudioContext;
+      if (!AC) return;
+      if (!audioCtx || audioCtx.state === 'closed') audioCtx = new AC();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const t0 = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 2400;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(980, t0);
+      osc.frequency.exponentialRampToValueAtTime(1240, t0 + 0.06);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.09, t0 + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.18);
+    } catch (_) {}
+  }
+
+  function torchSupported() {
+    const track = activeStream?.getVideoTracks?.()[0];
+    if (!track?.getCapabilities) return false;
+    return !!track.getCapabilities().torch;
+  }
+
+  async function setTorch(on) {
+    const track = activeStream?.getVideoTracks?.()[0];
+    if (!track?.getCapabilities) return false;
+    if (!track.getCapabilities().torch) return false;
+    await track.applyConstraints({ advanced: [{ torch: !!on }] });
+    torchOn = !!on;
+    return true;
+  }
+
+  function getTorchOn() {
+    return torchOn;
   }
 
   function onlyDigits(s) {
@@ -306,19 +373,21 @@
   async function detectWithZXing(canvas) {
     try {
       const ZXing = await loadZXing();
-      if (!zxingReader) {
-        const hints = new Map();
-        const formats = [
-          ZXing.BarcodeFormat.ITF,
-          ZXing.BarcodeFormat.CODE_128,
-          ZXing.BarcodeFormat.CODE_39,
-          ZXing.BarcodeFormat.CODABAR,
-        ];
-        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-        zxingReader = new ZXing.BrowserMultiFormatReader(hints);
-      }
-      const result = await zxingReader.decodeFromCanvas(canvas);
+      const hints = new Map();
+      const formats = [
+        ZXing.BarcodeFormat.ITF,
+        ZXing.BarcodeFormat.CODE_128,
+        ZXing.BarcodeFormat.CODE_39,
+        ZXing.BarcodeFormat.CODABAR,
+        ZXing.BarcodeFormat.EAN_13,
+        ZXing.BarcodeFormat.EAN_8,
+        ZXing.BarcodeFormat.UPC_A,
+        ZXing.BarcodeFormat.UPC_E,
+      ];
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      const reader = new ZXing.BrowserMultiFormatReader(hints, 250);
+      const result = await reader.decodeFromCanvas(canvas);
       if (result?.getText) {
         return [{ raw: result.getText(), format: String(result.getBarcodeFormat?.() || 'zxing') }];
       }
@@ -331,38 +400,53 @@
   async function detectBarcodeFromSource(source, opts = {}) {
     const wrap = opts.wrapEl;
     const guide = opts.guideEl;
-    const cropped = cropGuideRegion(source, guide, wrap) || (() => {
-      const c = document.createElement('canvas');
-      const w = source.videoWidth || source.width;
-      const h = source.videoHeight || source.height;
-      c.width = w;
-      c.height = h;
-      c.getContext('2d').drawImage(source, 0, 0);
-      return c;
-    })();
+    const mode = opts.mode || 'boleto';
 
-    let codes = await detectWithBarcodeDetector(cropped);
-    if (!codes.length) codes = await detectWithBarcodeDetector(source);
-    if (!codes.length) codes = await detectWithZXing(cropped);
-    if (!codes.length) {
-      // tenta full frame com contraste
-      const full = document.createElement('canvas');
-      const w = source.videoWidth || source.width;
-      const h = source.videoHeight || source.height;
+    const attempts = [];
+    const cropped = cropGuideRegion(source, guide, wrap);
+    if (cropped) attempts.push(cropped);
+
+    const full = document.createElement('canvas');
+    const w = source.videoWidth || source.width;
+    const h = source.videoHeight || source.height;
+    if (w && h) {
       full.width = w;
       full.height = h;
+      full.getContext('2d').drawImage(source, 0, 0);
+      attempts.push(full);
+
+      // faixa central larga (boleto)
+      if (mode === 'boleto') {
+        const band = document.createElement('canvas');
+        const sy = Math.floor(h * 0.22);
+        const sh = Math.floor(h * 0.56);
+        band.width = w;
+        band.height = Math.max(1, sh);
+        band.getContext('2d').drawImage(source, 0, sy, w, sh, 0, 0, w, sh);
+        attempts.push(band);
+      }
+    }
+
+    for (const canvas of attempts) {
+      let codes = await detectWithBarcodeDetector(canvas);
+      if (!codes.length) codes = await detectWithZXing(canvas);
+      if (codes.length) return codes;
+    }
+
+    // contraste alto no full frame
+    if (full.width) {
       const ctx = full.getContext('2d');
-      ctx.drawImage(source, 0, 0);
-      const img = ctx.getImageData(0, 0, w, h);
+      const img = ctx.getImageData(0, 0, full.width, full.height);
       for (let i = 0; i < img.data.length; i += 4) {
         const g = img.data[i] * 0.3 + img.data[i + 1] * 0.59 + img.data[i + 2] * 0.11;
-        const v = g > 140 ? 255 : 0;
+        const v = g > 135 ? 255 : 0;
         img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
       }
       ctx.putImageData(img, 0, 0);
-      codes = await detectWithZXing(full);
+      const codes = await detectWithZXing(full);
+      if (codes.length) return codes;
     }
-    return codes;
+    return [];
   }
 
   async function detectBarcodeFromVideo(video, opts) {
@@ -381,6 +465,27 @@
     return detectBarcodeFromSource(canvas, opts || {});
   }
 
+  function boletoFormats(ZXing) {
+    return [
+      ZXing.BarcodeFormat.ITF,
+      ZXing.BarcodeFormat.CODE_128,
+      ZXing.BarcodeFormat.CODE_39,
+      ZXing.BarcodeFormat.CODABAR,
+    ];
+  }
+
+  function productFormats(ZXing) {
+    return [
+      ZXing.BarcodeFormat.EAN_13,
+      ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A,
+      ZXing.BarcodeFormat.UPC_E,
+      ZXing.BarcodeFormat.CODE_128,
+      ZXing.BarcodeFormat.CODE_39,
+      ZXing.BarcodeFormat.ITF,
+    ];
+  }
+
   async function startCamera(videoEl, opts = {}) {
     stopCamera();
     const constraints = {
@@ -389,21 +494,100 @@
         facingMode: { ideal: 'environment' },
         width: { ideal: opts.wide ? 1920 : 1280 },
         height: { ideal: opts.wide ? 1080 : 720 },
-        focusMode: { ideal: 'continuous' },
       },
     };
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia(constraints);
     } catch {
-      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: false,
+      });
     }
     activeStream = stream;
     videoEl.srcObject = stream;
     videoEl.setAttribute('playsinline', 'true');
     videoEl.muted = true;
     await videoEl.play();
+    // tenta foco contínuo quando existir
+    try {
+      const track = stream.getVideoTracks()[0];
+      const caps = track.getCapabilities?.() || {};
+      if (caps.focusMode?.includes?.('continuous')) {
+        await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+      }
+    } catch (_) {}
     return stream;
+  }
+
+  /**
+   * Leitura contínua automática via ZXing (canvas) + BarcodeDetector.
+   * Mantém o stream próprio para o flash funcionar.
+   */
+  async function startContinuousScan(videoEl, opts = {}) {
+    const onCode = opts.onCode;
+    const mode = opts.mode || 'boleto';
+    if (!videoEl || typeof onCode !== 'function') throw new Error('Vídeo inválido');
+
+    await startCamera(videoEl, opts);
+
+    try {
+      const AC = global.AudioContext || global.webkitAudioContext;
+      if (AC) {
+        if (!audioCtx || audioCtx.state === 'closed') audioCtx = new AC();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+      }
+    } catch (_) {}
+
+    // Pré-carrega ZXing em paralelo
+    loadZXing().catch(() => {});
+
+    let handled = false;
+    const accept = (raw, format) => {
+      if (handled || !raw) return;
+      if (mode === 'boleto') {
+        if (!parseBoletoDigits(raw)) return;
+      } else if (onlyDigits(raw).length < 8) {
+        return;
+      }
+      handled = true;
+      playScanBeep();
+      stopCamera();
+      onCode({ raw: String(raw), format: format || 'unknown' });
+    };
+
+    const tick = async () => {
+      if (handled || !activeStream) return;
+      try {
+        const codes = await detectBarcodeFromVideo(videoEl, {
+          mode,
+          wrapEl: opts.wrapEl,
+          guideEl: opts.guideEl,
+        });
+        if (codes?.length) {
+          accept(codes[0].raw, codes[0].format);
+          return;
+        }
+      } catch (_) {}
+      if (!handled && activeStream) scanTimer = setTimeout(tick, 140);
+    };
+    // dá um tempo para o vídeo estabilizar foco/exposição
+    scanTimer = setTimeout(tick, 250);
+
+    if ('BarcodeDetector' in global) {
+      const tickBd = async () => {
+        if (handled || !activeStream) return;
+        try {
+          const codes = await detectWithBarcodeDetector(videoEl);
+          if (codes?.length) accept(codes[0].raw, codes[0].format);
+        } catch (_) {}
+        if (!handled && activeStream) setTimeout(tickBd, 260);
+      };
+      setTimeout(tickBd, 300);
+    }
+
+    return { torchSupported: torchSupported() };
   }
 
   async function pdfFirstPageToCanvas(file) {
@@ -530,6 +714,11 @@
     detectBarcodeFromBlob,
     detectBarcodeFromSource,
     startCamera,
+    startContinuousScan,
+    playScanBeep,
+    setTorch,
+    torchSupported,
+    getTorchOn,
     readBoletoFromFile,
     findCostConflicts,
     findMaterialByBarcode,
