@@ -91,10 +91,131 @@ let state = JSON.parse(localStorage.getItem('chevalier_gestao_v1')||'null') || s
 let persistReady = false;
 let receivableFilter = '';
 
+function csrfToken(){return String(window.CHEVALIER_CSRF||'');}
+function csrfHeaders(extra={}){
+  const h={...extra};
+  const t=csrfToken();
+  if(t) h['X-CSRF-TOKEN']=t;
+  return h;
+}
+function applyCsrfFromResponse(data){
+  if(data && typeof data.csrf==='string' && data.csrf) window.CHEVALIER_CSRF=data.csrf;
+}
+function defaultSettings(){
+  return {autoMargin:true,alertOverdue:true,alertStock:true,allocateFixed:false};
+}
+function ensureSettings(){
+  state.settings={...defaultSettings(),...(state.settings&&typeof state.settings==='object'?state.settings:{})};
+  return state.settings;
+}
+function getSetting(key){
+  return !!ensureSettings()[key];
+}
+function toggleSetting(key, el){
+  ensureSettings();
+  el.classList.toggle('on');
+  const on=el.classList.contains('on');
+  state.settings[key]=on;
+  el.setAttribute('aria-checked', on?'true':'false');
+  save();
+  renderAll();
+  toast('Preferência salva.');
+}
+function renderSettings(){
+  ensureSettings();
+  const map={setAutoMargin:'autoMargin',setAlertOverdue:'alertOverdue',setAlertStock:'alertStock',setAllocateFixed:'allocateFixed'};
+  Object.entries(map).forEach(([id,key])=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    const on=!!state.settings[key];
+    el.classList.toggle('on',on);
+    el.setAttribute('aria-checked', on?'true':'false');
+  });
+}
+function updateNotifBadge(){
+  const n=collectNotifications().length;
+  const btn=document.getElementById('notifBtn');
+  if(btn) btn.title=n?`Notificações (${n})`:'Notificações';
+  if(btn) btn.dataset.count=String(n);
+  btn?.classList.toggle('has-notif', n>0);
+}
+function collectNotifications(){
+  const items=[];
+  if(getSetting('alertOverdue')){
+    state.patients.filter(isOverdue).forEach(p=>items.push({
+      title:`Cobrança vencida · ${p.name}`,
+      sub:`${clinic(p.clinicId).name} · venceu ${fmtDate(p.due)} · ${brl.format(balance(p))}`,
+      go:'receber'
+    }));
+  }
+  if(getSetting('alertStock')){
+    state.materials.filter(m=>Number(m.stock)<=Number(m.min)).forEach(m=>items.push({
+      title:`Estoque baixo · ${m.name}`,
+      sub:`Saldo ${m.stock} · mínimo ${m.min}`,
+      go:'estoque'
+    }));
+  }
+  (state.reminders||[]).filter(r=>!r.done && r.date && r.date<=todayISO()).forEach(r=>items.push({
+    title:`Lembrete · ${r.title}`,
+    sub:`${fmtDate(r.date)}${r.time?' · '+r.time:''}${r.type?' · '+r.type:''}`,
+    go:'calendario'
+  }));
+  (state.prostheses||[]).filter(w=>w.due && w.due<todayISO() && Number(w.stage)<4).forEach(w=>items.push({
+    title:`Prótese atrasada · ${patientById(w.patientId).name}`,
+    sub:`${w.type||'Trabalho'} · prazo ${fmtDate(w.due)}`,
+    go:'entregas'
+  }));
+  return items;
+}
+function openNotifications(){
+  const items=collectNotifications();
+  const body=items.length
+    ? `<div class="list">${items.slice(0,25).map(a=>`<button type="button" class="list-item" style="width:100%;text-align:left;border:0;background:transparent;cursor:pointer" onclick="closeModal();go('${esc(a.go)}')"><span class="dot amber"></span><div class="list-main"><strong>${esc(a.title)}</strong><span>${esc(a.sub)}</span></div></button>`).join('')}</div>`
+    : '<div class="empty">Nenhuma notificação no momento.</div>';
+  openModal('Notificações',body,()=>closeModal());
+  const s=document.getElementById('modalSave');
+  if(s) s.style.display='none';
+}
+function exportReportCsv(){
+  const patients=state.patients.filter(p=>inPeriod(p.date));
+  const rows=[['Paciente','Clínica','Procedimento','Data','Valor','Recebido','Saldo','Custos','Lucro','Status']];
+  patients.forEach(p=>rows.push([
+    p.name,
+    clinic(p.clinicId).name,
+    procedure(p.procedureId).name,
+    p.date||'',
+    Number(p.value||0),
+    Number(p.received||0),
+    balance(p),
+    patientCost(p),
+    patientProfit(p),
+    p.status||''
+  ]));
+  const csv=rows.map(r=>r.map(v=>{
+    const s=String(v??'');
+    return /[";\n,]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;
+  }).join(';')).join('\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`dr-gabriel-rosa-relatorio-${todayISO()}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast(patients.length?`CSV com ${patients.length} lançamento(s).`:'CSV exportado (sem lançamentos no período).');
+}
 function save(){
   localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
   if(!persistReady) return;
-  fetch('api/state.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)}).catch(()=>{});
+  const payload={...state,csrf:csrfToken()};
+  fetch('api/state.php',{
+    method:'POST',
+    headers:csrfHeaders({'Content-Type':'application/json'}),
+    credentials:'same-origin',
+    body:JSON.stringify(payload)
+  }).then(async r=>{
+    try{applyCsrfFromResponse(await r.json());}catch(_){}
+    if(r.status===401) location.href='login.php';
+  }).catch(()=>{});
 }
 function clinic(id){return state.clinics.find(x=>x.id===id)||{name:'—',color:'??'};}
 function procedure(id){return state.procedures.find(x=>x.id===id)||{name:'—',price:0,items:[],extra:0,clinicPrices:[]};}
@@ -147,7 +268,7 @@ function badge(status){
   else if(s.includes('cobrar')||s.includes('à receber')||s.includes('atras')||s.includes('não vai')) cls='b-red';
   else if(s.includes('aguardando')||s.includes('moldagem')||s.includes('tratamento')) cls='b-blue';
   else if(s.includes('retrabalho')||s.includes('re-moldagem')) cls='b-purple';
-  return `<span class="badge ${cls}">${status||'—'}</span>`;
+  return `<span class="badge ${cls}">${esc(status||'—')}</span>`;
 }
 function fmtDate(v){if(!v)return'—'; const [y,m,d]=v.split('-'); return `${d}/${m}/${y}`;}
 function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
@@ -166,7 +287,7 @@ function catalogTypeOptions(selected=''){
 function ensureCatalog(force=false){
   if(!Array.isArray(state.materials)) state.materials=[];
   const versionOk=Number(state.catalogVersion||0)===CATALOG_VERSION;
-  if(state.catalogReady && versionOk && !force) return;
+  if(state.catalogReady && versionOk && !force) return 0;
   const byId=Object.fromEntries(state.materials.map(m=>[m.id,m]));
   let added=0;
   DENTAL_CATALOG.forEach(([id,name,brand,type,pack,price,unitCost])=>{
@@ -295,8 +416,9 @@ async function openPriceSyncModal(){
   const ctrl=typeof AbortController!=='undefined'?new AbortController():null;
   const timer=ctrl?setTimeout(()=>ctrl.abort(),90000):null;
   try{
-    const res=await fetch('api/price-sync.php',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'same-origin',signal:ctrl?.signal,body:JSON.stringify({materials:list.map(m=>({id:m.id,name:m.name,brand:m.brand,pack:m.pack,price:m.price}))})});
+    const res=await fetch('api/price-sync.php',{method:'POST',headers:csrfHeaders({'Content-Type':'application/json','Accept':'application/json'}),credentials:'same-origin',signal:ctrl?.signal,body:JSON.stringify({materials:list.map(m=>({id:m.id,name:m.name,brand:m.brand,pack:m.pack,price:m.price})),csrf:csrfToken()})});
     const data=await res.json();
+    applyCsrfFromResponse(data);
     if(!data.ok) throw new Error(data.error||'Falha na sincronização');
     const body=document.getElementById('modalBody');
     body.innerHTML=`<p class="field-hint">Selecione os preços sugeridos. O custo unitário é calculado pelo fracionamento da embalagem (ex.: 50 tubetes).</p>
@@ -454,8 +576,8 @@ function renderDashboard(){
   }
 
   const attention=[];
-  overdue.slice(0,3).forEach(p=>attention.push({kind:'red',title:`Cobrança vencida · ${p.name}`,sub:`${clinic(p.clinicId).name} · venceu ${fmtDate(p.due)}`,value:brl.format(balance(p))}));
-  state.materials.filter(m=>Number(m.stock)<=Number(m.min)).slice(0,3).forEach(m=>attention.push({kind:'amber',title:`Estoque mínimo · ${m.name}`,sub:`Saldo ${m.stock} · mínimo ${m.min}`,value:m.brand}));
+  if(getSetting('alertOverdue')) overdue.slice(0,3).forEach(p=>attention.push({kind:'red',title:`Cobrança vencida · ${p.name}`,sub:`${clinic(p.clinicId).name} · venceu ${fmtDate(p.due)}`,value:brl.format(balance(p))}));
+  if(getSetting('alertStock')) state.materials.filter(m=>Number(m.stock)<=Number(m.min)).slice(0,3).forEach(m=>attention.push({kind:'amber',title:`Estoque mínimo · ${m.name}`,sub:`Saldo ${m.stock} · mínimo ${m.min}`,value:m.brand}));
   (state.reminders||[]).filter(r=>!r.done && r.date && r.date<=todayISO()).slice(0,3).forEach(r=>attention.push({kind:'blue',title:`Lembrete · ${r.title}`,sub:`${fmtDate(r.date)}${r.time?' · '+r.time:''}`,value:r.type||'Agenda'}));
   document.getElementById('attentionCount').textContent=`${attention.length} itens`;
   document.getElementById('attentionList').innerHTML=attention.length?attention.map(a=>`
@@ -654,7 +776,7 @@ function lookupProsthesis(){
   const w=state.prostheses.find(x=>String(x.code).toUpperCase()===raw||x.id===raw);
   if(!w){box.innerHTML='<div class="empty">Código não encontrado.</div>';return;}
   const pat=patientById(w.patientId);
-  box.innerHTML=`<div class="lookup-card"><strong>${esc(pat.name)}</strong><span class="code">${esc(w.code)}</span><p>${esc(w.type)} · ${esc(w.lab||'Lab')} · ${esc(PROSTH_STAGES[w.stage])}</p><p>Previsão ${fmtDate(w.due)} · ${w.labStatus||''}</p><button class="btn primary" onclick="openProsthesisDetail('${w.id}')">Abrir ficha</button></div>`;
+  box.innerHTML=`<div class="lookup-card"><strong>${esc(pat.name)}</strong><span class="code">${esc(w.code)}</span><p>${esc(w.type)} · ${esc(w.lab||'Lab')} · ${esc(PROSTH_STAGES[w.stage])}</p><p>Previsão ${fmtDate(w.due)} · ${esc(w.labStatus||'')}</p><button class="btn primary" onclick="openProsthesisDetail('${w.id}')">Abrir ficha</button></div>`;
 }
 function openProsthesisModal(editId=''){
   if(!state.patients.length){toast('Cadastre um paciente antes.');return;}
@@ -761,10 +883,12 @@ function renderStock(){
   document.getElementById('stockTable').innerHTML=state.materials.map(m=>`<tr>${td('Item',`<strong>${esc(m.name)}</strong>`)}${td('Marca',esc(m.brand))}${td('Tipo',esc(m.type))}${td('Atual',String(m.stock))}${td('Mínimo',String(m.min))}${td('Custo unit.',brl.format(m.unitCost))}${td('Valor',brl.format(m.stock*m.unitCost))}${td('Status',m.stock<=m.min?'<span class="badge b-red">Reposição</span>':'<span class="badge b-green">OK</span>')}<td class="actions-cell">${acts(`openMaterialModal('${m.id}')`,`deleteMaterial('${m.id}')`)}</td></tr>`).join('');
 }
 function renderAll(){
+  ensureSettings();
   ensureProstheses();
   if(window.ChevalierPlan){ChevalierPlan.ensureCollections();ChevalierPlan.seedDefaults();ChevalierPlan.bindUi();}
-  renderDashboard();renderPatients();renderClinics();renderProcedures();renderService();renderPrivate();renderTrabalhos();renderLab();renderEntregas();renderTimeline();renderReceivables();renderCosts();renderPayroll();renderReports();renderMaterials();renderStock();renderBanco();
+  renderDashboard();renderPatients();renderClinics();renderProcedures();renderService();renderPrivate();renderTrabalhos();renderLab();renderEntregas();renderTimeline();renderReceivables();renderCosts();renderPayroll();renderReports();renderMaterials();renderStock();renderBanco();renderSettings();
   if(window.ChevalierPlan){ChevalierPlan.renderCalendario();ChevalierPlan.renderPlanejamento();}
+  updateNotifBadge();
   syncMobileNav();
 }
 
@@ -829,7 +953,7 @@ function closeModal(){
   s.style.display='';s.textContent='Salvar';s.classList.remove('danger');s.disabled=false;
 }
 function confirmDelete(msg,fn){
-  openModal('Excluir registro',`<p>${msg}</p><p class="cell-sub">Esta ação não pode ser desfeita.</p>`,()=>{fn();closeModal();renderAll();toast('Registro excluído.');});
+  openModal('Excluir registro',`<p>${esc(msg)}</p><p class="cell-sub">Esta ação não pode ser desfeita.</p>`,()=>{fn();save();closeModal();renderAll();toast('Registro excluído.');});
   const s=document.getElementById('modalSave');s.textContent='Excluir';s.classList.add('danger');
 }
 function deletePatient(id){
@@ -845,7 +969,6 @@ function deleteClinic(id){
   confirmDelete('Excluir esta clínica?',()=>{
     state.clinics=state.clinics.filter(x=>x.id!==id);
     ensureClinicPrices();
-    save();
   });
 }
 function deleteProcedure(id){
@@ -1539,8 +1662,8 @@ function openBarcodeScanModal(){
 
 function openQuickModal(){
   openModal('Novo lançamento',`<div class="grid layout-3"><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openPatientModal()">Paciente</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();ChevalierPlan.openReminderModal()">Lembrete</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();go('planejamento')">Planejamento</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openProsthesisModal()">Trabalho protético</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openReceivableModal()">Recebível</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openCostModal()">Custo</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBoletoScanModal()">Escanear boleto</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBarcodeScanModal()">Código de barras</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openMaterialModal()">Material</button></div>`,()=>closeModal());
-  document.getElementById('modalSave').style.display='none';
-  setTimeout(()=>document.getElementById('modalSave').style.display='',0);
+  const s=document.getElementById('modalSave');
+  if(s) s.style.display='none';
 }
 function markReceived(id){
   const p=state.patients.find(x=>x.id===id);if(!p)return;
@@ -1565,22 +1688,37 @@ document.getElementById('todayLabel').textContent=now.toLocaleDateString('pt-BR'
 
 async function boot(){
   try{
-    const r=await fetch('api/state.php',{cache:'no-store'});
+    const r=await fetch('api/state.php',{cache:'no-store',credentials:'same-origin'});
+    if(r.status===401){location.href='login.php';return;}
     if(r.ok){
       const data=await r.json();
+      applyCsrfFromResponse(data);
       if(data.ok && data.state){
         state=data.state;
         persistReady=true;
         localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
       }else if(data.ok && !data.state){
         persistReady=true;
-        await fetch('api/state.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});
+        await fetch('api/state.php',{
+          method:'POST',
+          headers:csrfHeaders({'Content-Type':'application/json'}),
+          credentials:'same-origin',
+          body:JSON.stringify({...state,csrf:csrfToken()})
+        }).then(async res=>{try{applyCsrfFromResponse(await res.json());}catch(_){}});
       }
     }
   }catch(e){ /* fallback localStorage */ }
-  ensureCatalog();
+  ensureSettings();
+  const catalogAdded=ensureCatalog()||0;
   ensureProstheses();
   ensureClinicPrices();
+  if(window.ChevalierPlan){
+    ChevalierPlan.ensureCollections();
+    const seeded=ChevalierPlan.seedDefaults();
+    if(seeded||catalogAdded) save();
+  }else if(catalogAdded){
+    save();
+  }
   renderAll();
   setBancoTab(bancoTab);
 }

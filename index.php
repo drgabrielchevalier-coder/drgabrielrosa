@@ -3,8 +3,10 @@ declare(strict_types=1);
 require_once __DIR__ . '/api/auth-lib.php';
 require_once __DIR__ . '/api/app-version-lib.php';
 chevalier_auth_require();
+chevalier_security_headers();
 $chevalierBuild = chevalier_app_build(__DIR__);
 $chevalierUser = chevalier_auth_user();
+$chevalierCsrf = chevalier_csrf_token();
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
@@ -17,12 +19,14 @@ header('Expires: 0');
 <title>Dr Gabriel Rosa — Gestão</title>
 <meta name="theme-color" content="#171816">
 <meta name="description" content="Dr Gabriel Rosa — reabilitação oral e estética. Gestão clínica, financeira, pacientes, custos e próteses.">
+<meta name="robots" content="noindex,nofollow">
 <link rel="icon" type="image/svg+xml" href="<?= chevalier_asset_url('assets/img/favicon.svg') ?>">
 <link rel="stylesheet" href="<?= chevalier_asset_url('assets/css/app.css') ?>">
 <link rel="stylesheet" href="<?= chevalier_asset_url('assets/css/update.css') ?>">
 <script>
 window.CHEVALIER_BUILD=<?= json_encode($chevalierBuild, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
 window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
+window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
 </script>
 </head>
 <body>
@@ -105,7 +109,7 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
       </div>
       <div class="spacer"></div>
       <div class="top-date" id="todayLabel"></div>
-      <button class="icon-btn" title="Notificações">♧</button>
+      <button class="icon-btn" title="Notificações" onclick="openNotifications()" id="notifBtn">♧</button>
       <button class="btn primary top-new" onclick="openQuickModal()">＋ Novo</button>
     </header>
 
@@ -125,7 +129,7 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
               <option value="180">6 meses</option>
               <option value="365">1 ano</option>
             </select>
-            <button class="btn" onclick="toast('Relatório preparado para exportação.')">⇩ Exportar</button>
+            <button class="btn" onclick="exportReportCsv()">⇩ Exportar CSV</button>
           </div>
         </div>
 
@@ -448,7 +452,7 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
       <section class="page" id="page-relatorios">
         <div class="page-head">
           <div><h2>Relatórios</h2><p>Análises gerenciais para identificar onde sua margem cresce ou se perde.</p></div>
-          <div class="page-actions"><button class="btn" onclick="toast('Exportação de relatório simulada neste protótipo.')">⇩ Exportar PDF</button></div>
+          <div class="page-actions"><button class="btn" onclick="exportReportCsv()">⇩ Exportar CSV</button></div>
         </div>
         <div class="report-grid">
           <div class="report-tile"><small>Melhor clínica por margem</small><strong id="reportBestClinic">—</strong></div>
@@ -543,8 +547,6 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
         </div>
       </section>
 
-      </section>
-
       <!-- CALENDÁRIO -->
       <section class="page" id="page-calendario">
         <div class="page-head">
@@ -625,10 +627,10 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
           <div class="card">
             <div class="card-head"><h3>Motor financeiro</h3></div>
             <div class="card-body">
-              <div class="settings-row"><div class="desc"><strong>Calcular margem automaticamente</strong><span>Atualiza lucro e margem sempre que custos ou recebimentos mudarem.</span></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
-              <div class="settings-row"><div class="desc"><strong>Alertar recebíveis vencidos</strong><span>Destaca cobranças com vencimento anterior à data atual.</span></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
-              <div class="settings-row"><div class="desc"><strong>Alertar estoque mínimo</strong><span>Sinaliza materiais cujo saldo atingiu o mínimo configurado.</span></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
-              <div class="settings-row"><div class="desc"><strong>Ratear custos fixos</strong><span>Preparado para cálculo de lucro líquido por centro de resultado.</span></div><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+              <div class="settings-row"><div class="desc"><strong>Calcular margem automaticamente</strong><span>Atualiza lucro e margem sempre que custos ou recebimentos mudarem.</span></div><div class="toggle on" id="setAutoMargin" role="switch" aria-checked="true" onclick="toggleSetting('autoMargin', this)"></div></div>
+              <div class="settings-row"><div class="desc"><strong>Alertar recebíveis vencidos</strong><span>Destaca cobranças com vencimento anterior à data atual.</span></div><div class="toggle on" id="setAlertOverdue" role="switch" aria-checked="true" onclick="toggleSetting('alertOverdue', this)"></div></div>
+              <div class="settings-row"><div class="desc"><strong>Alertar estoque mínimo</strong><span>Sinaliza materiais cujo saldo atingiu o mínimo configurado.</span></div><div class="toggle on" id="setAlertStock" role="switch" aria-checked="true" onclick="toggleSetting('alertStock', this)"></div></div>
+              <div class="settings-row"><div class="desc"><strong>Ratear custos fixos</strong><span>Preparado para cálculo de lucro líquido por centro de resultado.</span></div><div class="toggle" id="setAllocateFixed" role="switch" aria-checked="false" onclick="toggleSetting('allocateFixed', this)"></div></div>
             </div>
           </div>
           <div class="card">

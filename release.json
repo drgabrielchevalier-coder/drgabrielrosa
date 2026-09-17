@@ -1,8 +1,11 @@
 {
-  "version": "2.0.1",
-  "name": "Atualização teste",
+  "version": "2.1.0",
+  "name": "Revisão funcional e segurança",
   "releasedAt": "2026-09-17",
   "changes": [
-    "Atualização de teste para validar o deploy automático e a barra de versão no site."
+    "Botões de notificações, exportação CSV e preferências passam a funcionar e gravar no estado.",
+    "Exclusões e sincronizações persistem no MySQL; CSRF em todas as APIs mutáveis.",
+    "Login com rate-limit, cookies seguros, auditoria e headers HTTP de proteção.",
+    "Uploads de planejamento com MIME allowlist e bloqueio de execução de scripts."
   ]
 }

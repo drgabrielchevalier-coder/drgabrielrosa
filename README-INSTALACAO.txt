@@ -57,11 +57,21 @@ INSTALAÇÃO MANUAL (upload zip)
 
 LOGIN
 - Usuário padrão: gabriel
-- Senha padrão: chevalier
+- Senha padrão: chevalier  (troque imediatamente em produção)
 - Para trocar, crie/edite api/config.local.php com:
   define('AUTH_USER', 'seu_usuario');
-  define('AUTH_PASS', 'sua_senha');
+  define('AUTH_PASS_HASH', password_hash('sua-senha-forte', PASSWORD_DEFAULT));
+  // ou, menos seguro: define('AUTH_PASS', 'sua-senha');
 - Nunca envie config.local.php para o GitHub.
+
+SEGURANÇA (v2.1+)
+- Sessão HttpOnly + Secure (HTTPS) + SameSite=Lax
+- Token CSRF em POST/DELETE das APIs (state, price-sync, uploads, IA, setup)
+- Rate-limit de login (8 tentativas / 15 min por IP+usuário)
+- Headers: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, HSTS
+- .htaccess bloqueia listagem de pastas, config.local.php e PHP em /uploads
+- Tabela auth_audit registra logins (ok/falha) e logout quando o MySQL está ativo
+- Setup do banco exige login e não sobrescreve config.local.php existente
 
 Para gerar o zip localmente:
   bash scripts/pack-deploy.sh /tmp/chevalier.zip
@@ -70,14 +80,13 @@ BANCO MYSQL (Hostinger)
 - Banco: u680963503_drgabriel
 - Usuário: u680963503_drgabriel
 - Depois do upload, abra /api/setup.php e informe a senha do phpMyAdmin.
-- Isso cria a tabela app_state e passa a gravar os lançamentos no MySQL.
+- Isso cria as tabelas app_state e auth_audit e passa a gravar os lançamentos no MySQL.
 - Enquanto a senha não for informada, o sistema continua no localStorage do navegador.
 
 IMPORTANTE
-- Esta V1 é funcional. Com o setup do MySQL, os dados ficam no servidor.
+- Com MySQL configurado, os dados ficam no servidor (app_state).
 - Ainda não há login multiusuário.
-- Antes de uso clínico/financeiro definitivo, a próxima fase deve migrar persistência para backend/banco,
-  implementar autenticação, auditoria e backup de servidor.
+- Troque a senha padrão e use AUTH_PASS_HASH antes de uso clínico definitivo.
 - Nunca envie api/config.local.php para o GitHub.
 
 BASE FUNCIONAL

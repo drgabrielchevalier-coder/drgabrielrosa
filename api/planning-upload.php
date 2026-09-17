@@ -9,6 +9,7 @@ header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store');
 
 chevalier_auth_boot();
+chevalier_security_headers();
 if (!chevalier_auth_logged_in()) {
     http_response_code(401);
     echo json_encode(['ok' => false, 'needsAuth' => true, 'error' => 'Faça login.'], JSON_UNESCAPED_UNICODE);
@@ -55,16 +56,20 @@ if ($method === 'GET') {
         exit;
     }
     $mime = (string) ($meta['mime'] ?? 'application/octet-stream');
-    $download = !empty($_GET['download']);
-    header('Content-Type: ' . $mime);
+    $safeName = preg_replace('/[^a-zA-Z0-9._-]+/', '_', (string) ($meta['name'] ?? $id)) ?: $id;
+    $isImage = str_starts_with($mime, 'image/');
+    $download = !empty($_GET['download']) || !$isImage;
+    header('X-Content-Type-Options: nosniff');
+    header('Content-Type: ' . ($isImage ? $mime : 'application/octet-stream'));
     header('Content-Length: ' . (string) filesize($path));
-    header('Content-Disposition: ' . ($download ? 'attachment' : 'inline') . '; filename="' . addslashes((string) ($meta['name'] ?? $id)) . '"');
+    header('Content-Disposition: ' . ($download ? 'attachment' : 'inline') . '; filename="' . $safeName . '"');
     readfile($path);
     exit;
 }
 
 if ($method === 'DELETE') {
-    $raw = file_get_contents('php://input');
+    chevalier_csrf_require();
+    $raw = chevalier_request_body();
     $data = json_decode($raw ?: 'null', true);
     $id = preg_replace('/[^a-zA-Z0-9_-]/', '', (string) (($data['id'] ?? $_GET['id'] ?? '')));
     if ($id === '') {
@@ -93,6 +98,13 @@ if ($method !== 'POST') {
     exit;
 }
 
+$csrfHeader = (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? $_POST['csrf'] ?? '');
+if (!chevalier_csrf_validate($csrfHeader)) {
+    http_response_code(403);
+    echo json_encode(['ok' => false, 'error' => 'Token CSRF inválido ou ausente.'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if (empty($_FILES['file']) || !is_array($_FILES['file'])) {
     http_response_code(422);
     echo json_encode(['ok' => false, 'error' => 'Envie o arquivo (campo file).'], JSON_UNESCAPED_UNICODE);
@@ -114,12 +126,12 @@ if ($size <= 0 || $size > $maxBytes) {
     exit;
 }
 
-$origName = (string) ($file['name'] ?? 'arquivo');
+$origName = basename((string) ($file['name'] ?? 'arquivo'));
 $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
 $allowed = [
     'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'tif', 'tiff',
-    'pdf', 'dcm', 'dicom', 'stl', 'ply', 'obj', 'zip', 'rar', '7z',
-    'icon', 'xml', 'json', 'csv', 'txt', 'doc', 'docx',
+    'pdf', 'dcm', 'dicom', 'stl', 'ply', 'obj', 'zip',
+    'icon', 'xml', 'json', 'csv', 'txt',
 ];
 if ($ext === '' || !in_array($ext, $allowed, true)) {
     http_response_code(415);
@@ -129,6 +141,38 @@ if ($ext === '' || !in_array($ext, $allowed, true)) {
 
 $finfo = new finfo(FILEINFO_MIME_TYPE);
 $mime = $finfo->file($file['tmp_name']) ?: 'application/octet-stream';
+$mimeOk = [
+    'jpg' => ['image/jpeg'],
+    'jpeg' => ['image/jpeg'],
+    'png' => ['image/png'],
+    'webp' => ['image/webp'],
+    'gif' => ['image/gif'],
+    'bmp' => ['image/bmp', 'image/x-ms-bmp'],
+    'tif' => ['image/tiff'],
+    'tiff' => ['image/tiff'],
+    'pdf' => ['application/pdf'],
+    'json' => ['application/json', 'text/plain'],
+    'xml' => ['application/xml', 'text/xml', 'text/plain'],
+    'csv' => ['text/csv', 'text/plain'],
+    'txt' => ['text/plain'],
+    'zip' => ['application/zip', 'application/x-zip-compressed', 'application/octet-stream'],
+    'stl' => ['application/octet-stream', 'model/stl', 'text/plain'],
+    'ply' => ['application/octet-stream', 'text/plain'],
+    'obj' => ['application/octet-stream', 'text/plain'],
+    'dcm' => ['application/dicom', 'application/octet-stream'],
+    'dicom' => ['application/dicom', 'application/octet-stream'],
+    'icon' => ['application/octet-stream', 'application/json', 'text/plain', 'application/xml', 'text/xml'],
+];
+$allowedMimes = $mimeOk[$ext] ?? ['application/octet-stream'];
+if (!in_array($mime, $allowedMimes, true)) {
+    // Aceita octet-stream genérico só para formatos binários clínicos
+    if (!in_array($ext, ['dcm', 'dicom', 'stl', 'ply', 'obj', 'icon', 'zip'], true) || $mime !== 'application/octet-stream') {
+        http_response_code(415);
+        echo json_encode(['ok' => false, 'error' => 'MIME não corresponde à extensão (' . $mime . ').'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+}
+
 $id = 'pl_' . bin2hex(random_bytes(8));
 $stored = $id . '.' . $ext;
 $dest = $dir . DIRECTORY_SEPARATOR . $stored;
@@ -142,6 +186,10 @@ $kind = trim((string) ($_POST['kind'] ?? 'planejamento'));
 $title = trim((string) ($_POST['title'] ?? pathinfo($origName, PATHINFO_FILENAME)));
 $patient = trim((string) ($_POST['patient'] ?? ''));
 $notes = trim((string) ($_POST['notes'] ?? ''));
+$kind = substr($kind, 0, 80);
+$title = substr($title, 0, 160);
+$patient = substr($patient, 0, 120);
+$notes = substr($notes, 0, 2000);
 
 $meta = [
     'id' => $id,

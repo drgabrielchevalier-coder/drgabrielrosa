@@ -6,6 +6,7 @@ header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store');
 
 chevalier_auth_boot();
+chevalier_security_headers();
 if (!chevalier_auth_logged_in()) {
     http_response_code(401);
     echo json_encode(['ok' => false, 'needsAuth' => true, 'error' => 'Faça login.'], JSON_UNESCAPED_UNICODE);
@@ -377,7 +378,8 @@ if ($method !== 'POST') {
     exit;
 }
 
-$raw = file_get_contents('php://input');
+chevalier_csrf_require();
+$raw = chevalier_request_body();
 $data = json_decode($raw ?: 'null', true);
 if (!is_array($data)) {
     http_response_code(400);
