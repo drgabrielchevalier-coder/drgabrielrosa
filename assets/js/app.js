@@ -82,7 +82,9 @@ const seed = {
     {id:'pr2',code:'GR0002',patientId:'pt4',type:'Coroa de zircônia',tooth:'16',lab:'Ateliê Dental',cost:450,stage:3,labStatus:'Recebido — aguardando agendamento',entry:pastDays(9),due:pastDays(1),urgent:true,shade:'A3',notes:'Aguardando cimentação.',events:[{date:pastDays(9),stage:0,note:'Moldagem registrada'},{date:pastDays(7),stage:1,note:'Enviado ao laboratório'},{date:pastDays(2),stage:2,note:'Prova realizada'},{date:pastDays(1),stage:3,note:'Peça pronta na clínica'}]},
     {id:'pr3',code:'GR0003',patientId:'pt1',type:'Protocolo superior',tooth:'Superior',lab:'OralLab',cost:1900,stage:4,labStatus:'Entregue / instalado',entry:pastDays(40),due:pastDays(10),urgent:false,shade:'BL3',notes:'Instalado e alta.',events:[{date:pastDays(40),stage:0,note:'Trabalho cadastrado'},{date:pastDays(28),stage:1,note:'Em produção'},{date:pastDays(14),stage:2,note:'Prova de dentes'},{date:pastDays(10),stage:4,note:'Instalado'}]},
     {id:'pr4',code:'GR0004',patientId:'pt5',type:'Faceta de porcelana',tooth:'11-21',lab:'Ateliê Dental',cost:620,stage:2,labStatus:'Prova / ajustes',entry:pastDays(6),due:addDays(4),urgent:false,shade:'A1',notes:'Ajuste de borda incisal.',events:[{date:pastDays(6),stage:0,note:'Trabalho cadastrado'},{date:pastDays(4),stage:1,note:'Enviado ao laboratório'},{date:pastDays(1),stage:2,note:'Prova em boca'}]}
-  ]
+  ],
+  reminders:[],
+  plans:[]
 };
 
 let state = JSON.parse(localStorage.getItem('chevalier_gestao_v1')||'null') || structuredClone(seed);
@@ -286,12 +288,14 @@ function applyStockConsumption(items, reverse=false){
   });
 }
 async function openPriceSyncModal(){
-  const list=state.materials.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).slice(0,40);
-  openModal('Assistente de preços','<div class="empty">Consultando Dental Cremer, Dental Speed e Surya Dental…</div>',()=>closeModal());
+  const list=state.materials.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).slice(0,12);
+  openModal('Assistente de preços',`<div class="empty">Consultando Dental Cremer, Dental Speed e Surya Dental…<br><small class="field-hint">Até ${list.length} materiais nesta rodada.</small></div>`,()=>closeModal());
   document.getElementById('modalSave').textContent='Fechar';
   document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  const ctrl=typeof AbortController!=='undefined'?new AbortController():null;
+  const timer=ctrl?setTimeout(()=>ctrl.abort(),90000):null;
   try{
-    const res=await fetch('api/price-sync.php',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'same-origin',body:JSON.stringify({materials:list.map(m=>({id:m.id,name:m.name,brand:m.brand,pack:m.pack,price:m.price}))})});
+    const res=await fetch('api/price-sync.php',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'same-origin',signal:ctrl?.signal,body:JSON.stringify({materials:list.map(m=>({id:m.id,name:m.name,brand:m.brand,pack:m.pack,price:m.price}))})});
     const data=await res.json();
     if(!data.ok) throw new Error(data.error||'Falha na sincronização');
     const body=document.getElementById('modalBody');
@@ -346,7 +350,8 @@ async function openPriceSyncModal(){
       save();closeModal();renderAll();toast(n?`${n} materiais atualizados.`:'Nenhum item selecionado.');
     };
   }catch(err){
-    document.getElementById('modalBody').innerHTML=`<div class="empty">${esc(err.message||'Não foi possível sincronizar agora.')}<br><br>Você ainda pode abrir as buscas manualmente e recalcular o fracionamento.</div>
+    const msg=err?.name==='AbortError'?'A consulta demorou demais — tente com menos materiais ou abra as buscas manuais.':(err.message||'Não foi possível sincronizar agora.');
+    document.getElementById('modalBody').innerHTML=`<div class="empty">${esc(msg)}<br><br>Você ainda pode abrir as buscas manualmente e recalcular o fracionamento.</div>
       <div class="row-actions" style="margin-top:12px">
         <a class="btn" target="_blank" rel="noopener" href="https://www.dentalcremer.com.br/">Dental Cremer</a>
         <a class="btn" target="_blank" rel="noopener" href="https://www.dentalspeed.com/">Dental Speed</a>
@@ -355,6 +360,8 @@ async function openPriceSyncModal(){
       </div>`;
     document.getElementById('modalSave').textContent='Fechar';
     document.getElementById('modalSave').onclick=()=>closeModal();
+  }finally{
+    if(timer) clearTimeout(timer);
   }
 }
 
@@ -449,6 +456,7 @@ function renderDashboard(){
   const attention=[];
   overdue.slice(0,3).forEach(p=>attention.push({kind:'red',title:`Cobrança vencida · ${p.name}`,sub:`${clinic(p.clinicId).name} · venceu ${fmtDate(p.due)}`,value:brl.format(balance(p))}));
   state.materials.filter(m=>Number(m.stock)<=Number(m.min)).slice(0,3).forEach(m=>attention.push({kind:'amber',title:`Estoque mínimo · ${m.name}`,sub:`Saldo ${m.stock} · mínimo ${m.min}`,value:m.brand}));
+  (state.reminders||[]).filter(r=>!r.done && r.date && r.date<=todayISO()).slice(0,3).forEach(r=>attention.push({kind:'blue',title:`Lembrete · ${r.title}`,sub:`${fmtDate(r.date)}${r.time?' · '+r.time:''}`,value:r.type||'Agenda'}));
   document.getElementById('attentionCount').textContent=`${attention.length} itens`;
   document.getElementById('attentionList').innerHTML=attention.length?attention.map(a=>`
     <div class="list-item"><span class="dot ${a.kind}"></span><div class="list-main"><strong>${esc(a.title)}</strong><span>${esc(a.sub)}</span></div><div class="list-value">${esc(a.value)}</div></div>`).join(''):'<div class="empty">Nenhuma pendência crítica.</div>';
@@ -752,7 +760,18 @@ function renderStock(){
   document.getElementById('stockValue').textContent=brl.format(val);document.getElementById('stockLow').textContent=low.length;document.getElementById('stockItems').textContent=state.materials.length;
   document.getElementById('stockTable').innerHTML=state.materials.map(m=>`<tr>${td('Item',`<strong>${esc(m.name)}</strong>`)}${td('Marca',esc(m.brand))}${td('Tipo',esc(m.type))}${td('Atual',String(m.stock))}${td('Mínimo',String(m.min))}${td('Custo unit.',brl.format(m.unitCost))}${td('Valor',brl.format(m.stock*m.unitCost))}${td('Status',m.stock<=m.min?'<span class="badge b-red">Reposição</span>':'<span class="badge b-green">OK</span>')}<td class="actions-cell">${acts(`openMaterialModal('${m.id}')`,`deleteMaterial('${m.id}')`)}</td></tr>`).join('');
 }
-function renderAll(){ensureProstheses();renderDashboard();renderPatients();renderClinics();renderProcedures();renderService();renderPrivate();renderTrabalhos();renderLab();renderEntregas();renderTimeline();renderReceivables();renderCosts();renderPayroll();renderReports();renderMaterials();renderStock();renderBanco();}
+function renderAll(){
+  ensureProstheses();
+  if(window.ChevalierPlan){ChevalierPlan.ensureCollections();ChevalierPlan.seedDefaults();ChevalierPlan.bindUi();}
+  renderDashboard();renderPatients();renderClinics();renderProcedures();renderService();renderPrivate();renderTrabalhos();renderLab();renderEntregas();renderTimeline();renderReceivables();renderCosts();renderPayroll();renderReports();renderMaterials();renderStock();renderBanco();
+  if(window.ChevalierPlan){ChevalierPlan.renderCalendario();ChevalierPlan.renderPlanejamento();}
+  syncMobileNav();
+}
+
+function syncMobileNav(page){
+  const cur=page||document.querySelector('.page.active')?.id?.replace(/^page-/,'')||'dashboard';
+  document.querySelectorAll('.mb-nav-btn[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===cur));
+}
 
 function go(page){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -761,7 +780,10 @@ function go(page){
     const on=b.dataset.page===page && (!b.dataset.tab || b.dataset.tab===bancoTab);
     b.classList.toggle('active',on);
   });
-  document.getElementById('sidebar').classList.remove('open');document.getElementById('overlay').classList.remove('open');
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+  document.body.classList.remove('nav-open');
+  syncMobileNav(page);
   window.scrollTo({top:0,behavior:'smooth'});
 }
 document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>{
@@ -769,22 +791,42 @@ document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>{
   go(b.dataset.page);
   if(b.dataset.page==='banco') setBancoTab(bancoTab);
 });
-document.getElementById('mobileMenu').onclick=()=>{document.getElementById('sidebar').classList.add('open');document.getElementById('overlay').classList.add('open')};
-document.getElementById('overlay').onclick=()=>{document.getElementById('sidebar').classList.remove('open');document.getElementById('overlay').classList.remove('open')};
+function openMobileNav(){
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+  document.body.classList.add('nav-open');
+}
+function closeMobileNav(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+  document.body.classList.remove('nav-open');
+}
+document.getElementById('mobileMenu').onclick=()=>openMobileNav();
+document.getElementById('overlay').onclick=()=>closeMobileNav();
+document.getElementById('mbMenuBtn')?.addEventListener('click',()=>openMobileNav());
+document.querySelectorAll('.mb-nav-btn[data-page]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.page)));
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    if(document.getElementById('modalRoot')?.classList.contains('open')) closeModal();
+    else closeMobileNav();
+  }
+});
 
 function openModal(title,body,onSave){
   const s=document.getElementById('modalSave');
-  s.style.display='';s.textContent='Salvar';s.classList.remove('danger');
+  s.style.display='';s.textContent='Salvar';s.classList.remove('danger');s.disabled=false;
   document.getElementById('modalTitle').textContent=title;document.getElementById('modalBody').innerHTML=body;document.getElementById('modalRoot').classList.add('open');
   document.getElementById('modalRoot')?.querySelector('.modal')?.classList.remove('modal-wide');
+  document.body.classList.add('modal-open');
   s.onclick=onSave;
 }
 function closeModal(){
   if(window.ChevalierScan) ChevalierScan.stopCamera();
   document.getElementById('bEditAgain')?.remove();
   document.getElementById('modalRoot').classList.remove('open');
+  document.body.classList.remove('modal-open');
   const s=document.getElementById('modalSave');
-  s.style.display='';s.textContent='Salvar';s.classList.remove('danger');
+  s.style.display='';s.textContent='Salvar';s.classList.remove('danger');s.disabled=false;
 }
 function confirmDelete(msg,fn){
   openModal('Excluir registro',`<p>${msg}</p><p class="cell-sub">Esta ação não pode ser desfeita.</p>`,()=>{fn();closeModal();renderAll();toast('Registro excluído.');});
@@ -1496,7 +1538,7 @@ function openBarcodeScanModal(){
 }
 
 function openQuickModal(){
-  openModal('Novo lançamento',`<div class="grid layout-3"><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openPatientModal()">Paciente</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openProsthesisModal()">Trabalho protético</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openReceivableModal()">Recebível</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openCostModal()">Custo</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBoletoScanModal()">Escanear boleto</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBarcodeScanModal()">Código de barras</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openMaterialModal()">Material</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openStockModal()">Estoque</button></div>`,()=>closeModal());
+  openModal('Novo lançamento',`<div class="grid layout-3"><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openPatientModal()">Paciente</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();ChevalierPlan.openReminderModal()">Lembrete</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();go('planejamento')">Planejamento</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openProsthesisModal()">Trabalho protético</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openReceivableModal()">Recebível</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openCostModal()">Custo</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBoletoScanModal()">Escanear boleto</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBarcodeScanModal()">Código de barras</button><button class="btn" style="height:80px;justify-content:center" onclick="closeModal();openMaterialModal()">Material</button></div>`,()=>closeModal());
   document.getElementById('modalSave').style.display='none';
   setTimeout(()=>document.getElementById('modalSave').style.display='',0);
 }

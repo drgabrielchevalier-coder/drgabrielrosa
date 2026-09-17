@@ -36,6 +36,8 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
     <div class="nav-group">
       <div class="nav-label">Visão geral</div>
       <button class="nav-btn active" data-page="dashboard"><span class="nav-icon">◫</span>Dashboard</button>
+      <button class="nav-btn" data-page="calendario"><span class="nav-icon">◷</span>Calendário / Lembretes</button>
+      <button class="nav-btn" data-page="planejamento"><span class="nav-icon">⌖</span>Planejamento</button>
     </div>
 
     <div class="nav-group">
@@ -541,6 +543,79 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
         </div>
       </section>
 
+      </section>
+
+      <!-- CALENDÁRIO -->
+      <section class="page" id="page-calendario">
+        <div class="page-head">
+          <div>
+            <h2>Calendário / Lembretes</h2>
+            <p>Compromissos clínicos, retornos, revisões de planejamento e alertas do dia.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn primary" onclick="ChevalierPlan.openReminderModal()">＋ Lembrete</button>
+          </div>
+        </div>
+        <div class="kpi-grid cal-kpis">
+          <div class="kpi"><div class="label">Em aberto</div><div class="value" id="calOpen">0</div></div>
+          <div class="kpi"><div class="label">Hoje</div><div class="value" id="calToday">0</div></div>
+          <div class="kpi"><div class="label">Próximos 7 dias</div><div class="value" id="calWeek">0</div></div>
+        </div>
+        <div class="toolbar">
+          <input class="input" id="calSearch" placeholder="Buscar lembrete, paciente, tipo…" oninput="ChevalierPlan.renderCalendario()">
+          <select class="select" id="calFilter" onchange="ChevalierPlan.renderCalendario()">
+            <option value="open">Em aberto</option>
+            <option value="today">Hoje</option>
+            <option value="all">Todos</option>
+            <option value="done">Concluídos</option>
+          </select>
+        </div>
+        <div id="calendarList" class="cal-list"></div>
+      </section>
+
+      <!-- PLANEJAMENTO -->
+      <section class="page" id="page-planejamento">
+        <div class="page-head">
+          <div>
+            <h2>Planejamento</h2>
+            <p>Arquivos ICON, CBCT, guias e avaliação por IA da tomografia de planejamento.</p>
+          </div>
+          <div class="page-actions">
+            <label class="btn primary" for="planFileInput">＋ Enviar arquivo</label>
+            <input type="file" id="planFileInput" hidden multiple accept="image/*,.pdf,.dcm,.dicom,.stl,.ply,.zip,.icon,.json,.xml,application/pdf">
+          </div>
+        </div>
+        <div class="kpi-grid cal-kpis">
+          <div class="kpi"><div class="label">Arquivos</div><div class="value" id="planCount">0</div></div>
+          <div class="kpi"><div class="label">Com análise IA</div><div class="value" id="planAiCount">0</div></div>
+        </div>
+        <div class="ai-banner">
+          <div>
+            <strong>IA de tomografia odontológica</strong>
+            <p>Envie fatias de CBCT, exports ICON ou PDFs de planejamento. A IA monta achados, riscos anatômicos e sugestões de implante.</p>
+          </div>
+        </div>
+        <div class="plan-upload-bar">
+          <input class="input" id="planPatient" placeholder="Paciente (opcional)">
+          <select class="select" id="planKind">
+            <option>Planejamento ICON / CBCT</option>
+            <option>Tomografia / fatia</option>
+            <option>Guia cirúrgico</option>
+            <option>STL / modelo</option>
+            <option>Relatório PDF</option>
+            <option>Outro</option>
+          </select>
+        </div>
+        <div class="plan-drop" id="planDrop">
+          <strong>Solte arquivos aqui</strong>
+          <span>PNG, JPG, PDF, DICOM, STL, ZIP ou export ICON — até 40 MB</span>
+        </div>
+        <div class="toolbar">
+          <input class="input" id="planSearch" placeholder="Buscar planejamento…" oninput="ChevalierPlan.renderPlanejamento()">
+        </div>
+        <div id="planList" class="plan-list"></div>
+      </section>
+
       <!-- CONFIG -->
       <section class="page" id="page-config">
         <div class="page-head">
@@ -564,6 +639,7 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
               <div class="settings-row"><div class="desc"><strong>Consumo automático</strong><span>Ao lançar procedimento, materiais da ficha preenchem o custo (editável).</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>Leitor de boletos</strong><span>Escaneia boleto (câmera/arquivo/linha digitável), lança em Custos e alerta duplicatas.</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>Código de barras</strong><span>Lê EAN/código do material para localizar e movimentar estoque.</span></div><span class="badge b-green">Ativo</span></div>
+              <div class="settings-row"><div class="desc"><strong>IA de tomografia</strong><span>Avalia arquivos de planejamento ICON/CBCT na aba Planejamento.</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>IA gerencial</strong><span>Consultas como “qual clínica me deu maior lucro nos últimos 90 dias?”.</span></div><span class="badge b-blue">Fase 5</span></div>
               <div class="settings-row"><div class="desc"><strong>Backup local</strong><span>Baixe os dados do protótipo em JSON.</span></div><button class="btn small" onclick="exportData()">Exportar JSON</button></div>
             </div>
@@ -573,6 +649,14 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
     </div>
   </main>
 </div>
+
+<nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Navegação principal">
+  <button type="button" class="mb-nav-btn active" data-page="dashboard"><span>◫</span>Início</button>
+  <button type="button" class="mb-nav-btn" data-page="calendario"><span>◷</span>Agenda</button>
+  <button type="button" class="mb-nav-btn" data-page="planejamento"><span>⌖</span>Plano</button>
+  <button type="button" class="mb-nav-btn" data-page="pacientes"><span>◉</span>Pacientes</button>
+  <button type="button" class="mb-nav-btn" id="mbMenuBtn"><span>☰</span>Menu</button>
+</nav>
 
 <div class="modal-backdrop" id="modalRoot">
   <div class="modal">
@@ -585,6 +669,7 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
 
 <script src="<?= chevalier_asset_url('assets/js/scan-tools.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/dental-catalog.js') ?>"></script>
+<script src="<?= chevalier_asset_url('assets/js/planning-calendar.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/app.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/update-manager.js') ?>" defer></script>
 </body>

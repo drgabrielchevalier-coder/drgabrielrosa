@@ -5,3 +5,5 @@ api/config.local.php
 *.zip
 .DS_Store
 Thumbs.db
+uploads/planning/*
+!uploads/planning/.htaccess
