@@ -1,10 +1,11 @@
 {
-  "version": "1.4",
-  "name": "Marca Dr Gabriel Rosa",
-  "releasedAt": "2026-09-16",
+  "version": "1.5",
+  "name": "Assistente de materiais e dashboard",
+  "releasedAt": "2026-09-17",
   "changes": [
-    "Identidade visual atualizada para Dr Gabriel Rosa — Reabilitação Oral & Estética.",
-    "Logo oficial na tela de login e no menu lateral.",
-    "Mantém o fundo em movimento desfocado e o layout de acesso."
+    "Assistente de preços na aba Materiais: busca Dental Cremer, Dental Speed e Surya Dental.",
+    "Cálculo automático do custo unitário fracionado (preço da embalagem ÷ unidades).",
+    "Ao lançar procedimento/paciente, consumo de materiais é preenchido pela ficha (editável) e baixa estoque.",
+    "Dashboard com gráficos de lucro bruto × custos por mês, caixa recebido × a receber e top procedimentos."
   ]
 }

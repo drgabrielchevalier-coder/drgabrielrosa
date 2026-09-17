@@ -205,11 +205,196 @@ function ensureCatalog(force=false){
   state.catalogReady=true;
 }
 
+function parsePackUnits(pack){
+  const s=String(pack||'').toLowerCase();
+  const m=s.match(/(\d+[.,]?\d*)\s*(un|unid|unidade|unidades|tubete|tubetes|par|pares|pct|pcts|envelope|envelopes|kit|kits|bolsa|bolsas|seringa|seringas|frasco|frascos|cx|caixa|caixas|g|ml|comp)?/);
+  if(m){const n=Number(String(m[1]).replace(',','.')); return n>0?n:1;}
+  return 1;
+}
+function unitCostFromPack(price,pack){
+  const units=parsePackUnits(pack);
+  return units>0?Math.round((Number(price||0)/units)*1000)/1000:Number(price||0);
+}
+function recalcAllUnitCosts(){
+  let n=0;
+  state.materials.forEach(m=>{
+    const next=unitCostFromPack(m.price,m.pack);
+    if(next>0 && Math.abs(next-Number(m.unitCost||0))>0.0005){m.unitCost=next;m.updated=todayISO();n++;}
+  });
+  save();renderAll();toast(n?`${n} custos unitários recalculados.`:'Nada a recalcular.');
+}
+function procedureMaterialsCost(procId){
+  const p=procedure(procId);
+  const materials=(p.items||[]).reduce((s,i)=>s+material(i.materialId).unitCost*Number(i.qty||0),0);
+  return {materials:Math.round(materials*100)/100, lab:Number(p.extra||0), items:(p.items||[]).map(i=>({materialId:i.materialId,qty:Number(i.qty||0)}))};
+}
+const PROC_AI_RULES=[
+  {match:/implante\s*\+\s*coroa|implante.*coroa/i, ids:['m1','m4','m5','m6','m7','m8','m16','m20']},
+  {match:/implante.*enxerto|enxerto/i, ids:['m1','m3','m4','m5','m6','m15','m16']},
+  {match:/implante/i, ids:['m1','m4','m5','m6','m16','m20']},
+  {match:/coroa|protético|ciment/i, ids:['m7','m8','m26','m30']},
+  {match:/protocolo/i, ids:['m1','m2','m4','m5','m6','m16']},
+  {match:/restaura/i, ids:['m27','m28','m29','m37']},
+];
+function suggestMaterialsForProcedureName(name){
+  const rule=PROC_AI_RULES.find(r=>r.match.test(String(name||'')));
+  const ids=rule?rule.ids:[];
+  return ids.filter(id=>state.materials.some(m=>m.id===id)).map(id=>({materialId:id,qty:1}));
+}
+function applySuggestedMaterialsToProcedureForm(){
+  const name=getv('pName');
+  const items=suggestMaterialsForProcedureName(name);
+  if(!items.length) return toast('Não encontrei sugestão para este nome. Edite a ficha manualmente.');
+  const box=document.getElementById('procItems');
+  if(!box) return;
+  box.innerHTML=items.map(procItemRow).join('');
+  toast(`${items.length} materiais sugeridos — você pode editar.`);
+}
+function consumeRow(item={}){
+  return `<div class="consume-row"><select class="select ci-mat">${materialSelect(item.materialId||'')}</select><input class="input ci-qty" type="number" min="0" step="0.01" value="${item.qty??1}" oninput="refreshConsumeTotals()"><input class="input ci-total" disabled value=""><button type="button" class="btn small icon-x" onclick="this.parentElement.remove();refreshConsumeTotals()">×</button></div>`;
+}
+function collectConsumeItems(){
+  return [...document.querySelectorAll('.consume-row')].map(row=>({materialId:row.querySelector('.ci-mat')?.value,qty:Number(row.querySelector('.ci-qty')?.value||0)})).filter(x=>x.materialId&&x.qty>0);
+}
+function refreshConsumeTotals(){
+  let materials=0, components=0;
+  document.querySelectorAll('.consume-row').forEach(row=>{
+    const id=row.querySelector('.ci-mat')?.value;
+    const qty=Number(row.querySelector('.ci-qty')?.value||0);
+    const m=material(id);
+    const line=Number(m.unitCost||0)*qty;
+    const totalEl=row.querySelector('.ci-total');
+    if(totalEl) totalEl.value=brl.format(line);
+    materials+=line;
+    if(/componente|pilar|transfer|análogo|parafuso/i.test(String(m.type||'')+' '+String(m.name||''))) components+=line;
+  });
+  materials=Math.round(materials*100)/100;
+  components=Math.round(components*100)/100;
+  const pureMats=Math.round((materials-components)*100)/100;
+  const costEl=document.getElementById('fCost');
+  const compEl=document.getElementById('fComponents');
+  if(costEl) costEl.value=pureMats;
+  if(compEl && components>0) compEl.value=components;
+  const tip=document.getElementById('fConsumeTotal');
+  if(tip) tip.innerHTML=`Consumo calculado: <strong>${brl.format(materials)}</strong> (materiais ${brl.format(pureMats)} · componentes ${brl.format(components)})`;
+}
+function fillConsumeFromProcedure(procId){
+  const box=document.getElementById('fConsumeList');
+  if(!box) return;
+  const data=procedureMaterialsCost(procId);
+  const items=data.items.length?data.items:[{}];
+  box.innerHTML=items.map(consumeRow).join('');
+  const lab=document.getElementById('fLab');
+  if(lab && !document.getElementById('fLab')?.dataset.locked) lab.value=data.lab;
+  refreshConsumeTotals();
+}
+function applyStockConsumption(items, reverse=false){
+  (items||[]).forEach(it=>{
+    const m=state.materials.find(x=>x.id===it.materialId);
+    if(!m) return;
+    const q=Number(it.qty||0);
+    m.stock=Math.max(0,Number(m.stock||0)+(reverse?q:-q));
+  });
+}
+async function openPriceSyncModal(){
+  const list=state.materials.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).slice(0,40);
+  openModal('Assistente de preços','<div class="empty">Consultando Dental Cremer, Dental Speed e Surya Dental…</div>',()=>closeModal());
+  document.getElementById('modalSave').textContent='Fechar';
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  try{
+    const res=await fetch('api/price-sync.php',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'same-origin',body:JSON.stringify({materials:list.map(m=>({id:m.id,name:m.name,brand:m.brand,pack:m.pack,price:m.price}))})});
+    const data=await res.json();
+    if(!data.ok) throw new Error(data.error||'Falha na sincronização');
+    const body=document.getElementById('modalBody');
+    body.innerHTML=`<p class="field-hint">Selecione os preços sugeridos. O custo unitário é calculado pelo fracionamento da embalagem (ex.: 50 tubetes).</p>
+      <div id="syncResults">${(data.results||[]).map(r=>{
+        const units=parsePackUnits(r.pack);
+        const best=r.bestPrice;
+        const unit=best!=null?unitCostFromPack(best,r.pack):null;
+        const offers=(r.offers||[]).map(o=>`<div>${esc(o.supplier)}: ${o.suggested!=null?brl.format(o.suggested):(o.ok?'sem preço claro':'bloqueado')} · <a href="${esc(o.url)}" target="_blank" rel="noopener">abrir busca</a></div>`).join('');
+        return `<div class="sync-row" data-id="${esc(r.id)}">
+          <div class="sync-row-head">
+            <div><strong>${esc(r.name)}</strong><div class="cell-sub">${esc(r.brand||'—')} · embalagem ${esc(r.pack||'—')} (${units} un.) · atual ${brl.format(r.currentPrice||0)}</div></div>
+            <label style="display:flex;gap:8px;align-items:center;font-size:12px"><input type="checkbox" class="sync-check" ${best!=null?'checked':''} ${best==null?'disabled':''}> aplicar</label>
+          </div>
+          <div class="form-grid" style="margin-top:8px">
+            <div class="field"><label>Preço embalagem sugerido</label><input class="input sync-price" type="number" step="0.01" value="${best??''}"></div>
+            <div class="field"><label>Custo unitário fracionado</label><input class="input sync-unit" type="number" step="0.001" value="${unit??''}"></div>
+          </div>
+          <div class="sync-offers">${offers||'<div>Sem ofertas retornadas — use os links para conferir.</div>'}</div>
+        </div>`;
+      }).join('')}</div>`;
+    body.querySelectorAll('.sync-row').forEach(row=>{
+      const price=row.querySelector('.sync-price');
+      const unit=row.querySelector('.sync-unit');
+      const pack=state.materials.find(m=>m.id===row.dataset.id)?.pack||'';
+      price?.addEventListener('input',()=>{if(unit) unit.value=unitCostFromPack(Number(price.value||0),pack);});
+    });
+    document.getElementById('modalSave').textContent='Aplicar selecionados';
+    document.getElementById('modalSave').onclick=()=>{
+      let n=0;
+      body.querySelectorAll('.sync-row').forEach(row=>{
+        if(!row.querySelector('.sync-check')?.checked) return;
+        const id=row.dataset.id;
+        const m=state.materials.find(x=>x.id===id);
+        if(!m) return;
+        m.price=Number(row.querySelector('.sync-price')?.value||m.price||0);
+        m.unitCost=Number(row.querySelector('.sync-unit')?.value||unitCostFromPack(m.price,m.pack));
+        m.supplier=m.supplier||'Sincronizado';
+        m.updated=todayISO();
+        n++;
+      });
+      save();closeModal();renderAll();toast(n?`${n} materiais atualizados.`:'Nenhum item selecionado.');
+    };
+  }catch(err){
+    document.getElementById('modalBody').innerHTML=`<div class="empty">${esc(err.message||'Não foi possível sincronizar agora.')}<br><br>Você ainda pode abrir as buscas manualmente e recalcular o fracionamento.</div>
+      <div class="row-actions" style="margin-top:12px">
+        <a class="btn" target="_blank" rel="noopener" href="https://www.dentalcremer.com.br/">Dental Cremer</a>
+        <a class="btn" target="_blank" rel="noopener" href="https://www.dentalspeed.com/">Dental Speed</a>
+        <a class="btn" target="_blank" rel="noopener" href="https://www.suryadental.com.br/">Surya Dental</a>
+        <button class="btn primary" onclick="recalcAllUnitCosts();closeModal()">Recalcular fracionados</button>
+      </div>`;
+    document.getElementById('modalSave').textContent='Fechar';
+    document.getElementById('modalSave').onclick=()=>closeModal();
+  }
+}
+
+
+function monthKey(iso){return String(iso||'').slice(0,7)}
+function monthLabel(key){
+  const [y,m]=String(key).split('-');
+  const names=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  return `${names[Number(m)-1]||m}/${String(y).slice(2)}`;
+}
+function periodDays(){return Number(document.getElementById('periodSelect')?.value||90)}
+function inPeriod(iso){
+  if(!iso) return false;
+  const d=new Date(iso+'T12:00:00');
+  const cut=new Date(); cut.setDate(cut.getDate()-periodDays());
+  return d>=cut;
+}
+function monthlySeries(count=6){
+  const keys=[]; const now=new Date();
+  for(let i=count-1;i>=0;i--){
+    const d=new Date(now.getFullYear(), now.getMonth()-i, 1);
+    keys.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+  return keys.map(k=>{
+    const pts=state.patients.filter(p=>monthKey(p.date)===k);
+    const revenue=pts.reduce((s,p)=>s+Number(p.received||0),0);
+    const billed=pts.reduce((s,p)=>s+Number(p.value||0),0);
+    const cost=pts.reduce((s,p)=>s+patientCost(p),0);
+    const overhead=state.costs.filter(c=>monthKey(c.date)===k).reduce((s,c)=>s+Number(c.value||0),0);
+    return {key:k,label:monthLabel(k),revenue,billed,cost,overhead,profit:revenue-cost,cases:pts.length};
+  });
+}
 function renderDashboard(){
-  const fat=state.patients.reduce((s,p)=>s+Number(p.value||0),0);
-  const rec=state.patients.reduce((s,p)=>s+Number(p.received||0),0);
-  const receber=state.patients.reduce((s,p)=>s+balance(p),0);
-  const custos=state.patients.reduce((s,p)=>s+patientCost(p),0);
+  const patients=state.patients.filter(p=>inPeriod(p.date));
+  const costsPeriod=state.costs.filter(c=>inPeriod(c.date));
+  const fat=patients.reduce((s,p)=>s+Number(p.value||0),0);
+  const rec=patients.reduce((s,p)=>s+Number(p.received||0),0);
+  const receber=patients.reduce((s,p)=>s+balance(p),0);
+  const custos=patients.reduce((s,p)=>s+patientCost(p),0)+costsPeriod.reduce((s,c)=>s+Number(c.value||0),0);
   const lucro=rec-custos;
   const margem=pct(lucro,rec);
   const overdue=state.patients.filter(isOverdue);
@@ -221,9 +406,46 @@ function renderDashboard(){
   document.getElementById('kpiLucro').textContent=brl.format(lucro);
   document.getElementById('kpiMargem').textContent=margem+'%';
   document.getElementById('heroResult').textContent=brl.format(lucro);
-  document.getElementById('heroMargin').textContent='Margem '+margem+'%';
+  document.getElementById('heroMargin').textContent='Margem '+margem+'% · período selecionado';
   document.getElementById('kpiVencidos').textContent=`${overdue.length} vencido${overdue.length===1?'':'s'}`;
   document.getElementById('badgeReceber').textContent=overdue.length;
+
+  const months=monthlySeries(periodDays()>=300?12:periodDays()>=150?8:6);
+  const maxY=Math.max(1,...months.flatMap(m=>[m.profit,m.cost,m.overhead+m.cost]));
+  const chart=document.getElementById('chartMonthly');
+  if(chart){
+    chart.innerHTML=months.map(m=>{
+      const costTotal=m.cost+m.overhead;
+      const ph=Math.max(4,Math.round((Math.max(0,m.profit)/maxY)*132));
+      const ch=Math.max(4,Math.round((costTotal/maxY)*132));
+      return `<div class="chart-col" title="${esc(m.label)}: lucro ${brl.format(m.profit)} · custos ${brl.format(costTotal)}">
+        <div class="chart-bars"><span class="chart-bar profit" style="height:${ph}px"></span><span class="chart-bar cost" style="height:${ch}px"></span></div>
+        <small>${esc(m.label)}</small>
+      </div>`;
+    }).join('');
+  }
+  const cash=document.getElementById('chartCash');
+  if(cash){
+    const open=receber, done=rec, total=Math.max(1,done+open);
+    cash.innerHTML=`<div class="cash-meter">
+      <div class="cash-row"><div><span>Recebido</span><strong>${brl.format(done)}</strong></div><div class="progress"><span style="width:${(done/total)*100}%"></span></div></div>
+      <div class="cash-row"><div><span>A receber</span><strong>${brl.format(open)}</strong></div><div class="progress"><span style="width:${(open/total)*100}%;background:#b34c48"></span></div></div>
+      <div class="cash-row"><div><span>Custos no período</span><strong>${brl.format(custos)}</strong></div><div class="progress"><span style="width:${Math.min(100,(custos/Math.max(total,1))*100)}%;background:#5c6662"></span></div></div>
+    </div>`;
+  }
+  const top=document.getElementById('chartTopProcs');
+  if(top){
+    const map={};
+    patients.forEach(p=>{
+      const name=procedure(p.procedureId).name;
+      if(!map[name]) map[name]={name,profit:0,cases:0};
+      map[name].profit+=patientProfit(p); map[name].cases+=1;
+    });
+    const rows=Object.values(map).sort((a,b)=>b.profit-a.profit).slice(0,5);
+    const maxP=Math.max(1,...rows.map(r=>Math.abs(r.profit)));
+    top.innerHTML=rows.length?rows.map(r=>`
+      <div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:6px"><span>${esc(r.name)} · ${r.cases} caso(s)</span><strong>${brl.format(r.profit)}</strong></div><div class="progress"><span style="width:${Math.max(6,Math.abs(r.profit)/maxP*100)}%"></span></div></div>`).join(''):'<div class="empty">Sem lançamentos no período.</div>';
+  }
 
   const attention=[];
   overdue.slice(0,3).forEach(p=>attention.push({kind:'red',title:`Cobrança vencida · ${p.name}`,sub:`${clinic(p.clinicId).name} · venceu ${fmtDate(p.due)}`,value:brl.format(balance(p))}));
@@ -233,7 +455,7 @@ function renderDashboard(){
     <div class="list-item"><span class="dot ${a.kind}"></span><div class="list-main"><strong>${esc(a.title)}</strong><span>${esc(a.sub)}</span></div><div class="list-value">${esc(a.value)}</div></div>`).join(''):'<div class="empty">Nenhuma pendência crítica.</div>';
 
   const clinicSummary=state.clinics.map(c=>{
-    const arr=state.patients.filter(p=>p.clinicId===c.id);
+    const arr=patients.filter(p=>p.clinicId===c.id);
     const revenue=arr.reduce((s,p)=>s+Number(p.value||0),0);
     const costs=arr.reduce((s,p)=>s+patientCost(p),0);
     const profit=revenue-costs;
@@ -246,16 +468,21 @@ function renderDashboard(){
   }).join('');
   document.getElementById('clinicSummary').innerHTML=clinicSummary;
 
-  document.getElementById('dashboardPatients').innerHTML=[...state.patients].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6).map(p=>`
+  document.getElementById('dashboardPatients').innerHTML=[...patients].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6).map(p=>`
     <tr>${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${fmtDate(p.date)}</span>`)}${td('Origem',esc(clinic(p.clinicId).name))}${td('Procedimento',esc(procedure(p.procedureId).name))}${td('Financeiro',badge(p.status))}${td('Resultado',`<strong>${brl.format(patientProfit(p))}</strong>`)}</tr>
-  `).join('');
+  `).join('')||'<tr><td colspan="5"><div class="empty">Sem lançamentos no período.</div></td></tr>';
 
   const costCats={};
-  state.costs.forEach(c=>costCats[c.type]=(costCats[c.type]||0)+Number(c.value||0));
+  costsPeriod.forEach(c=>costCats[c.type]=(costCats[c.type]||0)+Number(c.value||0));
+  patients.forEach(p=>{
+    costCats['Materiais casos']=(costCats['Materiais casos']||0)+Number(p.cost||0);
+    costCats['Laboratório casos']=(costCats['Laboratório casos']||0)+Number(p.lab||0);
+  });
   const max=Math.max(1,...Object.values(costCats));
-  document.getElementById('costDistribution').innerHTML=Object.entries(costCats).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([k,v])=>`
-    <div style="margin-bottom:13px"><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:6px"><span>${esc(k)}</span><strong>${brl.format(v)}</strong></div><div class="progress"><span style="width:${(v/max)*100}%"></span></div></div>`).join('');
+  document.getElementById('costDistribution').innerHTML=Object.entries(costCats).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([k,v])=>`
+    <div style="margin-bottom:13px"><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:6px"><span>${esc(k)}</span><strong>${brl.format(v)}</strong></div><div class="progress"><span style="width:${(v/max)*100}%"></span></div></div>`).join('')||'<div class="empty">Sem custos no período.</div>';
 }
+
 
 function fillFilters(){
   const sel=document.getElementById('patientClinicFilter');
@@ -607,7 +834,7 @@ function setBancoTab(tab){
   const actions=document.getElementById('bancoActions');
   if(actions){
     actions.innerHTML=bancoTab==='materiais'
-      ? `<button class="btn" onclick="importDentalCatalog()">Importar catálogo odontológico</button><button class="btn primary" onclick="openMaterialModal()">＋ Material</button>`
+      ? `<button class="btn" onclick="openPriceSyncModal()">↻ Sincronizar preços</button><button class="btn" onclick="importDentalCatalog()">Importar catálogo</button><button class="btn primary" onclick="openMaterialModal()">＋ Material</button>`
       : `<button class="btn primary" onclick="openProcedureModal()">＋ Procedimento</button>`;
   }
   document.querySelectorAll('.nav-btn').forEach(b=>{
@@ -656,6 +883,9 @@ function openPatientModal(origin='',editId=''){
   const initialClinic=p.clinicId||(origin==='Particular'?'particular':'allon');
   const initialProc=p.procedureId||'p1';
   const suggested=editId?null:procedureHonorarium(initialProc,initialClinic);
+  const seedConsume=editId?(p.consumedItems||procedureMaterialsCost(initialProc).items):procedureMaterialsCost(initialProc).items;
+  const seedCost=editId?(p.cost??0):procedureMaterialsCost(initialProc).materials;
+  const seedLab=editId?(p.lab??0):procedureMaterialsCost(initialProc).lab;
   openModal(editId?'Editar paciente':'Novo paciente',`
     <div class="form-grid">
       <div class="field full"><label>Nome do paciente</label><input id="fName" class="input" value="${esc(p.name||'')}" placeholder="Nome completo"></div>
@@ -667,18 +897,34 @@ function openPatientModal(origin='',editId=''){
       <div class="field"><label>Recebido</label><input id="fReceived" type="number" step="0.01" class="input" value="${p.received??0}"></div>
       <div class="field"><label>Vencimento</label><input id="fDue" type="date" class="input" value="${p.due||addDays(10)}"></div>
       <div class="field"><label>Status financeiro</label><select id="fStatus" class="select">${statusOptions(p.status)}</select></div>
-      <div class="field"><label>Custo materiais</label><input id="fCost" type="number" step="0.01" class="input" value="${p.cost??0}"></div>
-      <div class="field"><label>Laboratório</label><input id="fLab" type="number" step="0.01" class="input" value="${p.lab??0}"></div>
+      <div class="field full"><label>Consumo de materiais (calculado automaticamente)</label>
+        <p class="field-hint">A IA preenche com a ficha do procedimento. Edite quantidades livremente.</p>
+        <div id="fConsumeList" class="consume-list">${(seedConsume.length?seedConsume:[{}]).map(consumeRow).join('')}</div>
+        <div class="row-actions" style="margin-top:8px"><button type="button" class="btn small" onclick="document.getElementById('fConsumeList').insertAdjacentHTML('beforeend', consumeRow())">＋ Item</button><button type="button" class="btn small" onclick="fillConsumeFromProcedure(getv('fProc'))">Recalcular do procedimento</button></div>
+        <div class="consume-total" id="fConsumeTotal"></div>
+      </div>
+      <div class="field"><label>Custo materiais</label><input id="fCost" type="number" step="0.01" class="input" value="${seedCost}"></div>
+      <div class="field"><label>Laboratório</label><input id="fLab" type="number" step="0.01" class="input" value="${seedLab}"></div>
       <div class="field"><label>Componentes</label><input id="fComponents" type="number" step="0.01" class="input" value="${p.components??0}"></div>
       <div class="field"><label>Custo clínico / sala</label><input id="fClinical" type="number" step="0.01" class="input" value="${p.clinical??0}"></div>
       <div class="field full"><label>Progresso clínico/protético</label><select id="fProgress" class="select">${['Orçamento','Em tratamento','Aguardo pós Cirúrgico','Moldagem','Enviado para Laboratório','Aguardando Prova','Aguardando Cimentação','Alta'].map(s=>`<option ${s===(p.progress||'Em tratamento')?'selected':''}>${s}</option>`).join('')}</select></div>
     </div>`,()=>{
       if(!getv('fName')) return toast('Informe o nome do paciente.');
-      const obj={id:editId||uid(),name:getv('fName'),origin:getv('fOrigin'),clinicId:getv('fClinic'),procedureId:getv('fProc'),date:getv('fDate'),value:num('fValue'),received:num('fReceived'),due:getv('fDue'),status:getv('fStatus'),cost:num('fCost'),lab:num('fLab'),components:num('fComponents'),clinical:num('fClinical'),progress:getv('fProgress')};
-      if(editId){state.patients=state.patients.map(x=>x.id===editId?obj:x)}else state.patients.unshift(obj);
-      save();closeModal();renderAll();toast('Paciente salvo.');
+      refreshConsumeTotals();
+      const consumed=collectConsumeItems();
+      const obj={id:editId||uid(),name:getv('fName'),origin:getv('fOrigin'),clinicId:getv('fClinic'),procedureId:getv('fProc'),date:getv('fDate'),value:num('fValue'),received:num('fReceived'),due:getv('fDue'),status:getv('fStatus'),cost:num('fCost'),lab:num('fLab'),components:num('fComponents'),clinical:num('fClinical'),progress:getv('fProgress'),consumedItems:consumed};
+      if(editId){
+        const prev=state.patients.find(x=>x.id===editId);
+        if(prev?.consumedItems?.length) applyStockConsumption(prev.consumedItems,true);
+        state.patients=state.patients.map(x=>x.id===editId?obj:x);
+      }else state.patients.unshift(obj);
+      applyStockConsumption(consumed,false);
+      save();closeModal();renderAll();toast('Paciente salvo com consumo calculado.');
     });
   wireHonorariumAutosuggest('fClinic','fProc');
+  document.getElementById('fProc')?.addEventListener('change',()=>{fillConsumeFromProcedure(getv('fProc'));syncPatientHonorarium();});
+  document.getElementById('fConsumeList')?.addEventListener('change',e=>{if(e.target.classList.contains('ci-mat')) refreshConsumeTotals();});
+  refreshConsumeTotals();
   if(!editId) syncPatientHonorarium();
 }
 function editPatient(id){openPatientModal('',id)}
@@ -753,7 +999,7 @@ function openProcedureModal(editId=''){
       <p class="field-hint">Em cada clínica, informe o valor praticado e se você recebe valor fechado (integral) ou porcentagem desse valor.</p>
       <div id="clinicPrices" class="clinic-price-list">${clinicRows}</div>
     </div>
-    <div class="field full"><label>Materiais utilizados (qtd. × custo unitário)</label><div id="procItems">${rows}</div><button type="button" class="btn small" onclick="document.getElementById('procItems').insertAdjacentHTML('beforeend', procItemRow())">＋ Material</button></div>
+    <div class="field full"><label>Materiais utilizados (qtd. × custo unitário)</label><p class="field-hint">Use “Sugerir materiais” para preencher automaticamente conforme o nome do procedimento.</p><div id="procItems">${rows}</div><div class="row-actions"><button type="button" class="btn small" onclick="document.getElementById('procItems').insertAdjacentHTML('beforeend', procItemRow())">＋ Material</button><button type="button" class="btn small" onclick="applySuggestedMaterialsToProcedureForm()">✦ Sugerir materiais</button></div></div>
   </div>`,()=>{
     if(!getv('pName'))return toast('Informe o nome do procedimento.');
     const obj={id:editId||uid(),name:getv('pName'),price:num('pPrice'),extra:num('pExtra'),items:collectProcItems(),clinicPrices:collectClinicPrices()};
@@ -796,9 +1042,10 @@ function openCostModal(editId=''){
 }
 function openMaterialModal(editId=''){
   const m=state.materials.find(x=>x.id===editId)||{};
-  openModal(editId?'Editar material':'Novo material',`<div class="form-grid"><div class="field full"><label>Material</label><input id="mName" class="input" value="${esc(m.name||'')}"></div><div class="field"><label>Marca</label><input id="mBrand" class="input" value="${esc(m.brand||'')}"></div><div class="field"><label>Tipo</label><input id="mType" class="input" value="${esc(m.type||'')}" placeholder="Implante, Componente, Insumo..."></div><div class="field"><label>Fornecedor</label><input id="mSupplier" class="input" value="${esc(m.supplier||'')}"></div><div class="field"><label>Embalagem</label><input id="mPack" class="input" value="${esc(m.pack||'')}" placeholder="Ex.: 20 unidades"></div><div class="field"><label>Preço total da embalagem</label><input id="mPrice" type="number" step="0.01" class="input" value="${m.price??''}"></div><div class="field"><label>Custo unitário de utilização</label><input id="mUnit" type="number" step="0.001" class="input" value="${m.unitCost??''}"></div><div class="field"><label>Quantidade atual</label><input id="mStock" type="number" class="input" value="${m.stock??0}"></div><div class="field"><label>Estoque mínimo</label><input id="mMin" type="number" class="input" value="${m.min??1}"></div></div>`,()=>{
+  openModal(editId?'Editar material':'Novo material',`<div class="form-grid"><div class="field full"><label>Material</label><input id="mName" class="input" value="${esc(m.name||'')}"></div><div class="field"><label>Marca</label><input id="mBrand" class="input" value="${esc(m.brand||'')}"></div><div class="field"><label>Tipo</label><input id="mType" class="input" value="${esc(m.type||'')}" placeholder="Implante, Componente, Insumo..."></div><div class="field"><label>Fornecedor</label><input id="mSupplier" class="input" value="${esc(m.supplier||'')}"></div><div class="field"><label>Embalagem</label><input id="mPack" class="input" value="${esc(m.pack||'')}" placeholder="Ex.: 50 tubetes" oninput="document.getElementById('mUnit').value=unitCostFromPack(Number(document.getElementById('mPrice').value||0),this.value)"></div><div class="field"><label>Preço total da embalagem</label><input id="mPrice" type="number" step="0.01" class="input" value="${m.price??''}" oninput="document.getElementById('mUnit').value=unitCostFromPack(Number(this.value||0),document.getElementById('mPack').value)"></div><div class="field"><label>Custo unitário fracionado</label><input id="mUnit" type="number" step="0.001" class="input" value="${m.unitCost??''}"><small class="field-hint">Calculado automaticamente: preço ÷ unidades da embalagem.</small></div><div class="field"><label>Quantidade atual</label><input id="mStock" type="number" class="input" value="${m.stock??0}"></div><div class="field"><label>Estoque mínimo</label><input id="mMin" type="number" class="input" value="${m.min??1}"></div></div>`,()=>{
     if(!getv('mName'))return toast('Informe o material.');
-    const obj={id:editId||uid(),name:getv('mName'),brand:getv('mBrand'),type:getv('mType'),supplier:getv('mSupplier'),pack:getv('mPack'),price:num('mPrice'),unitCost:num('mUnit')||num('mPrice'),stock:num('mStock'),min:num('mMin'),updated:todayISO()};
+    const pack=getv('mPack'); const price=num('mPrice');
+    const obj={id:editId||uid(),name:getv('mName'),brand:getv('mBrand'),type:getv('mType'),supplier:getv('mSupplier'),pack,price,unitCost:num('mUnit')||unitCostFromPack(price,pack)||price,stock:num('mStock'),min:num('mMin'),updated:todayISO()};
     if(editId) state.materials=state.materials.map(x=>x.id===editId?obj:x); else state.materials.push(obj);
     save();closeModal();renderAll();toast('Material salvo.');
   })
@@ -816,7 +1063,10 @@ function openReceivableModal(type=''){
   const initialClinic=type==='prestacao'?'allon':'particular';
   openModal('Novo recebível',`<div class="form-grid"><div class="field full"><label>Paciente</label><input id="rName" class="input"></div><div class="field"><label>Clínica</label><select id="rClinic" class="select">${clinicOptions(initialClinic)}</select></div><div class="field"><label>Procedimento</label><select id="rProc" class="select">${procOptions()}</select></div><div class="field"><label>Valor</label><input id="rValue" type="number" class="input"><small id="rHonorHint" class="field-hint">Sugestão pelo cadastro do procedimento × clínica.</small></div><div class="field"><label>Recebido</label><input id="rReceived" type="number" class="input" value="0"></div><div class="field"><label>Vencimento</label><input id="rDue" type="date" class="input" value="${addDays(7)}"></div><div class="field"><label>Status</label><select id="rStatus" class="select">${statusOptions()}</select></div></div>`,()=>{
     if(!getv('rName'))return toast('Informe o paciente.');
-    const cl=getv('rClinic'); state.patients.unshift({id:uid(),name:getv('rName'),origin:cl==='particular'?'Particular':'Prestação',clinicId:cl,procedureId:getv('rProc'),date:todayISO(),value:num('rValue'),received:num('rReceived'),due:getv('rDue'),status:getv('rStatus'),cost:0,lab:0,components:0,clinical:0,progress:'Em tratamento'});save();closeModal();renderAll();toast('Recebível lançado.');
+    const cl=getv('rClinic'); const procId=getv('rProc'); const calc=procedureMaterialsCost(procId);
+    state.patients.unshift({id:uid(),name:getv('rName'),origin:cl==='particular'?'Particular':'Prestação',clinicId:cl,procedureId:procId,date:todayISO(),value:num('rValue'),received:num('rReceived'),due:getv('rDue'),status:getv('rStatus'),cost:calc.materials,lab:calc.lab,components:0,clinical:0,progress:'Em tratamento',consumedItems:calc.items});
+    applyStockConsumption(calc.items,false);
+    save();closeModal();renderAll();toast('Recebível lançado com custo do procedimento.');
   });
   wireHonorariumAutosuggest('rClinic','rProc');
   syncPatientHonorarium();
