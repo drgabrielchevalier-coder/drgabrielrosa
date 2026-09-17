@@ -1,10 +1,10 @@
 {
-  "version": "1.8",
-  "name": "Sincronização de preços dos fornecedores",
+  "version": "1.9",
+  "name": "Catálogo odontológico completo",
   "releasedAt": "2026-09-17",
   "changes": [
-    "Busca de preços em Dental Cremer e Dental Speed via API MinhaDental (não mais scrap de HTML).",
-    "Busca na Surya Dental via GraphQL Magento com preços reais.",
-    "Sugestão de embalagem com ranqueamento por nome/marca e link direto ao produto."
+    "Catálogo com categorias e materiais de Cirurgia, Implante dentário, Prótese dentária e Endodontia.",
+    "Mais de 200 itens com preços de referência e filtro por categoria no banco de custos.",
+    "Atualização automática do banco existente ao abrir o app (versão de catálogo 2)."
   ]
 }

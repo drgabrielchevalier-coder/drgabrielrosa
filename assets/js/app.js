@@ -12,14 +12,14 @@ const seed = {
     {id:'particular',name:'Particular',type:'Próprio',rule:'Receita integral do paciente',color:'PT'}
   ],
   materials:[
-    {id:'m1',name:'Implante CM 3.5',brand:'Dérig',type:'CM',supplier:'Dental fornecedor',pack:'1 un',price:158,unitCost:158,stock:8,min:3,barcode:'7891000000001',updated:todayISO()},
-    {id:'m2',name:'Mini pilar CM',brand:'Neodent',type:'Componente',supplier:'Dental fornecedor',pack:'1 un',price:92,unitCost:92,stock:4,min:3,barcode:'7891000000002',updated:todayISO()},
-    {id:'m3',name:'Biomaterial 0,5 g',brand:'Lumina Bone',type:'Osso',supplier:'Dental fornecedor',pack:'1 un',price:198,unitCost:198,stock:2,min:2,barcode:'7891000000003',updated:pastDays(5)},
-    {id:'m4',name:'Anestésico',brand:'DFL',type:'Insumo',supplier:'Dental fornecedor',pack:'50 tubetes',price:200,unitCost:4,stock:31,min:10,barcode:'7891000000004',updated:pastDays(2)},
-    {id:'m5',name:'Campo cirúrgico',brand:'Genérico',type:'Insumo',supplier:'Distribuidora',pack:'1 kit',price:35,unitCost:35,stock:5,min:3,barcode:'7891000000005',updated:pastDays(8)},
-    {id:'m6',name:'Soro fisiológico 500 ml',brand:'Equiplex',type:'Insumo',supplier:'Distribuidora',pack:'20 bolsas',price:279.90,unitCost:13.995,stock:12,min:5,barcode:'7891000000006',updated:pastDays(12)},
-    {id:'m7',name:'Transfer HE 4.1',brand:'Implacil',type:'Transfer',supplier:'Dental fornecedor',pack:'1 un',price:30,unitCost:30,stock:2,min:2,barcode:'7891000000007',updated:pastDays(7)},
-    {id:'m8',name:'Análogo',brand:'Implacil',type:'Análogo',supplier:'Dental fornecedor',pack:'1 un',price:45,unitCost:45,stock:3,min:2,barcode:'7891000000008',updated:pastDays(7)}
+    {id:'m1',name:'Implante CM 3.5',brand:'Dérig',type:'Implante — Fixação',supplier:'Dental fornecedor',pack:'1 un',price:158,unitCost:158,stock:8,min:3,barcode:'7891000000001',updated:todayISO()},
+    {id:'m2',name:'Mini pilar CM',brand:'Neodent',type:'Implante — Componente',supplier:'Dental fornecedor',pack:'1 un',price:92,unitCost:92,stock:4,min:3,barcode:'7891000000002',updated:todayISO()},
+    {id:'m3',name:'Biomaterial 0,5 g',brand:'Lumina Bone',type:'Implante — Biomaterial',supplier:'Dental fornecedor',pack:'1 un',price:198,unitCost:198,stock:2,min:2,barcode:'7891000000003',updated:pastDays(5)},
+    {id:'m4',name:'Anestésico com vasoconstritor',brand:'DFL',type:'Comum — Anestésico',supplier:'Dental fornecedor',pack:'50 tubetes',price:200,unitCost:4,stock:31,min:10,barcode:'7891000000004',updated:pastDays(2)},
+    {id:'m5',name:'Campo cirúrgico estéril',brand:'Genérico',type:'Cirurgia — Descartáveis',supplier:'Distribuidora',pack:'1 kit',price:35,unitCost:35,stock:5,min:3,barcode:'7891000000005',updated:pastDays(8)},
+    {id:'m6',name:'Soro fisiológico 500 ml',brand:'Equiplex',type:'Cirurgia — Antisepsia',supplier:'Distribuidora',pack:'20 bolsas',price:279.90,unitCost:13.995,stock:12,min:5,barcode:'7891000000006',updated:pastDays(12)},
+    {id:'m7',name:'Transfer HE 4.1',brand:'Implacil',type:'Implante — Transfer / análogo',supplier:'Dental fornecedor',pack:'1 un',price:30,unitCost:30,stock:2,min:2,barcode:'7891000000007',updated:pastDays(7)},
+    {id:'m8',name:'Análogo de implante',brand:'Implacil',type:'Implante — Transfer / análogo',supplier:'Dental fornecedor',pack:'1 un',price:45,unitCost:45,stock:3,min:2,barcode:'7891000000008',updated:pastDays(7)}
   ],
   procedures:[
     {id:'p1',name:'Implante unitário',price:1500,items:[{materialId:'m1',qty:1},{materialId:'m4',qty:4},{materialId:'m5',qty:1},{materialId:'m6',qty:1}],extra:44,clinicPrices:[
@@ -152,63 +152,44 @@ function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 function td(label,html){return `<td data-label="${esc(label)}">${html}</td>`}
 function acts(edit,del){return `<div class="row-actions"><button class="btn small" onclick="${edit}">Editar</button><button class="btn small danger" onclick="${del}">Excluir</button></div>`}
 let bancoTab='materiais';
-const DENTAL_CATALOG=[
-  ['m1','Implante CM 3.5','Dérig','Implante','1 un',158,158],
-  ['m2','Mini pilar CM','Neodent','Componente','1 un',92,92],
-  ['m3','Biomaterial 0,5 g','Lumina Bone','Osso / biomaterial','1 un',198,198],
-  ['m4','Anestésico','DFL','Anestésico','50 tubetes',200,4],
-  ['m5','Campo cirúrgico','Genérico','Insumo','1 kit',35,35],
-  ['m6','Soro fisiológico 500 ml','Equiplex','Insumo','20 bolsas',279.9,13.995],
-  ['m7','Transfer HE 4.1','Implacil','Transfer','1 un',30,30],
-  ['m8','Análogo','Implacil','Análogo','1 un',45,45],
-  ['m9','Implante CM 4.0','Dérig','Implante','1 un',168,168],
-  ['m10','Implante CM 4.5','Dérig','Implante','1 un',178,178],
-  ['m11','Cicatrizador CM','Neodent','Componente','1 un',68,68],
-  ['m12','Pilar definitivo CM','Neodent','Componente','1 un',185,185],
-  ['m13','Parafuso protético','Neodent','Componente','1 un',42,42],
-  ['m14','Biomaterial 1,0 g','Lumina Bone','Osso / biomaterial','1 un',320,320],
-  ['m15','Membrana colágena 20x30','Lumina-Coat','Membrana','1 un',210,210],
-  ['m16','Fio de sutura 4-0','Shalon','Sutura','1 envelope',8.5,8.5],
-  ['m17','Agulha gengival 30G','Injex','Anestésico','100 un',45,0.45],
-  ['m18','Lâmina de bisturi nº15','Solidor','Insumo','100 un',38,0.38],
-  ['m19','Gaze estéril','Cremer','Descartável','10 pct',22,2.2],
-  ['m20','Luva cirúrgica','Descarpack','Descartável','50 pares',48,0.96],
-  ['m21','Máscara descartável','Descarpack','Descartável','50 un',18,0.36],
-  ['m22','Clorexidina 0,12%','Periogard','Medicamento','1 frasco',28,28],
-  ['m23','Broca inicial','Neodent','Broca','1 un',95,95],
-  ['m24','Broca sequencial','Neodent','Broca','1 un',88,88],
-  ['m25','Chave torque','Neodent','Instrumental','1 un',320,320],
-  ['m26','Cimento resinoso','RelyX','Cimento','1 kit',189,189],
-  ['m27','Resina composta A2','3M','Restaurador','1 seringa',62,62],
-  ['m28','Ácido fosfórico 37%','FGM','Restaurador','1 seringa',18,18],
-  ['m29','Adesivo universal','3M','Restaurador','1 frasco',145,145],
-  ['m30','Fio retrator','Ultrapak','Protético','1 unidose',9,9],
-  ['m31','Silicone de adição','Express','Moldagem','1 kit',210,210],
-  ['m32','Alginato','Jeltrate','Moldagem','1 pote',38,38],
-  ['m33','Gesso pedra','Asfer','Laboratório','1 kg',16,16],
-  ['m34','Provisório bisacrílico','Protemp','Protético','1 kit',245,245],
-  ['m35','Kit irrigação','Genérico','Insumo','1 kit',22,22],
-  ['m36','Dique de borracha','Madeitex','Isolamento','36 un',32,0.89],
-  ['m37','Broca diamantada','KG','Broca','1 un',12,12],
-  ['m38','Ionômero de vidro','GC','Restaurador','1 kit',78,78],
-  ['m39','Antibiótico (amox+clav)','Genérico','Medicamento','1 cx',24,24],
-  ['m40','Analgésico / AINE','Genérico','Medicamento','1 cx',12,12]
-];
+const CATALOG_VERSION=Number(window.CHEVALIER_CATALOG_VERSION||2);
+const DENTAL_CATALOG=Array.isArray(window.DENTAL_CATALOG)?window.DENTAL_CATALOG:[];
+const DENTAL_SPECIALTIES=Array.isArray(window.DENTAL_SPECIALTIES)?window.DENTAL_SPECIALTIES:[];
+function catalogTypeOptions(selected=''){
+  const fromSpec=DENTAL_SPECIALTIES.flatMap(s=>s.categories||[]);
+  const fromMats=[...new Set((state.materials||[]).map(m=>m.type).filter(Boolean))];
+  const types=[...new Set([...fromSpec,...fromMats])].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  return types.map(t=>`<option value="${esc(t)}" ${t===selected?'selected':''}>${esc(t)}</option>`).join('');
+}
 function ensureCatalog(force=false){
   if(!Array.isArray(state.materials)) state.materials=[];
-  if(state.catalogReady && !force) return;
-  const have=new Set(state.materials.map(m=>m.id));
+  const versionOk=Number(state.catalogVersion||0)===CATALOG_VERSION;
+  if(state.catalogReady && versionOk && !force) return;
+  const byId=Object.fromEntries(state.materials.map(m=>[m.id,m]));
+  let added=0;
   DENTAL_CATALOG.forEach(([id,name,brand,type,pack,price,unitCost])=>{
-    if(have.has(id)) return;
-    const barcode='789'+String(id.replace(/\D/g,'')||'0').padStart(10,'0').slice(-10);
-    state.materials.push({id,name,brand,type,supplier:'Catálogo odontológico',pack,price,unitCost,stock:0,min:1,barcode,updated:todayISO()});
+    const existing=byId[id];
+    if(existing){
+      existing.type=type;
+      if(!existing.name) existing.name=name;
+      if(!existing.brand) existing.brand=brand;
+      if(!existing.pack) existing.pack=pack;
+      return;
+    }
+    const barcode='789'+String(String(id).replace(/\D/g,'')||'0').padStart(10,'0').slice(-10);
+    const row={id,name,brand,type,supplier:'Catálogo odontológico',pack,price,unitCost,stock:0,min:1,barcode,updated:todayISO()};
+    state.materials.push(row);
+    byId[id]=row;
+    added++;
   });
   state.materials.forEach(m=>{
     if(!m.barcode){
-      m.barcode='789'+String(m.id.replace(/\D/g,'')||'0').padStart(10,'0').slice(-10);
+      m.barcode='789'+String(String(m.id).replace(/\D/g,'')||'0').padStart(10,'0').slice(-10);
     }
   });
+  state.catalogVersion=CATALOG_VERSION;
   state.catalogReady=true;
+  return added;
 }
 
 function parsePackUnits(pack){
@@ -236,10 +217,12 @@ function procedureMaterialsCost(procId){
 }
 const PROC_AI_RULES=[
   {match:/implante\s*\+\s*coroa|implante.*coroa/i, ids:['m1','m4','m5','m6','m7','m8','m16','m20']},
-  {match:/implante.*enxerto|enxerto/i, ids:['m1','m3','m4','m5','m6','m15','m16']},
-  {match:/implante/i, ids:['m1','m4','m5','m6','m16','m20']},
-  {match:/coroa|protético|ciment/i, ids:['m7','m8','m26','m30']},
-  {match:/protocolo/i, ids:['m1','m2','m4','m5','m6','m16']},
+  {match:/implante.*enxerto|enxerto|levantamento|seio/i, ids:['m1','m3','m4','m5','m6','m15','m16','m85','m91']},
+  {match:/implante/i, ids:['m1','m4','m5','m6','m16','m20','m11']},
+  {match:/exodont|cirurg|extra[cç]/i, ids:['m4','m5','m16','m18','m19','m20','m102','m108','m127']},
+  {match:/coroa|protético|ciment|faceta|pr[oó]tese/i, ids:['m7','m8','m26','m30','m31','m169']},
+  {match:/protocolo/i, ids:['m1','m2','m4','m5','m6','m16','m56']},
+  {match:/endo|tratament[o].*canal|obtura/i, ids:['m36','m189','m190','m205','m207','m214','m216','m217','m226']},
   {match:/restaura/i, ids:['m27','m28','m29','m37']},
 ];
 function suggestMaterialsForProcedureName(name){
@@ -866,17 +849,21 @@ function setBancoTab(tab){
 }
 function importDentalCatalog(){
   const before=state.materials.length;
-  ensureCatalog(true);
-  const added=state.materials.length-before;
-  save();renderAll();toast(added?`${added} materiais adicionados ao banco.`:'O catálogo já estava completo.');
+  const added=ensureCatalog(true)||Math.max(0,state.materials.length-before);
+  save();renderAll();
+  const specs=DENTAL_SPECIALTIES.map(s=>s.name).filter(Boolean).join(', ');
+  toast(added?`${added} materiais adicionados (${DENTAL_CATALOG.length} no catálogo${specs?` · ${specs}`:''}).`:'O catálogo já estava completo.');
 }
 function renderBanco(){
   if(!document.getElementById('bancoMaterialsTable')) return;
-  const types=[...new Set(state.materials.map(m=>m.type).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const types=[...new Set([
+    ...DENTAL_SPECIALTIES.flatMap(s=>s.categories||[]),
+    ...state.materials.map(m=>m.type).filter(Boolean)
+  ])].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   const typeSel=document.getElementById('matDbType');
   if(typeSel){
     const cur=typeSel.value;
-    typeSel.innerHTML='<option value="">Todos os tipos</option>'+types.map(t=>`<option ${t===cur?'selected':''}>${esc(t)}</option>`).join('');
+    typeSel.innerHTML='<option value="">Todas as categorias</option>'+types.map(t=>`<option value="${esc(t)}" ${t===cur?'selected':''}>${esc(t)}</option>`).join('');
     typeSel.value=cur;
   }
   const q=(document.getElementById('matDbSearch')?.value||'').toLowerCase();
@@ -1063,7 +1050,8 @@ function openCostModal(editId=''){
 }
 function openMaterialModal(editId=''){
   const m=state.materials.find(x=>x.id===editId)||{};
-  openModal(editId?'Editar material':'Novo material',`<div class="form-grid"><div class="field full"><label>Material</label><input id="mName" class="input" value="${esc(m.name||'')}"></div><div class="field"><label>Marca</label><input id="mBrand" class="input" value="${esc(m.brand||'')}"></div><div class="field"><label>Tipo</label><input id="mType" class="input" value="${esc(m.type||'')}" placeholder="Implante, Componente, Insumo..."></div><div class="field"><label>Fornecedor</label><input id="mSupplier" class="input" value="${esc(m.supplier||'')}"></div><div class="field full"><label>Código de barras (EAN / interno)</label><input id="mBarcode" class="input" value="${esc(m.barcode||'')}" placeholder="Escaneie ou digite o código"><small class="field-hint">Usado pelo leitor para localizar o material no estoque.</small></div><div class="field"><label>Embalagem</label><input id="mPack" class="input" value="${esc(m.pack||'')}" placeholder="Ex.: 50 tubetes" oninput="document.getElementById('mUnit').value=unitCostFromPack(Number(document.getElementById('mPrice').value||0),this.value)"></div><div class="field"><label>Preço total da embalagem</label><input id="mPrice" type="number" step="0.01" class="input" value="${m.price??''}" oninput="document.getElementById('mUnit').value=unitCostFromPack(Number(this.value||0),document.getElementById('mPack').value)"></div><div class="field"><label>Custo unitário fracionado</label><input id="mUnit" type="number" step="0.001" class="input" value="${m.unitCost??''}"><small class="field-hint">Calculado automaticamente: preço ÷ unidades da embalagem.</small></div><div class="field"><label>Quantidade atual</label><input id="mStock" type="number" class="input" value="${m.stock??0}"></div><div class="field"><label>Estoque mínimo</label><input id="mMin" type="number" class="input" value="${m.min??1}"></div></div>`,()=>{
+  const typeOpts=catalogTypeOptions(m.type||'');
+  openModal(editId?'Editar material':'Novo material',`<div class="form-grid"><div class="field full"><label>Material</label><input id="mName" class="input" value="${esc(m.name||'')}"></div><div class="field"><label>Marca</label><input id="mBrand" class="input" value="${esc(m.brand||'')}"></div><div class="field"><label>Categoria</label><select id="mType" class="select"><option value="">Selecione…</option>${typeOpts}</select><small class="field-hint">Cirurgia, implante, prótese, endodontia e uso comum.</small></div><div class="field"><label>Fornecedor</label><input id="mSupplier" class="input" value="${esc(m.supplier||'')}"></div><div class="field full"><label>Código de barras (EAN / interno)</label><input id="mBarcode" class="input" value="${esc(m.barcode||'')}" placeholder="Escaneie ou digite o código"><small class="field-hint">Usado pelo leitor para localizar o material no estoque.</small></div><div class="field"><label>Embalagem</label><input id="mPack" class="input" value="${esc(m.pack||'')}" placeholder="Ex.: 50 tubetes" oninput="document.getElementById('mUnit').value=unitCostFromPack(Number(document.getElementById('mPrice').value||0),this.value)"></div><div class="field"><label>Preço total da embalagem</label><input id="mPrice" type="number" step="0.01" class="input" value="${m.price??''}" oninput="document.getElementById('mUnit').value=unitCostFromPack(Number(this.value||0),document.getElementById('mPack').value)"></div><div class="field"><label>Custo unitário fracionado</label><input id="mUnit" type="number" step="0.001" class="input" value="${m.unitCost??''}"><small class="field-hint">Calculado automaticamente: preço ÷ unidades da embalagem.</small></div><div class="field"><label>Quantidade atual</label><input id="mStock" type="number" class="input" value="${m.stock??0}"></div><div class="field"><label>Estoque mínimo</label><input id="mMin" type="number" class="input" value="${m.min??1}"></div></div>`,()=>{
     if(!getv('mName'))return toast('Informe o material.');
     const pack=getv('mPack'); const price=num('mPrice');
     const obj={id:editId||uid(),name:getv('mName'),brand:getv('mBrand'),type:getv('mType'),supplier:getv('mSupplier'),barcode:getv('mBarcode').trim(),pack,price,unitCost:num('mUnit')||unitCostFromPack(price,pack)||price,stock:num('mStock'),min:num('mMin'),updated:todayISO()};
