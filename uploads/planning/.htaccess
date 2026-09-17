@@ -1,1 +1,6 @@
 Require all denied
+
+# Reforço: nada de PHP nesta pasta
+<FilesMatch "\.(?i:php|phtml|phar)$">
+  Require all denied
+</FilesMatch>

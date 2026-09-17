@@ -23,7 +23,9 @@
         { id: global.uid(), title: 'Lembrete de retorno pós-cirúrgico', date: addDays(7), time: '10:00', type: 'Cirurgia', notes: 'Paciente protocolo.', done: false, created: today },
       ];
       state._calendarSeeded = true;
+      return true;
     }
+    return false;
   }
 
   function typeBadge(t) {
@@ -130,8 +132,6 @@
   function deleteReminder(id) {
     global.confirmDelete('Excluir este lembrete?', () => {
       S().reminders = S().reminders.filter((x) => x.id !== id);
-      global.save();
-      renderCalendario();
     });
   }
 
@@ -191,9 +191,12 @@
       fd.append('patient', patient);
       fd.append('kind', kind);
       fd.append('title', file.name.replace(/\.[^.]+$/, ''));
+      if (typeof global.csrfToken === 'function') fd.append('csrf', global.csrfToken());
       try {
-        const res = await fetch('api/planning-upload.php', { method: 'POST', body: fd, credentials: 'same-origin' });
+        const headers = typeof global.csrfHeaders === 'function' ? global.csrfHeaders() : {};
+        const res = await fetch('api/planning-upload.php', { method: 'POST', body: fd, credentials: 'same-origin', headers });
         const data = await res.json();
+        if (typeof global.applyCsrfFromResponse === 'function') global.applyCsrfFromResponse(data);
         if (!data.ok || !data.file) throw new Error(data.error || 'Falha no upload');
         S().plans.unshift({ ...data.file, analysis: null });
         ok++;
@@ -243,7 +246,9 @@
       try {
         const res = await fetch('api/tomography-ai.php', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          headers: typeof global.csrfHeaders === 'function'
+            ? global.csrfHeaders({ 'Content-Type': 'application/json', Accept: 'application/json' })
+            : { 'Content-Type': 'application/json', Accept: 'application/json' },
           credentials: 'same-origin',
           body: JSON.stringify({
             fileId: p.id,
@@ -251,9 +256,11 @@
             region: global.getv('aiRegion'),
             goal: global.getv('aiGoal'),
             notes: global.getv('aiNotes'),
+            csrf: typeof global.csrfToken === 'function' ? global.csrfToken() : undefined,
           }),
         });
         const data = await res.json();
+        if (typeof global.applyCsrfFromResponse === 'function') global.applyCsrfFromResponse(data);
         if (!data.ok || !data.analysis) throw new Error(data.error || 'Falha na IA');
         p.analysis = data.analysis;
         p.patient = global.getv('aiPatient') || p.patient;
@@ -287,19 +294,23 @@
     s.textContent = 'Analisar com IA';
   }
 
-  async function deletePlan(id) {
-    global.confirmDelete('Excluir este arquivo de planejamento?', async () => {
-      try {
-        await fetch('api/planning-upload.php', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify({ id }),
-        });
-      } catch (_) {}
+  function deletePlan(id) {
+    global.confirmDelete('Excluir este arquivo de planejamento?', () => {
       S().plans = S().plans.filter((x) => x.id !== id);
-      global.save();
-      renderPlanejamento();
+      const headers = typeof global.csrfHeaders === 'function'
+        ? global.csrfHeaders({ 'Content-Type': 'application/json' })
+        : { 'Content-Type': 'application/json' };
+      fetch('api/planning-upload.php', {
+        method: 'DELETE',
+        headers,
+        credentials: 'same-origin',
+        body: JSON.stringify({ id, csrf: typeof global.csrfToken === 'function' ? global.csrfToken() : undefined }),
+      }).then(async (res) => {
+        try {
+          const data = await res.json();
+          if (typeof global.applyCsrfFromResponse === 'function') global.applyCsrfFromResponse(data);
+        } catch (_) {}
+      }).catch(() => {});
     });
   }
 

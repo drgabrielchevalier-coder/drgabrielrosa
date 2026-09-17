@@ -27,5 +27,17 @@ function chevalier_pdo(): PDO
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
 
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS auth_audit (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            event VARCHAR(40) NOT NULL,
+            username VARCHAR(120) NOT NULL DEFAULT "",
+            ip VARCHAR(64) NOT NULL DEFAULT "",
+            detail VARCHAR(255) NOT NULL DEFAULT "",
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+
     return $pdo;
 }
