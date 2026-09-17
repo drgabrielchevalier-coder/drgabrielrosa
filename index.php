@@ -150,28 +150,31 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
         <div class="grid layout-2">
           <div class="card">
             <div class="card-head">
-              <div><h3>Receita x resultado</h3><small>Evolução mensal simulada da operação</small></div>
-              <div class="right legend"><span>Receita</span></div>
+              <div><h3>Lucro bruto × custos</h3><small>Evolução mensal dos casos lançados</small></div>
+              <div class="right legend chart-legend">
+                <span class="leg leg-profit">Lucro bruto</span>
+                <span class="leg leg-cost">Custos</span>
+              </div>
             </div>
-            <div class="card-body">
-              <svg class="spark" viewBox="0 0 760 180" preserveAspectRatio="none" aria-label="Gráfico de receita">
-                <defs>
-                  <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#8e7d5b" stop-opacity=".22"/>
-                    <stop offset="100%" stop-color="#8e7d5b" stop-opacity=".02"/>
-                  </linearGradient>
-                </defs>
-                <line class="gridline" x1="0" y1="30" x2="760" y2="30"/>
-                <line class="gridline" x1="0" y1="90" x2="760" y2="90"/>
-                <line class="gridline" x1="0" y1="150" x2="760" y2="150"/>
-                <path class="area" d="M0 145 C70 130 95 112 150 120 C215 130 250 74 315 82 C365 88 420 47 475 59 C540 74 585 34 640 45 C690 55 720 27 760 22 L760 180 L0 180 Z"/>
-                <path class="line" d="M0 145 C70 130 95 112 150 120 C215 130 250 74 315 82 C365 88 420 47 475 59 C540 74 585 34 640 45 C690 55 720 27 760 22"/>
-              </svg>
+            <div class="card-body chart-wrap">
+              <div id="chartMonthly" class="chart-monthly" aria-label="Gráfico mensal de lucro e custos"></div>
+              <div class="chart-axis" id="chartMonthlyLabels"></div>
             </div>
           </div>
           <div class="card">
             <div class="card-head"><h3>Atenção hoje</h3><div class="right"><span class="badge b-red" id="attentionCount">0 itens</span></div></div>
             <div class="card-body list" id="attentionList"></div>
+          </div>
+        </div>
+
+        <div class="grid layout-2" style="margin-top:16px">
+          <div class="card">
+            <div class="card-head"><div><h3>Recebido × a receber</h3><small>Caixa do período selecionado</small></div></div>
+            <div class="card-body" id="chartCash"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><h3>Top procedimentos</h3><small>Lucro por tipo de procedimento</small></div></div>
+            <div class="card-body" id="chartTopProcs"></div>
           </div>
         </div>
 
@@ -479,7 +482,7 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
       <!-- BANCO DE DADOS -->
       <section class="page" id="page-banco">
         <div class="page-head">
-          <div><h2>Banco de dados</h2><p>Custos unitários de materiais odontológicos e ficha de custo de cada procedimento.</p></div>
+          <div><h2>Banco de dados</h2><p>Custos unitários, sincronização com fornecedores e ficha de consumo de cada procedimento.</p></div>
           <div class="page-actions" id="bancoActions"></div>
         </div>
         <div class="subtabs" role="tablist">
@@ -487,9 +490,17 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
           <button class="subtab" data-tab="procedimentos" onclick="setBancoTab('procedimentos')">Procedimentos</button>
         </div>
         <div id="bancoMateriais">
+          <div class="ai-banner">
+            <div>
+              <strong>Assistente de preços</strong>
+              <p>Busca Dental Cremer, Dental Speed e Surya Dental, calcula consumo fracionado da embalagem e sugere custo unitário.</p>
+            </div>
+            <button class="btn primary" onclick="openPriceSyncModal()">↻ Sincronizar preços</button>
+          </div>
           <div class="toolbar">
             <input class="input" id="matDbSearch" placeholder="Buscar material, marca, tipo..." oninput="renderBanco()">
             <select class="select" id="matDbType" onchange="renderBanco()"><option value="">Todos os tipos</option></select>
+            <button class="btn" onclick="recalcAllUnitCosts()">Recalcular fracionados</button>
           </div>
           <div class="card"><div class="table-wrap"><table>
             <thead><tr><th>Material</th><th>Marca</th><th>Tipo</th><th>Embalagem</th><th>Preço embalagem</th><th>Custo unitário</th><th>Estoque</th><th></th></tr></thead>
@@ -526,7 +537,8 @@ window.CHEVALIER_USER=<?= json_encode($chevalierUser, JSON_HEX_TAG|JSON_HEX_AMP|
             <div class="card-head"><h3>Integrações</h3></div>
             <div class="card-body">
               <div class="settings-row"><div class="desc"><strong>Notion</strong><span>Fonte atual para migração de pacientes, custos, honorários e estoque.</span></div><span class="badge b-green">Referência conectada</span></div>
-              <div class="settings-row"><div class="desc"><strong>Banco de preços</strong><span>Fornecedores e APIs serão conectados na etapa de automação.</span></div><span class="badge b-amber">Planejado</span></div>
+              <div class="settings-row"><div class="desc"><strong>Banco de preços</strong><span>Assistente busca Dental Cremer, Dental Speed e Surya Dental e calcula custo fracionado.</span></div><span class="badge b-green">Ativo</span></div>
+              <div class="settings-row"><div class="desc"><strong>Consumo automático</strong><span>Ao lançar procedimento, materiais da ficha preenchem o custo (editável).</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>IA gerencial</strong><span>Consultas como “qual clínica me deu maior lucro nos últimos 90 dias?”.</span></div><span class="badge b-blue">Fase 5</span></div>
               <div class="settings-row"><div class="desc"><strong>Backup local</strong><span>Baixe os dados do protótipo em JSON.</span></div><button class="btn small" onclick="exportData()">Exportar JSON</button></div>
             </div>
