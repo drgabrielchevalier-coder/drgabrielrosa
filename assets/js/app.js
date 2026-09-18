@@ -1541,18 +1541,35 @@ function lookupProsthesis(){
   box.innerHTML=`<div class="lookup-card"><strong>${esc(pat.name)}</strong><span class="code">${esc(w.code)}</span><p>${esc(w.type)} · ${esc(workFlow(w)==='cirurgico'?(w.labStatus||'Cirúrgico'):(w.lab||'Lab'))} · ${esc(workStageLabel(w))}</p><p>Previsão ${fmtDate(w.due)} · ${esc(w.labStatus||'')}</p><button class="btn primary" onclick="openProsthesisDetail('${w.id}')">Abrir ficha</button></div>`;
 }
 function openProsthesisModal(editId=''){
-  if(!state.patients.length){toast('Cadastre um paciente antes.');return;}
   const w=state.prostheses.find(x=>x.id===editId)||{};
   const flow0=w.flow||(productionFlowFilter==='cirurgico'?'cirurgico':'protetico');
   const stages0=flow0==='cirurgico'?SURG_STAGES:PROSTH_STAGES;
   const status0=flow0==='cirurgico'?SURG_STATUS:LAB_STATUS;
+  const preferNew=!editId && !state.patients.length;
+  const patientOpts=[
+    ...state.patients.map(p=>`<option value="${p.id}" ${!preferNew && p.id===(w.patientId||'')?'selected':''}>${esc(p.name)}</option>`),
+    `<option value="__new__" ${preferNew?'selected':''}>＋ Cadastrar novo paciente…</option>`
+  ].join('');
   openModal(editId?'Editar trabalho':'Novo trabalho',`
     <div class="form-grid">
       <div class="field full"><label>Fluxo</label><select id="wFlow" class="select" onchange="onWorkFlowChange()">
         <option value="protetico" ${flow0!=='cirurgico'?'selected':''}>Protético (laboratório)</option>
         <option value="cirurgico" ${flow0==='cirurgico'?'selected':''}>Cirúrgico</option>
       </select></div>
-      <div class="field full"><label>Paciente</label><select id="wPatient" class="select">${state.patients.map(p=>`<option value="${p.id}" ${p.id===(w.patientId||'')?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
+      <div class="field full"><label>Paciente</label>
+        <div class="patient-pick">
+          <select id="wPatient" class="select" onchange="onWorkPatientChange()">${patientOpts}</select>
+          <button type="button" class="btn small" id="wNewPatientBtn" onclick="selectNewWorkPatient()">＋ Novo</button>
+        </div>
+        <small class="field-hint">Escolha um paciente existente ou cadastre na hora.</small>
+      </div>
+      <div id="wNewPatientBox" class="new-patient-box" style="display:none;grid-column:1/-1">
+        <div class="form-grid" style="margin:0">
+          <div class="field full"><label>Nome do paciente</label><input id="wNewName" class="input" placeholder="Nome completo" autocomplete="name"></div>
+          <div class="field"><label>Origem</label><select id="wNewOrigin" class="select"><option>Prestação</option><option>Particular</option></select></div>
+          <div class="field"><label>Clínica</label><select id="wNewClinic" class="select">${clinicOptions(state.clinics[0]?.id||'')}</select></div>
+        </div>
+      </div>
       <div class="field"><label>Tipo de trabalho</label><input id="wType" class="input" value="${esc(w.type||'')}" placeholder="Ex.: Coroa sobre implante ou Implante unitário"></div>
       <div class="field"><label>Dente / região</label><input id="wTooth" class="input" value="${esc(w.tooth||'')}" placeholder="Ex.: 16 ou arcada superior"></div>
       <div class="field" id="wLabWrap"><label>Laboratório</label><input id="wLab" class="input" value="${esc(w.lab||'')}" placeholder="Nome do laboratório"></div>
@@ -1568,11 +1585,13 @@ function openProsthesisModal(editId=''){
       if(!getv('wType')) return toast('Informe o tipo de trabalho.');
       const flow=getv('wFlow')||'protetico';
       if(flow==='protetico' && !getv('wLab')) return toast('Informe o laboratório.');
+      const patientId=resolveWorkPatientId();
+      if(!patientId) return;
       const stage=Number(getv('wStage')||0);
       const payload={
-        patientId:getv('wPatient'),type:getv('wType'),tooth:getv('wTooth'),flow,
+        patientId,type:getv('wType'),tooth:getv('wTooth'),flow,
         lab:flow==='cirurgico'?(getv('wLab')||''):getv('wLab'),
-        cost:flow==='cirurgico'?num('wCost'):num('wCost'),
+        cost:num('wCost'),
         shade:getv('wShade'),stage,labStatus:getv('wLabStatus'),
         entry:getv('wEntry'),due:getv('wDue'),
         urgent:document.getElementById('wUrgent').checked,notes:getv('wNotes')
@@ -1586,6 +1605,56 @@ function openProsthesisModal(editId=''){
       save();closeModal();renderAll();toast('Trabalho salvo.');
     });
   onWorkFlowChange();
+  onWorkPatientChange();
+  if(preferNew){
+    const nameEl=document.getElementById('wNewName');
+    if(nameEl) setTimeout(()=>nameEl.focus(),50);
+  }
+}
+function selectNewWorkPatient(){
+  const sel=document.getElementById('wPatient');
+  if(!sel) return;
+  sel.value='__new__';
+  onWorkPatientChange();
+  document.getElementById('wNewName')?.focus();
+}
+function onWorkPatientChange(){
+  const isNew=getv('wPatient')==='__new__';
+  const box=document.getElementById('wNewPatientBox');
+  const btn=document.getElementById('wNewPatientBtn');
+  if(box) box.style.display=isNew?'':'none';
+  if(btn) btn.style.display=isNew?'none':'';
+}
+function resolveWorkPatientId(){
+  const selected=getv('wPatient');
+  if(selected && selected!=='__new__') return selected;
+  const name=getv('wNewName').trim();
+  if(!name){ toast('Informe o nome do novo paciente.'); return ''; }
+  const origin=getv('wNewOrigin')||'Prestação';
+  const clinicId=getv('wNewClinic')||(origin==='Particular'?'particular':(state.clinics[0]?.id||''));
+  const flow=getv('wFlow')||'protetico';
+  const progress=flow==='cirurgico'?'Planejar caso':'Em tratamento';
+  const patient={
+    id:uid(),
+    name,
+    origin,
+    clinicId,
+    procedureId:'',
+    lines:[],
+    date:getv('wEntry')||todayISO(),
+    value:0,
+    received:0,
+    due:getv('wDue')||addDays(14),
+    status:'À receber',
+    cost:0,
+    lab:flow==='protetico'?num('wCost'):0,
+    components:0,
+    clinical:0,
+    progress,
+    consumedItems:[]
+  };
+  state.patients.unshift(patient);
+  return patient.id;
 }
 function onWorkFlowChange(){
   const flow=getv('wFlow')||'protetico';
