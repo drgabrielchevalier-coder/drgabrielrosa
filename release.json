@@ -1,10 +1,10 @@
 {
-  "version": "2.6.1",
-  "name": "Novo paciente no fluxo",
+  "version": "2.6.2",
+  "name": "Histórico Allon Roter",
   "releasedAt": "2026-09-18",
   "changes": [
-    "No modal Novo trabalho: opção “＋ Cadastrar novo paciente” com nome, origem e clínica.",
-    "Fluxo protético / cirúrgico / todos (v2.6.0).",
-    "Laboratório só automático para procedimentos protéticos."
+    "Importa 405 lançamentos do controle de honorários Allon Roter (Notion) para Prestação.",
+    "Mapeia status financeiro, lab (moldagem/prova/cimentado), honorário e valor praticado.",
+    "Casos em moldagem/prova entram no fluxo de produção."
   ]
 }

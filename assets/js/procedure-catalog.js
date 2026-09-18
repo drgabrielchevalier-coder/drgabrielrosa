@@ -5,7 +5,7 @@
  * kind: 'clinico' | 'cirurgico'
  * Componha tratamentos somando linhas (ex.: plantio + enxerto + coroa).
  */
-window.CHEVALIER_PROCEDURE_CATALOG_VERSION = 2;
+window.CHEVALIER_PROCEDURE_CATALOG_VERSION = 3;
 
 window.DENTAL_PROCEDURE_SPECIALTIES = [
   { id: 'cirurgia', name: 'Cirurgia' },
@@ -125,6 +125,7 @@ window.DENTAL_PROCEDURE_CATALOG = [
   ['proc-dessensibilizacao', 'clinica', 'Dessensibilização dentinária', 'clinico', 0, 0, []],
   ['proc-remocao-carie', 'clinica', 'Remoção de cárie / proteção pulpar', 'clinico', 0, 0, []],
   ['proc-ajuste-protese', 'clinica', 'Ajuste de prótese / alívio', 'clinico', 0, 0, []],
+  ['proc-historico-livre', 'clinica', 'Procedimento histórico (descrição livre)', 'clinico', 0, 0, []],
 
   /* —— Ortodontia —— */
   ['proc-aparelho-fixo', 'ortodontia', 'Aparelho fixo (instalação por arcada)', 'clinico', 0, 0, []],
