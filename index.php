@@ -237,7 +237,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
       <!-- CLINICAS -->
       <section class="page" id="page-clinicas">
         <div class="page-head">
-          <div><h2>Clínicas e centros de resultado</h2><p>Cada clínica mantém suas próprias regras de honorários, custos e cobrança.</p></div>
+          <div><h2>Clínicas e cobrança</h2><p>Cadastre clínicas e, em cada uma, o modelo de cobrança: %, cartão, materiais e reembolso — com simulação e IA.</p></div>
           <div class="page-actions"><button class="btn primary" onclick="openClinicModal()">＋ Nova clínica</button></div>
         </div>
         <div class="grid layout-3" id="clinicsGrid"></div>
@@ -654,6 +654,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
               <div class="settings-row"><div class="desc"><strong>Leitor de boletos</strong><span>Escaneia boleto (câmera/arquivo/linha digitável), lança em Custos e alerta duplicatas.</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>Código de barras</strong><span>Lê EAN/código do material para localizar e movimentar estoque.</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>IA de tomografia</strong><span>Avalia arquivos de planejamento ICON/CBCT na aba Planejamento.</span></div><span class="badge b-green">Ativo</span></div>
+              <div class="settings-row"><div class="desc"><strong>IA de cobrança</strong><span>Interpreta a regra da clínica em texto e monta o algoritmo (%, cartão, reembolso).</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>IA gerencial</strong><span>Consultas como “qual clínica me deu maior lucro nos últimos 90 dias?”.</span></div><span class="badge b-blue">Fase 5</span></div>
               <div class="settings-row"><div class="desc"><strong>Backup local</strong><span>Baixe os dados do protótipo em JSON.</span></div><button class="btn small" onclick="exportData()">Exportar JSON</button></div>
             </div>
@@ -684,6 +685,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
 <script src="<?= chevalier_asset_url('assets/js/scan-tools.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/dental-catalog.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/procedure-catalog.js') ?>"></script>
+<script src="<?= chevalier_asset_url('assets/js/clinic-billing.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/planning-calendar.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/app.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/update-manager.js') ?>" defer></script>

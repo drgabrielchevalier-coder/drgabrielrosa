@@ -1,11 +1,11 @@
 {
-  "version": "2.3.0",
-  "name": "Catálogo e composição de tratamentos",
+  "version": "2.4.0",
+  "name": "Modelo de cobrança por clínica",
   "releasedAt": "2026-09-18",
   "changes": [
-    "Catálogo completo de procedimentos clínicos e cirúrgicos (cirurgia, implante, prótese, endo, perio, orto, pedo, HOF).",
-    "Composição de tratamento: some procedimentos (ex.: plantio + enxerto + coroa) em orçamento, prestação e custos.",
-    "Prestação de serviço dividida por clínicas parceiras (abas por centro).",
-    "Preços base em 0 para precificar depois; preços por clínica preservados."
+    "Cada clínica tem modelo de cobrança configurável: %, valor fechado, taxa de cartão e reembolso de materiais.",
+    "Simulação didática ao vivo (ex.: Gerlúcia 50% − 10% cartão + componentes).",
+    "IA interpreta a regra em texto e monta o algoritmo (com fallback local).",
+    "Orçamento, prestação e custos usam o modelo da clínica selecionada."
   ]
 }

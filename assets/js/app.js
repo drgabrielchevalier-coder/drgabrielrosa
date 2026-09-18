@@ -8,10 +8,10 @@ Object.assign(window, { todayISO, addDays, pastDays, uid, brl });
 
 const seed = {
   clinics:[
-    {id:'allon',name:'Allon Roter',type:'Prestação de serviço',rule:'Honorário por procedimento',color:'AR'},
-    {id:'daniele',name:'Daniele Belmiro',type:'Prestação de serviço',rule:'Honorário informado por caso',color:'DB'},
-    {id:'gerlucia',name:'Gerlúcia',type:'Prestação de serviço',rule:'Valor menos laboratório/componentes',color:'GE'},
-    {id:'particular',name:'Particular',type:'Próprio',rule:'Receita integral do paciente',color:'PT'}
+    {id:'allon',name:'Allon Roter',type:'Prestação de serviço',rule:'Honorário por procedimento',color:'AR',billing:{version:1,shareMode:'procedure',professionalPercent:50,fixedAmount:0,cardFeeEnabled:false,cardFeePercent:0,cardFeeOn:'share',materialsPaidBy:'doctor',reimburseComponents:false,reimburseMaterials:false,reimburseLab:false,notes:'Valor fechado ou % definidos em cada procedimento.',aiSummary:'Por procedimento · sem taxa cartão · você paga material',examplePracticed:1500,exampleComponents:0,exampleMaterials:0,exampleLab:0}},
+    {id:'daniele',name:'Daniele Belmiro',type:'Prestação de serviço',rule:'Honorário informado por caso',color:'DB',billing:{version:1,shareMode:'procedure',professionalPercent:50,fixedAmount:0,cardFeeEnabled:false,cardFeePercent:0,cardFeeOn:'share',materialsPaidBy:'doctor',reimburseComponents:false,reimburseMaterials:false,reimburseLab:false,notes:'Honorário informado por caso / ficha do procedimento.',aiSummary:'Por procedimento · sem taxa cartão',examplePracticed:1500,exampleComponents:0,exampleMaterials:0,exampleLab:0}},
+    {id:'gerlucia',name:'Gerlúcia',type:'Prestação de serviço',rule:'50% profissional − 10% cartão + reembolso de componentes',color:'GE',billing:{version:1,shareMode:'percent',professionalPercent:50,fixedAmount:0,cardFeeEnabled:true,cardFeePercent:10,cardFeeOn:'share',materialsPaidBy:'clinic',reimburseComponents:true,reimburseMaterials:false,reimburseLab:false,notes:'Implante exemplo R$ 3.000: 50% pra mim, desconta 10% cartão dessa parte; clínica reembolsa componentes.',aiSummary:'50% − 10% cartão + reembolso de componentes',examplePracticed:3000,exampleComponents:200,exampleMaterials:0,exampleLab:0}},
+    {id:'particular',name:'Particular',type:'Próprio',rule:'Receita integral do paciente',color:'PT',billing:{version:1,shareMode:'percent',professionalPercent:100,fixedAmount:0,cardFeeEnabled:false,cardFeePercent:0,cardFeeOn:'share',materialsPaidBy:'doctor',reimburseComponents:false,reimburseMaterials:false,reimburseLab:false,notes:'Consultório próprio — receita integral.',aiSummary:'100% · sem taxa cartão · você arca com materiais',examplePracticed:2400,exampleComponents:75,exampleMaterials:225,exampleLab:450}}
   ],
   materials:[
     {id:'m1',name:'Implante CM 3.5',brand:'Dérig',type:'Implante — Fixação',supplier:'Dental fornecedor',pack:'1 un',price:158,unitCost:158,stock:8,min:3,barcode:'7891000000001',updated:todayISO()},
@@ -259,6 +259,77 @@ function honorariumFromPrice(row){
 function procedureHonorarium(procId,clinicId){
   return honorariumFromPrice(clinicPriceFor(procId,clinicId));
 }
+function ensureClinicBilling(){
+  const presets=window.ChevalierBilling?.presets?.()||{};
+  let n=0;
+  (state.clinics||[]).forEach(c=>{
+    if(!c.billing || typeof c.billing!=='object'){
+      if(c.id==='gerlucia' && presets.gerlucia) c.billing=presets.gerlucia;
+      else if(c.id==='particular' && presets.particular) c.billing=presets.particular;
+      else if(presets.closed) c.billing={...presets.closed,notes:c.rule||presets.closed.notes};
+      else c.billing=window.ChevalierBilling?.normalizeBilling?.({notes:c.rule||''})||{version:1};
+      n++;
+    }else{
+      c.billing=window.ChevalierBilling.normalizeBilling(c.billing);
+    }
+    if(!c.rule && c.billing?.aiSummary) c.rule=c.billing.aiSummary;
+  });
+  return n;
+}
+function billingForClinic(clinicId){
+  const c=clinic(clinicId);
+  return window.ChevalierBilling?ChevalierBilling.clinicBilling(c):{shareMode:'procedure',professionalPercent:50,cardFeeEnabled:false,cardFeePercent:0,materialsPaidBy:'doctor',reimburseComponents:false};
+}
+/** Honorário efetivo de um procedimento já com modelo da clínica (cartão + base). */
+function procedureSettlement(procId,clinicId,qty=1){
+  const q=Number(qty||1)||1;
+  const row=clinicPriceFor(procId,clinicId);
+  const baseShare=honorariumFromPrice(row)*q;
+  const practiced=Number(row.practicedValue||0)*q;
+  const bom=combinedProcedureMaterials([{procedureId:procId,qty:q}]);
+  const billing=billingForClinic(clinicId);
+  if(!window.ChevalierBilling){
+    return {receivable:baseShare,netShare:baseShare,reimbursement:0,cardFee:0,grossShare:baseShare,practiced,costs:{materials:bom.materials,components:bom.components,lab:bom.lab,total:bom.total},profit:baseShare-bom.total};
+  }
+  return ChevalierBilling.settleCase({
+    practiced,
+    baseShare,
+    components:bom.components,
+    materials:bom.materials,
+    lab:bom.lab
+  },billing);
+}
+function settleLines(lines,clinicId){
+  const list=(lines||[]).filter(l=>l&&l.procedureId);
+  if(!list.length){
+    return {receivable:0,netShare:0,reimbursement:0,cardFee:0,grossShare:0,practiced:0,costs:{materials:0,components:0,lab:0,total:0},profit:0,breakdown:[]};
+  }
+  const billing=billingForClinic(clinicId);
+  // Agrega praticado + share base por linha, BOM total uma vez
+  let practiced=0, baseShare=0;
+  const breakdown=[];
+  list.forEach(l=>{
+    const row=clinicPriceFor(l.procedureId,clinicId);
+    const q=Number(l.qty||1)||1;
+    const linePracticed=Number(row.practicedValue||0)*q;
+    const lineShare=(l.honorarium!=null && l.honorarium!=='')?Number(l.honorarium)*q:honorariumFromPrice(row)*q;
+    practiced+=linePracticed;
+    baseShare+=lineShare;
+    breakdown.push({procedureId:l.procedureId,practiced:linePracticed,baseShare:lineShare});
+  });
+  const bom=combinedProcedureMaterials(list);
+  if(!window.ChevalierBilling){
+    return {receivable:baseShare,netShare:baseShare,reimbursement:0,cardFee:0,grossShare:baseShare,practiced,costs:{materials:bom.materials,components:bom.components,lab:bom.lab,total:bom.total},profit:baseShare-bom.total,breakdown};
+  }
+  const settled=ChevalierBilling.settleCase({
+    practiced, baseShare,
+    components:bom.components, materials:bom.materials, lab:bom.lab
+  },billing);
+  return {...settled,breakdown};
+}
+function honorariumForLines(lines,clinicId){
+  return settleLines(lines,clinicId).receivable;
+}
 function clinicPriceLabel(row){
   const r=normalizeClinicPrice(row);
   if(r.receiveMode==='percent') return `${brl.format(r.practicedValue)} · ${r.receivePercent}% = ${brl.format(honorariumFromPrice(r))}`;
@@ -413,12 +484,6 @@ function combinedProcedureMaterials(lines){
   });
   return {items,materials,components,lab,total:materials+components+lab};
 }
-function honorariumForLines(lines,clinicId){
-  return (lines||[]).reduce((s,l)=>{
-    if(l.honorarium!=null && l.honorarium!=='') return s+Number(l.honorarium||0)*Number(l.qty||1);
-    return s+procedureHonorarium(l.procedureId,clinicId)*Number(l.qty||1);
-  },0);
-}
 function treatmentLineRow(line={}){
   const id=line.procedureId||'';
   const p=procedure(id);
@@ -467,22 +532,27 @@ function migratePatientLines(){
 function recalcTreatmentTotals(){
   const clinicId=getv('fClinic')||getv('rClinic')||'';
   const lines=collectTreatmentLines();
+  const settled=settleLines(lines,clinicId);
   const valueEl=document.getElementById('fValue')||document.getElementById('rValue');
   if(valueEl && clinicId){
-    valueEl.value=String(Math.round(honorariumForLines(lines,clinicId)*100)/100);
+    valueEl.value=String(settled.receivable);
   }
-  const hint=document.getElementById('fHonorHint');
+  const hint=document.getElementById('fHonorHint')||document.getElementById('rHonorHint');
   if(hint){
-    hint.textContent=lines.length
-      ? `Composição: ${lines.length} procedimento(s) · honorário sugerido pela clínica.`
-      : 'Adicione procedimentos para montar o tratamento.';
+    if(!lines.length){
+      hint.textContent='Adicione procedimentos para montar o tratamento.';
+    }else{
+      const chips=window.ChevalierBilling?ChevalierBilling.chipLabels(billingForClinic(clinicId)).join(' · '):'';
+      hint.textContent=`Você recebe ${brl.format(settled.receivable)}`+(settled.cardFee?` (cartão −${brl.format(settled.cardFee)})`:'')+(settled.reimbursement?` · reembolso ${brl.format(settled.reimbursement)}`:'')+(chips?` · ${chips}`:'');
+    }
   }
   if(document.getElementById('fConsumeList')){
-    fillConsumeFromLines(lines);
+    fillConsumeFromLines(lines,clinicId);
   }
 }
-function fillConsumeFromLines(lines){
+function fillConsumeFromLines(lines,clinicId){
   const bom=combinedProcedureMaterials(lines);
+  const settled=clinicId?settleLines(lines,clinicId):null;
   const list=document.getElementById('fConsumeList');
   if(list){
     list.innerHTML=(bom.items.length?bom.items:[{}]).map(consumeRow).join('');
@@ -491,9 +561,15 @@ function fillConsumeFromLines(lines){
   const costEl=document.getElementById('fCost');
   const labEl=document.getElementById('fLab');
   const compEl=document.getElementById('fComponents');
-  if(costEl) costEl.value=String(Math.round(bom.materials*100)/100);
-  if(labEl) labEl.value=String(Math.round(bom.lab*100)/100);
-  if(compEl) compEl.value=String(Math.round(bom.components*100)/100);
+  if(settled){
+    if(costEl) costEl.value=String(settled.costs.materials);
+    if(labEl) labEl.value=String(settled.costs.lab);
+    if(compEl) compEl.value=String(settled.costs.components);
+  }else{
+    if(costEl) costEl.value=String(Math.round(bom.materials*100)/100);
+    if(labEl) labEl.value=String(Math.round(bom.lab*100)/100);
+    if(compEl) compEl.value=String(Math.round(bom.components*100)/100);
+  }
 }
 function procOptionsGrouped(selected=''){
   const groups={};
@@ -830,11 +906,20 @@ function renderPatients(){
 function renderClinics(){
   document.getElementById('clinicsGrid').innerHTML=state.clinics.map(c=>{
     const arr=state.patients.filter(p=>p.clinicId===c.id), revenue=arr.reduce((s,p)=>s+Number(p.value||0),0), costs=arr.reduce((s,p)=>s+patientCost(p),0);
+    const billing=billingForClinic(c.id);
+    const chips=(window.ChevalierBilling?ChevalierBilling.chipLabels(billing):[]).map(t=>`<span class="bill-chip">${esc(t)}</span>`).join('');
+    const summary=window.ChevalierBilling?ChevalierBilling.humanSummary(billing,c.name):null;
     return `<div class="card clinic-card">
       <div class="clinic-top"><div class="clinic-logo">${esc(c.color)}</div><div><div class="clinic-name">${esc(c.name)}</div><div class="clinic-sub">${esc(c.type)}</div></div><div style="margin-left:auto">${badge(pct(revenue-costs,revenue)+'% margem')}</div></div>
       <div class="clinic-stats"><div class="clinic-stat"><small>Casos</small><strong>${arr.length}</strong></div><div class="clinic-stat"><small>Receita</small><strong>${brl.format(revenue)}</strong></div><div class="clinic-stat"><small>Resultado</small><strong>${brl.format(revenue-costs)}</strong></div></div>
-      <div style="margin-top:14px;padding-top:13px;border-top:1px solid var(--line);font-size:10px;color:var(--muted)">Regra financeira<br><strong style="display:block;color:var(--text);font-size:11px;margin-top:4px">${esc(c.rule)}</strong></div>
-      <div class="row-actions"><button class="btn small" onclick="openClinicModal('${c.id}')">Editar</button><button class="btn small danger" onclick="deleteClinic('${c.id}')">Excluir</button></div>
+      <div class="bill-chips">${chips||'<span class="bill-chip">Sem modelo</span>'}</div>
+      <div class="bill-formula">${(summary?.bullets||[c.rule||'Regra não definida']).map(x=>`<div>${esc(x)}</div>`).join('')}</div>
+      ${summary?.example?`<p class="bill-example">${esc(summary.example)}</p>`:''}
+      <div class="row-actions">
+        <button class="btn small primary" onclick="openClinicBillingModal('${c.id}')">Modelo de cobrança</button>
+        <button class="btn small" onclick="openClinicModal('${c.id}')">Dados</button>
+        <button class="btn small danger" onclick="deleteClinic('${c.id}')">Excluir</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -1290,11 +1375,12 @@ function openPatientModal(origin='',editId=''){
   const lines=patientLines(p);
   const seedLines=lines.length?lines:[{procedureId:state.procedures[0]?.id||'p1',qty:1}];
   const bom=combinedProcedureMaterials(seedLines);
-  const suggested=editId?null:honorariumForLines(seedLines,initialClinic);
+  const settled=settleLines(seedLines,initialClinic);
+  const suggested=editId?null:settled.receivable;
   const seedConsume=editId?(p.consumedItems||bom.items):bom.items;
-  const seedCost=editId?(p.cost??0):bom.materials;
-  const seedLab=editId?(p.lab??0):bom.lab;
-  const seedComp=editId?(p.components??0):bom.components;
+  const seedCost=editId?(p.cost??0):settled.costs.materials;
+  const seedLab=editId?(p.lab??0):settled.costs.lab;
+  const seedComp=editId?(p.components??0):settled.costs.components;
   openModal(editId?'Editar paciente / tratamento':'Novo paciente / tratamento',`
     <div class="form-grid">
       <div class="field full"><label>Nome do paciente</label><input id="fName" class="input" value="${esc(p.name||'')}" placeholder="Nome completo"></div>
@@ -1365,13 +1451,226 @@ function openPatientModal(origin='',editId=''){
 function editPatient(id){openPatientModal('',id)}
 function openClinicModal(editId=''){
   const c=state.clinics.find(x=>x.id===editId)||{};
-  openModal(editId?'Editar clínica':'Nova clínica',`<div class="form-grid"><div class="field full"><label>Nome</label><input id="cName" class="input" value="${esc(c.name||'')}"></div><div class="field"><label>Tipo</label><select id="cType" class="select"><option ${c.type!=='Próprio'?'selected':''}>Prestação de serviço</option><option ${c.type==='Próprio'?'selected':''}>Próprio</option></select></div><div class="field"><label>Sigla</label><input id="cColor" class="input" maxlength="3" value="${esc(c.color||'')}"></div><div class="field full"><label>Regra financeira</label><textarea id="cRule" class="textarea" rows="3" placeholder="Ex.: R$ 490 por implante; materiais por minha conta...">${esc(c.rule||'')}</textarea></div></div>`,()=>{
+  openModal(editId?'Editar clínica':'Nova clínica',`<div class="form-grid">
+    <div class="field full"><label>Nome</label><input id="cName" class="input" value="${esc(c.name||'')}"></div>
+    <div class="field"><label>Tipo</label><select id="cType" class="select"><option ${c.type!=='Próprio'?'selected':''}>Prestação de serviço</option><option ${c.type==='Próprio'?'selected':''}>Próprio</option></select></div>
+    <div class="field"><label>Sigla</label><input id="cColor" class="input" maxlength="3" value="${esc(c.color||'')}"></div>
+    <div class="field full"><label>Resumo (texto livre)</label><textarea id="cRule" class="textarea" rows="2" placeholder="Aparece no card da clínica">${esc(c.rule||'')}</textarea>
+      <small class="field-hint">O algoritmo fica em “Modelo de cobrança”. Aqui é só o texto de referência.</small></div>
+  </div>`,()=>{
     if(!getv('cName'))return toast('Informe o nome da clínica.');
-    const obj={id:editId||uid(),name:getv('cName'),type:getv('cType'),rule:getv('cRule')||'Regra não definida',color:(getv('cColor')||getv('cName').slice(0,2)).toUpperCase()};
-    if(editId) state.clinics=state.clinics.map(x=>x.id===editId?obj:x); else state.clinics.push(obj);
+    const prev=editId?state.clinics.find(x=>x.id===editId):null;
+    const obj={
+      id:editId||uid(),
+      name:getv('cName'),
+      type:getv('cType'),
+      rule:getv('cRule')||'Regra não definida',
+      color:(getv('cColor')||getv('cName').slice(0,2)).toUpperCase(),
+      billing:prev?.billing||window.ChevalierBilling?.normalizeBilling?.({notes:getv('cRule')})||undefined
+    };
+    if(editId) state.clinics=state.clinics.map(x=>x.id===editId?{...x,...obj,billing:x.billing||obj.billing}:x);
+    else state.clinics.push(obj);
     ensureClinicPrices();
-    save();closeModal();renderAll();toast('Clínica salva.');
-  })
+    ensureClinicBilling();
+    save();closeModal();renderAll();
+    if(!editId) openClinicBillingModal(obj.id);
+    else toast('Clínica salva.');
+  });
+}
+function collectClinicBillingFromForm(){
+  const shareMode=getv('bShareMode')||'procedure';
+  return window.ChevalierBilling.normalizeBilling({
+    shareMode,
+    professionalPercent:num('bProPercent'),
+    fixedAmount:num('bFixed'),
+    cardFeeEnabled:document.getElementById('bCardOn')?.checked||false,
+    cardFeePercent:num('bCardPct'),
+    cardFeeOn:getv('bCardOnWhat')||'share',
+    materialsPaidBy:getv('bMatWho')||'doctor',
+    reimburseComponents:document.getElementById('bReimbComp')?.checked||false,
+    reimburseMaterials:document.getElementById('bReimbMat')?.checked||false,
+    reimburseLab:document.getElementById('bReimbLab')?.checked||false,
+    notes:getv('bNotes'),
+    aiSummary:getv('bAiSummary'),
+    examplePracticed:num('bExPracticed')||3000,
+    exampleComponents:num('bExComp')||0,
+    exampleMaterials:num('bExMat')||0,
+    exampleLab:num('bExLab')||0
+  });
+}
+function refreshClinicBillingPreview(){
+  if(!window.ChevalierBilling) return;
+  const billing=collectClinicBillingFromForm();
+  const name=getv('cNamePreview')||document.getElementById('bClinicTitle')?.textContent||'Clínica';
+  const summary=ChevalierBilling.humanSummary(billing,name);
+  const box=document.getElementById('bPreview');
+  if(box){
+    box.innerHTML=`
+      <div class="bill-preview-head">Como o algoritmo entende</div>
+      <ul class="bill-preview-list">${summary.bullets.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
+      <p class="bill-example">${esc(summary.example)}</p>
+      <div class="bill-preview-math">
+        <div><small>Sua parte bruta</small><strong>${brl.format(summary.settlement.grossShare)}</strong></div>
+        <div><small>Taxa cartão</small><strong>− ${brl.format(summary.settlement.cardFee)}</strong></div>
+        <div><small>Reembolso</small><strong>+ ${brl.format(summary.settlement.reimbursement)}</strong></div>
+        <div><small>Você recebe</small><strong>${brl.format(summary.settlement.receivable)}</strong></div>
+      </div>`;
+  }
+  const sumEl=document.getElementById('bAiSummary');
+  if(sumEl && !sumEl.dataset.locked) sumEl.value=billing.aiSummary||ChevalierBilling.formulaLines(billing).join(' · ');
+  toggleClinicBillingFields();
+}
+function toggleClinicBillingFields(){
+  const mode=getv('bShareMode');
+  const pct=document.getElementById('bWrapPercent');
+  const fix=document.getElementById('bWrapFixed');
+  if(pct) pct.hidden=mode!=='percent';
+  if(fix) fix.hidden=mode!=='fixed';
+  const cardOn=document.getElementById('bCardOn')?.checked;
+  const cardFields=document.getElementById('bCardFields');
+  if(cardFields) cardFields.hidden=!cardOn;
+}
+function applyBillingToForm(billing){
+  const b=window.ChevalierBilling.normalizeBilling(billing);
+  const set=(id,v)=>{const el=document.getElementById(id); if(el) el.value=v;}
+  const check=(id,v)=>{const el=document.getElementById(id); if(el) el.checked=!!v;}
+  set('bShareMode',b.shareMode);
+  set('bProPercent',b.professionalPercent);
+  set('bFixed',b.fixedAmount);
+  check('bCardOn',b.cardFeeEnabled);
+  set('bCardPct',b.cardFeePercent);
+  set('bCardOnWhat',b.cardFeeOn);
+  set('bMatWho',b.materialsPaidBy);
+  check('bReimbComp',b.reimburseComponents);
+  check('bReimbMat',b.reimburseMaterials);
+  check('bReimbLab',b.reimburseLab);
+  set('bNotes',b.notes);
+  set('bAiSummary',b.aiSummary);
+  set('bExPracticed',b.examplePracticed);
+  set('bExComp',b.exampleComponents);
+  set('bExMat',b.exampleMaterials);
+  set('bExLab',b.exampleLab);
+  refreshClinicBillingPreview();
+}
+function openClinicBillingModal(clinicId){
+  const c=state.clinics.find(x=>x.id===clinicId);
+  if(!c) return toast('Clínica não encontrada.');
+  ensureClinicBilling();
+  const billing=billingForClinic(clinicId);
+  openModal(`Cobrança · ${c.name}`,`
+    <input type="hidden" id="cNamePreview" value="${esc(c.name)}">
+    <div class="bill-layout">
+      <div class="bill-config">
+        <p class="field-hint" id="bClinicTitle">Configure o modelo desta clínica. O mesmo algoritmo alimenta orçamento, prestação e custos.</p>
+
+        <div class="field full"><label>Descreva a regra (texto livre)</label>
+          <textarea id="bNotes" class="textarea" rows="3" placeholder="Ex.: Implante R$ 3.000 — 50% pra mim, desconta 10% de cartão dessa parte; a clínica me reembolsa os componentes.">${esc(billing.notes||'')}</textarea>
+          <div class="row-actions" style="margin-top:8px">
+            <button type="button" class="btn small primary" onclick="interpretClinicBillingAi()">✦ Interpretar com IA</button>
+            <button type="button" class="btn small" onclick="applyClinicBillingPreset('gerlucia')">Preset Gerlúcia</button>
+            <button type="button" class="btn small" onclick="applyClinicBillingPreset('closed')">Por procedimento</button>
+            <button type="button" class="btn small" onclick="applyClinicBillingPreset('particular')">Particular 100%</button>
+          </div>
+        </div>
+
+        <div class="bill-section-title">1. Como você divide o valor</div>
+        <div class="form-grid">
+          <div class="field full"><label>Base do honorário</label>
+            <select id="bShareMode" class="select" onchange="refreshClinicBillingPreview()">
+              <option value="procedure" ${billing.shareMode==='procedure'?'selected':''}>Conforme cada procedimento (ficha)</option>
+              <option value="percent" ${billing.shareMode==='percent'?'selected':''}>Porcentagem fixa do valor praticado</option>
+              <option value="fixed" ${billing.shareMode==='fixed'?'selected':''}>Valor fechado (mesmo em todos)</option>
+            </select>
+          </div>
+          <div class="field" id="bWrapPercent" ${billing.shareMode!=='percent'?'hidden':''}><label>% que você recebe</label><input id="bProPercent" type="number" min="0" max="100" step="0.01" class="input" value="${billing.professionalPercent}" oninput="refreshClinicBillingPreview()"></div>
+          <div class="field" id="bWrapFixed" ${billing.shareMode!=='fixed'?'hidden':''}><label>Valor fechado (R$)</label><input id="bFixed" type="number" min="0" step="0.01" class="input" value="${billing.fixedAmount}" oninput="refreshClinicBillingPreview()"></div>
+        </div>
+
+        <div class="bill-section-title">2. Taxa de cartão de crédito</div>
+        <label class="check-row"><input type="checkbox" id="bCardOn" ${billing.cardFeeEnabled?'checked':''} onchange="refreshClinicBillingPreview()"> Desconta taxa de cartão</label>
+        <div class="form-grid" id="bCardFields" ${billing.cardFeeEnabled?'':'hidden'}>
+          <div class="field"><label>% da taxa</label><input id="bCardPct" type="number" min="0" max="100" step="0.01" class="input" value="${billing.cardFeePercent}" oninput="refreshClinicBillingPreview()"></div>
+          <div class="field"><label>Incide sobre</label>
+            <select id="bCardOnWhat" class="select" onchange="refreshClinicBillingPreview()">
+              <option value="share" ${billing.cardFeeOn!=='practiced'?'selected':''}>Sua parte (recomendado)</option>
+              <option value="practiced" ${billing.cardFeeOn==='practiced'?'selected':''}>Valor praticado total</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="bill-section-title">3. Materiais e componentes</div>
+        <div class="form-grid">
+          <div class="field full"><label>Quem arca com o material</label>
+            <select id="bMatWho" class="select" onchange="refreshClinicBillingPreview()">
+              <option value="doctor" ${billing.materialsPaidBy!=='clinic'?'selected':''}>Você (profissional)</option>
+              <option value="clinic" ${billing.materialsPaidBy==='clinic'?'selected':''}>A clínica</option>
+            </select>
+          </div>
+        </div>
+        <label class="check-row"><input type="checkbox" id="bReimbComp" ${billing.reimburseComponents?'checked':''} onchange="refreshClinicBillingPreview()"> Clínica reembolsa componentes do implante</label>
+        <label class="check-row"><input type="checkbox" id="bReimbMat" ${billing.reimburseMaterials?'checked':''} onchange="refreshClinicBillingPreview()"> Clínica reembolsa materiais / biomaterial</label>
+        <label class="check-row"><input type="checkbox" id="bReimbLab" ${billing.reimburseLab?'checked':''} onchange="refreshClinicBillingPreview()"> Clínica reembolsa laboratório</label>
+
+        <div class="bill-section-title">4. Exemplo didático (simulação)</div>
+        <div class="form-grid">
+          <div class="field"><label>Valor praticado</label><input id="bExPracticed" type="number" class="input" value="${billing.examplePracticed}" oninput="refreshClinicBillingPreview()"></div>
+          <div class="field"><label>Componentes</label><input id="bExComp" type="number" class="input" value="${billing.exampleComponents}" oninput="refreshClinicBillingPreview()"></div>
+          <div class="field"><label>Materiais</label><input id="bExMat" type="number" class="input" value="${billing.exampleMaterials}" oninput="refreshClinicBillingPreview()"></div>
+          <div class="field"><label>Laboratório</label><input id="bExLab" type="number" class="input" value="${billing.exampleLab}" oninput="refreshClinicBillingPreview()"></div>
+        </div>
+        <div class="field full"><label>Resumo curto (salvo no card)</label><input id="bAiSummary" class="input" value="${esc(billing.aiSummary||'')}"></div>
+      </div>
+      <aside class="bill-preview" id="bPreview"></aside>
+    </div>
+  `,()=>{
+    const next=collectClinicBillingFromForm();
+    next.aiSummary=getv('bAiSummary')||next.aiSummary;
+    state.clinics=state.clinics.map(x=>{
+      if(x.id!==clinicId) return x;
+      return {...x, billing:next, rule:next.aiSummary||next.notes||x.rule};
+    });
+    save();closeModal();renderAll();toast('Modelo de cobrança salvo.');
+  });
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  refreshClinicBillingPreview();
+}
+function applyClinicBillingPreset(key){
+  const p=window.ChevalierBilling?.presets?.()?.[key];
+  if(!p) return;
+  applyBillingToForm(p);
+  toast('Preset aplicado — revise e salve.');
+}
+async function interpretClinicBillingAi(){
+  const text=getv('bNotes');
+  if(!text.trim()) return toast('Descreva a regra antes de interpretar.');
+  const btn=[...document.querySelectorAll('.modal .btn')].find(b=>b.textContent.includes('Interpretar'));
+  if(btn){btn.disabled=true;btn.textContent='Interpretando…';}
+  try{
+    const res=await fetch('api/billing-rule-ai.php',{
+      method:'POST',
+      headers:csrfHeaders({'Content-Type':'application/json'}),
+      credentials:'same-origin',
+      body:JSON.stringify({text,clinicName:getv('cNamePreview'),csrf:csrfToken()})
+    });
+    const data=await res.json().catch(()=>({}));
+    applyCsrfFromResponse(data);
+    if(res.status===401){location.href='login.php';return;}
+    if(!data.ok || !data.billing){
+      // fallback local
+      const local=ChevalierBilling.parseRuleLocal(text);
+      applyBillingToForm(local);
+      toast('Interpretado localmente (sem OpenAI).');
+    }else{
+      applyBillingToForm({...data.billing, notes:text});
+      toast(data.mode==='openai'?'IA interpretou a regra.':'Regra interpretada (modo local).');
+    }
+  }catch(e){
+    const local=ChevalierBilling.parseRuleLocal(text);
+    applyBillingToForm(local);
+    toast('Interpretado no aparelho (offline).');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='✦ Interpretar com IA';}
+  }
 }
 function clinicPriceRow(row={},fallbackPrice=0){
   const r=normalizeClinicPrice(row,fallbackPrice);
@@ -1523,10 +1822,12 @@ function openReceivableModal(type=''){
     if(!lines.length) return toast('Adicione ao menos um procedimento.');
     const cl=getv('rClinic');
     const bom=combinedProcedureMaterials(lines);
+    const settled=settleLines(lines,cl);
     state.patients.unshift({
       id:uid(),name:getv('rName'),origin:cl==='particular'?'Particular':'Prestação',clinicId:cl,
       procedureId:lines[0].procedureId,lines,date:todayISO(),value:num('rValue'),received:num('rReceived'),due:getv('rDue'),status:getv('rStatus'),
-      cost:bom.materials,lab:bom.lab,components:bom.components,clinical:0,progress:getv('rProgress')||'Em tratamento',consumedItems:bom.items
+      cost:settled.costs.materials,lab:settled.costs.lab,components:settled.costs.components,clinical:0,progress:getv('rProgress')||'Em tratamento',consumedItems:bom.items,
+      billingSnap:{cardFee:settled.cardFee,reimbursement:settled.reimbursement,netShare:settled.netShare}
     });
     applyStockConsumption(bom.items,false);
     save();closeModal();renderAll();toast('Lançamento salvo com composição.');
@@ -1537,10 +1838,15 @@ function openReceivableModal(type=''){
 function recalcReceivableTotals(){
   const clinicId=getv('rClinic')||'';
   const lines=collectTreatmentLines();
+  const settled=settleLines(lines,clinicId);
   const valueEl=document.getElementById('rValue');
   const hint=document.getElementById('rHonorHint');
-  if(valueEl && clinicId) valueEl.value=String(Math.round(honorariumForLines(lines,clinicId)*100)/100);
-  if(hint) hint.textContent=lines.length?`${lines.length} procedimento(s) · honorário sugerido pela clínica.`:'Adicione procedimentos.';
+  if(valueEl && clinicId) valueEl.value=String(settled.receivable);
+  if(hint){
+    hint.textContent=lines.length
+      ? `Você recebe ${brl.format(settled.receivable)}`+(settled.cardFee?` · cartão −${brl.format(settled.cardFee)}`:'')+(settled.reimbursement?` · reembolso ${brl.format(settled.reimbursement)}`:'')
+      : 'Adicione procedimentos.';
+  }
 }
 function openStockModal(prefillId=''){
   const selected=prefillId||(state.materials[0]?.id||'');
@@ -2021,6 +2327,7 @@ async function boot(){
   const linesMigrated=migratePatientLines()||0;
   ensureProstheses();
   ensureClinicPrices();
+  const billingMigrated=ensureClinicBilling()||0;
   let seeded=false;
   try{
     if(window.ChevalierPlan){
@@ -2028,7 +2335,7 @@ async function boot(){
       seeded=!!ChevalierPlan.seedDefaults();
     }
   }catch(e){ console.warn('ChevalierPlan boot', e); }
-  if(seeded||catalogAdded||procAdded||linesMigrated) save();
+  if(seeded||catalogAdded||procAdded||linesMigrated||billingMigrated) save();
   renderAll();
   setBancoTab(bancoTab);
 }
