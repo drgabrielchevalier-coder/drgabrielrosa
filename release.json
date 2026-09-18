@@ -1,9 +1,10 @@
 {
-  "version": "2.1.1",
-  "name": "Correção Novo e Lembrete",
-  "releasedAt": "2026-09-17",
+  "version": "2.2.0",
+  "name": "Landing page Dr Gabriel Rosa",
+  "releasedAt": "2026-09-18",
   "changes": [
-    "Corrige botão ＋ Novo e ＋ Lembrete: o calendário passa a enxergar o estado global da aplicação.",
-    "Abertura de lembrete pelo menu Novo também navega para a agenda."
+    "Home pública mobile-first para bio do Instagram, com botão discreto Entrar.",
+    "Conteúdo baseado no Currículo Lattes: cirurgia, implantes, prótese e gestão.",
+    "Login deixa de ser a primeira tela; o sistema continua em /login.php."
   ]
 }
