@@ -10,7 +10,7 @@ function chevalier_app_build(string $root): string
     $root = rtrim($root, DIRECTORY_SEPARATOR);
     $paths = [];
     $topFiles = [
-        '.htaccess', 'index.php', 'index.html', 'login.php', 'release.json', 'manifest.json',
+        '.htaccess', 'home.php', 'index.php', 'index.html', 'login.php', 'release.json', 'manifest.json',
     ];
     foreach ($topFiles as $name) {
         $file = $root . DIRECTORY_SEPARATOR . $name;

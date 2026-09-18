@@ -22,6 +22,15 @@ A partir daí: todo push/merge em main atualiza o site.
 A senha do MySQL fica só no servidor em api/config.local.php
 (não vai para o Git).
 
+A home pública é home.php (landing do Instagram).
+O sistema de gestão continua em /login.php → /index.php.
+
+LANDING (Instagram bio)
+- Edite no topo de home.php:
+  $LANDING_WHATSAPP = '5521XXXXXXXXX';  // só dígitos
+  $LANDING_INSTAGRAM = 'https://instagram.com/seuusuario';
+- Enquanto o WhatsApp estiver vazio, o CTA usa o e-mail do Lattes.
+
 Depois do primeiro deploy Git, abra /api/setup.php se ainda
 não conectou o banco.
 
@@ -43,15 +52,16 @@ INSTALAÇÃO MANUAL (upload zip)
 2. Entre na pasta public_html do domínio/subdomínio desejado.
 3. Faça backup do conteúdo atual antes de substituir arquivos.
 4. Envie o conteúdo desta pasta public_html preservando a estrutura:
-   - login.php (tela de entrada)
+   - home.php (landing pública — Instagram bio)
+   - login.php (tela de entrada do sistema)
    - index.php (painel — protegido por sessão)
-   - index.html (redireciona para index.php)
+   - index.html (redireciona para home.php)
    - .htaccess
    - release.json
    - api/ (incluindo version.php e auth.php)
-   - assets/css/app.css, update.css e login.css
-   - assets/js/app.js e assets/js/update-manager.js
-   - assets/img/favicon.svg
+   - assets/css/app.css, update.css, login.css e landing.css
+   - assets/js/app.js, update-manager.js e landing.js
+   - assets/img/ (logo, favicon e retrato)
 5. Abra o domínio e atualize o navegador com Ctrl+F5.
    A barra no topo avisa quando uma versão nova estiver no servidor.
 

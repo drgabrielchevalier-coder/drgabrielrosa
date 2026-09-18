@@ -56,10 +56,12 @@ $csrf = htmlspecialchars(chevalier_csrf_token(), ENT_QUOTES, 'UTF-8');
 <meta name="theme-color" content="#0d0e0c">
 <meta name="description" content="Acesso ao sistema do Dr Gabriel Rosa — reabilitação oral e estética.">
 <meta name="robots" content="noindex,nofollow">
-<link rel="icon" type="image/svg+xml" href="<?= chevalier_asset_url('assets/img/favicon.svg') ?>">
+<link rel="icon" type="image/png" href="<?= chevalier_asset_url('assets/img/brand/mark-gr-gold.png') ?>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=boska@500,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?= chevalier_asset_url('assets/css/login.css') ?>">
 </head>
 <body class="login-body">
@@ -76,13 +78,13 @@ $csrf = htmlspecialchars(chevalier_csrf_token(), ENT_QUOTES, 'UTF-8');
 
   <main class="login-shell">
     <section class="login-hero">
-      <img class="login-hero-logo" src="<?= chevalier_asset_url('assets/img/logo-gabriel-rosa-wide.png') ?>" width="720" height="225" alt="Dr Gabriel Rosa — Reabilitação Oral &amp; Estética">
+      <img class="login-hero-logo" src="<?= chevalier_asset_url('assets/img/brand/logo-stacked-on-dark.png') ?>" width="720" height="315" alt="Dr Gabriel Rosa — Reabilitação Oral &amp; Estética">
       <p class="login-lead">Entre para acompanhar produção, custos, próteses e resultado por clínica.</p>
     </section>
 
     <section class="login-panel" aria-labelledby="login-title">
       <div class="login-panel-brand">
-        <img class="login-mark-img" src="<?= chevalier_asset_url('assets/img/favicon.svg') ?>" width="48" height="48" alt="">
+        <img class="login-mark-img" src="<?= chevalier_asset_url('assets/img/brand/mark-gr-gold.png') ?>" width="48" height="48" alt="">
         <div>
           <h2 id="login-title">Bem-vindo de volta</h2>
           <p>Acesse sua área de gestão.</p>
