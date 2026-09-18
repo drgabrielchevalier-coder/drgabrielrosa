@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "format": "csv",
+  "importsDir": "assets/data/imports",
+  "sources": [
+    {
+      "id": "allon",
+      "file": "allon-historico.json",
+      "csv": "imports/allon-honorarios.csv",
+      "flag": "allonHistoricoV1",
+      "label": "Allon Roter (honorários)",
+      "kind": "patients",
+      "clinicId": "allon"
+    },
+    {
+      "id": "daniele",
+      "file": "daniele-historico.json",
+      "csv": "imports/daniele-honorarios.csv",
+      "flag": "danieleHistoricoV1",
+      "label": "Daniele Belmiro (honorários)",
+      "kind": "patients",
+      "clinicId": "daniele"
+    },
+    {
+      "id": "gerlucia",
+      "file": "gerlucia-historico.json",
+      "csv": "imports/gerlucia-honorarios.csv",
+      "flag": "gerluciaHistoricoV1",
+      "label": "Gerlúcia (honorários)",
+      "kind": "patients",
+      "clinicId": "gerlucia"
+    },
+    {
+      "id": "particular",
+      "file": "particular-historico.json",
+      "csv": "imports/particular-honorarios.csv",
+      "flag": "particularHistoricoV1",
+      "label": "Particular (honorários)",
+      "kind": "patients",
+      "clinicId": "particular"
+    },
+    {
+      "id": "custos",
+      "file": "custos-historico.json",
+      "csv": "imports/custos.csv",
+      "flag": "custosHistoricoV1",
+      "label": "Controle de custos",
+      "kind": "costs"
+    }
+  ]
+}

@@ -1,10 +1,10 @@
 {
-  "version": "2.6.3",
-  "name": "Sidebar organizada e logo corrigido",
+  "version": "2.6.5",
+  "name": "Importação CSV padrão + históricos no banco",
   "releasedAt": "2026-09-18",
   "changes": [
-    "Seções do menu minimizáveis (estado lembrado) com fluxo didático: Início → Cadastros → Atendimento → Produção → Financeiro → Estoque → Sistema.",
-    "Logo do sidebar: monograma oficial com padding correto + tipografia da marca (sem corte/enquadramento errado).",
-    "Indicador visual na página ativa e scrollbar discreta no menu."
+    "Modelo padrão de importação: CSV ou HTML (tabela), com detecção de honorários/custos e escolha de clínica.",
+    "Botão genérico em Configurações — sem vínculo só à Allon Roter.",
+    "Históricos dos arquivos enviados (Daniele, Gerlúcia, Particular, Custos + Allon) aplicados automaticamente no estado/banco."
   ]
 }

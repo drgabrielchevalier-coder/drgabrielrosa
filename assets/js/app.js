@@ -524,7 +524,7 @@ function patientLines(p){
 }
 function patientProcedureLabel(p){
   if(p?.observation) return p.observation;
-  if(p?.notes && p.importSource==='allon-historico') return String(p.notes).split(' [')[0];
+  if(p?.notes && String(p.importSource||'').includes('historico')) return String(p.notes).split(' [')[0];
   const lines=patientLines(p);
   if(!lines.length) return procedure(p?.procedureId).name;
   const names=lines.map(l=>procedure(l.procedureId).name);
@@ -2976,26 +2976,204 @@ async function boot(){
   if(seeded||catalogAdded||procAdded||linesMigrated||billingMigrated||fracN) save();
   renderAll();
   setBancoTab(bancoTab);
-  importAllonHistorico().then(n=>{
-    if(n>0){ renderAll(); toast(`${n} lançamentos históricos Allon Roter importados.`); }
-  }).catch(e=>console.warn('import Allon', e));
+  // Importação dos CSVs já convertidos — roda sozinha, sem botão por clínica
+  applyBundledHistoricos().then(sum=>{
+    const n=(sum?.patients||0)+(sum?.costs||0);
+    if(n>0){ renderAll(); toast(`Importados ${sum.patients||0} casos e ${sum.costs||0} custos dos históricos.`); }
+  }).catch(e=>console.warn('import historicos', e));
 }
 boot();
 
-async function importAllonHistorico(force=false){
-  state.imports=state.imports||{};
-  if(!force && state.imports.allonHistoricoV1) return 0;
-  let data=window.ALLON_HISTORICO;
-  if(!data?.records?.length){
-    try{
-      const r=await fetch('assets/data/allon-historico.json',{cache:'no-store'});
-      if(r.ok) data=await r.json();
-    }catch(e){ console.warn('allon historico fetch', e); }
+/* ===== Importação padrão: CSV / HTML (Notion, Excel, etc.) ===== */
+const HISTORICO_SOURCES=[
+  {id:'allon',file:'allon-historico.json',flag:'allonHistoricoV1',kind:'patients',clinicId:'allon',origin:'Prestação',sourceTag:'allon-historico'},
+  {id:'daniele',file:'daniele-historico.json',flag:'danieleHistoricoV1',kind:'patients',clinicId:'daniele',origin:'Prestação',sourceTag:'daniele-historico'},
+  {id:'gerlucia',file:'gerlucia-historico.json',flag:'gerluciaHistoricoV1',kind:'patients',clinicId:'gerlucia',origin:'Prestação',sourceTag:'gerlucia-historico'},
+  {id:'particular',file:'particular-historico.json',flag:'particularHistoricoV1',kind:'patients',clinicId:'particular',origin:'Particular',sourceTag:'particular-historico'},
+  {id:'custos',file:'custos-historico.json',flag:'custosHistoricoV1',kind:'costs',sourceTag:'custos-historico'}
+];
+
+function importMoney(v){
+  if(v==null||v==='') return 0;
+  if(typeof v==='number') return v;
+  let s=String(v).replace(/R\$\s?/gi,'').replace(/\s/g,'').trim();
+  if(!s||/^não$/i.test(s)) return 0;
+  if(/\d,\d{2}$/.test(s)) s=s.replace(/\./g,'').replace(',','.');
+  else s=s.replace(/,/g,'');
+  const n=Number(s);
+  return Number.isFinite(n)?n:0;
+}
+function importDateBR(v){
+  const s=String(v||'').trim();
+  const m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+  return '';
+}
+function importMonthRef(v){return String(v||'').split('(')[0].trim()}
+function importHash(prefix, parts){
+  const raw=parts.filter(Boolean).join('|');
+  let h=0;
+  for(let i=0;i<raw.length;i++){ h=((h<<5)-h)+raw.charCodeAt(i); h|=0; }
+  return prefix+'-'+Math.abs(h).toString(16).padStart(8,'0')+raw.length.toString(16);
+}
+function importPick(row, names){
+  for(const n of names){
+    if(row[n]!=null && String(row[n]).trim()!=='') return row[n];
+    const key=Object.keys(row).find(k=>k.trim().toLowerCase()===n.trim().toLowerCase());
+    if(key && String(row[key]).trim()!=='') return row[key];
   }
+  for(const n of names){
+    const key=Object.keys(row).find(k=>k.toLowerCase().includes(n.toLowerCase()));
+    if(key && String(row[key]).trim()!=='') return row[key];
+  }
+  return '';
+}
+function parseDelimitedTable(text){
+  const raw=String(text||'').replace(/^\uFEFF/,'');
+  const delim=(raw.split('\n')[0]||'').includes(';')&&!(raw.split('\n')[0]||'').includes(',') ? ';' : ',';
+  const rows=[]; let row=[]; let cur=''; let inQ=false;
+  for(let i=0;i<raw.length;i++){
+    const c=raw[i], n=raw[i+1];
+    if(inQ){
+      if(c==='"'&&n==='"'){ cur+='"'; i++; continue; }
+      if(c==='"'){ inQ=false; continue; }
+      cur+=c; continue;
+    }
+    if(c==='"'){ inQ=true; continue; }
+    if(c===delim){ row.push(cur); cur=''; continue; }
+    if(c==='\n'){ row.push(cur); rows.push(row); row=[]; cur=''; continue; }
+    if(c==='\r') continue;
+    cur+=c;
+  }
+  if(cur.length||row.length){ row.push(cur); rows.push(row); }
+  if(!rows.length) return {headers:[], rows:[]};
+  const headers=rows[0].map(h=>String(h||'').trim());
+  const body=rows.slice(1).filter(r=>r.some(c=>String(c||'').trim())).map(r=>{
+    const o={}; headers.forEach((h,i)=>{ o[h]=r[i]??''; }); return o;
+  });
+  return {headers, rows:body};
+}
+function parseHtmlTable(html){
+  const doc=new DOMParser().parseFromString(String(html||''),'text/html');
+  const table=doc.querySelector('table');
+  if(!table) return {headers:[], rows:[]};
+  const trs=[...table.querySelectorAll('tr')];
+  if(!trs.length) return {headers:[], rows:[]};
+  const cellText=el=>[...el.querySelectorAll('th,td')].map(td=>(td.textContent||'').trim());
+  const headers=cellText(trs[0]);
+  const rows=trs.slice(1).map(tr=>{
+    const cells=cellText(tr); const o={};
+    headers.forEach((h,i)=>{ o[h]=cells[i]??''; });
+    return o;
+  }).filter(o=>Object.values(o).some(v=>String(v||'').trim()));
+  return {headers, rows};
+}
+function detectImportKind(headers){
+  const h=headers.map(x=>String(x||'').toLowerCase());
+  const has=p=>h.some(x=>x.includes(p));
+  if(has('descri') && (has('custo')||has('tipo')||has('venc'))) return 'costs';
+  if(has('nome') || has('honor') || has('paciente')) return 'patients';
+  return 'unknown';
+}
+function guessImportProcedure(obs, tipo){
+  const t=`${obs||''} ${tipo||''}`.toLowerCase();
+  const tooth=(String(obs||'').match(/\b([1-4]\d)\b/)||[])[1]||'';
+  if(/endodontia|endo /.test(t)) return /[1-4][678]/.test(tooth)||/multi/.test(t)?'proc-endo-multi':'proc-endo-uni';
+  if(/protocolo/.test(t)) return 'p5';
+  if(/coroa/.test(t)&&/implante/.test(t)) return 'p3';
+  if(/implante/.test(t)&&/enxerto/.test(t)) return 'p2';
+  if(/implante/.test(t)&&/coroa/.test(t)) return 'p4';
+  if(/implante|plantio|cirurgia/.test(t)) return 'p1';
+  if(/restaura/.test(t)) return 'p6';
+  return 'proc-historico-livre';
+}
+function mapHonorarioRows(rows, meta={}){
+  const clinicId=meta.clinicId||'particular';
+  const prefix=meta.prefix||clinicId.slice(0,3);
+  const origin=meta.origin||(clinicId==='particular'?'Particular':'Prestação');
+  const records=[];
+  rows.forEach(row=>{
+    const name=String(importPick(row,['Nome','Paciente'])).trim();
+    if(!name) return;
+    const honor=importMoney(importPick(row,['Honorários','Honorarios']))||importMoney(importPick(row,['A receber']));
+    const practiced=importMoney(importPick(row,['Valor','Valor Procedimento','Valor procedimento']))||honor;
+    const labRaw=importPick(row,['Lab','Lab ','Laboratório']);
+    const lab=/^não$/i.test(String(labRaw||'').trim())?0:importMoney(labRaw);
+    const components=importMoney(importPick(row,['Componentes']));
+    const clinical=importMoney(importPick(row,['CC','CC ']))||importMoney(importPick(row,['Clinica','Clínica']));
+    const date=importDateBR(importPick(row,['Data']))||todayISO();
+    const due=importDateBR(importPick(row,['Data da Cobrança','Data da Cobranca']))||date;
+    const fin=String(importPick(row,['Financeiro'])||'');
+    const obs=String(importPick(row,['Observação','Observacao','Texto'])||'').trim();
+    const progress=String(importPick(row,['Progresso'])||'Em tratamento').trim()||'Em tratamento';
+    const tipo=importPick(row,['Tipo']);
+    const mref=importMonthRef(importPick(row,['Mês Referencia novo','Mes Referencia novo','Resumo Financeiro','💲 Resumo Financeiro']));
+    let status='À receber', received=0;
+    if(/faturado|recebido/i.test(fin)&&!/parcial|não recebeu|nao recebeu/i.test(fin)){ status='Faturado / Recebido'; received=honor; }
+    else if(/parcial/i.test(fin)){ status='Recebido parcial'; received=honor*0.5; }
+    else if(/acordo/i.test(fin)){ status='Acordo'; received=honor; }
+    else if(/aguardando acerto/i.test(fin)) status='Aguardando acerto';
+    const procedureId=guessImportProcedure(obs, tipo);
+    const tooth=(obs.match(/\b([1-4]\d)\b/)||[])[1]||'';
+    records.push({
+      importId:importHash(prefix,[clinicId,name,date,honor,obs,practiced]),
+      name, date, due, status, progress, value:honor, received, practicedValue:practiced,
+      observation:obs, notes:mref?`${obs} [${mref}]`.trim():obs, monthRef:mref,
+      procedureId, tooth, lab, components, clinical,
+      syncFlow:/prova|moldagem|laborat|ciment|protese|prótese|coroa/i.test(`${progress} ${obs}`)
+    });
+  });
+  return {version:1, kind:'patients', clinicId, origin, count:records.length, records, source:meta.source||'CSV/HTML'};
+}
+function mapCustoRows(rows, meta={}){
+  const records=[];
+  rows.forEach((row, idx)=>{
+    const desc=String(importPick(row,['Descrição','Descricao'])).trim();
+    if(!desc) return;
+    const value=importMoney(importPick(row,['Valor']));
+    const date=importDateBR(importPick(row,['Data']))||todayISO();
+    const due=importDateBR(importPick(row,['Vencimento']))||date;
+    const type=String(importPick(row,['Tipo'])||'OUTROS').trim()||'OUTROS';
+    const center=importMonthRef(importPick(row,['CUSTOS','Centro','Centro de custo']))||'Geral';
+    const method=String(importPick(row,['Forma de Pg','Forma de Pagamento','Método'])||'PIX').trim()||'PIX';
+    let status=String(importPick(row,['Status Pg','Status'])||'À PAGAR').trim().toUpperCase()||'À PAGAR';
+    if(/PAGO|QUITADO/.test(status)) status='PAGO';
+    else if(/PARCEL/.test(status)) status='PARCELADO';
+    else status='À PAGAR';
+    const nf=String(importPick(row,['NF-E','NF','NFe'])||'').trim();
+    const texto=String(importPick(row,['Texto'])||'').trim();
+    const notes=[nf?`NF: ${nf}`:'', center!=='Geral'?`Ref ${center}`:'', texto].filter(Boolean).join(' · ');
+    records.push({
+      importId:importHash('cost',[String(idx+1),desc,date,value,type,due,nf,method]),
+      desc, type, center, date, due, method, value, status, notes, monthRef:center==='Geral'?'':center
+    });
+  });
+  return {version:1, kind:'costs', count:records.length, records, source:meta.source||'CSV/HTML custos'};
+}
+function parseImportFileContent(text, filename=''){
+  const lower=String(filename||'').toLowerCase();
+  const looksHtml=/<table[\s>]/i.test(text)||lower.endsWith('.html')||lower.endsWith('.htm');
+  const parsed=looksHtml?parseHtmlTable(text):parseDelimitedTable(text);
+  const kind=detectImportKind(parsed.headers);
+  return {kind, headers:parsed.headers, rows:parsed.rows};
+}
+
+async function fetchHistoricoJson(file){
+  try{
+    const r=await fetch('assets/data/'+file,{cache:'no-store'});
+    if(r.ok) return await r.json();
+  }catch(e){ console.warn('historico fetch', file, e); }
+  return null;
+}
+
+function importHistoricoPatients(data, meta){
   if(!data?.records?.length) return 0;
   if(!Array.isArray(state.patients)) state.patients=[];
   const existing=new Set(state.patients.map(p=>p.importId).filter(Boolean));
-  const clinicId=data.clinicId||'allon';
+  const clinicId=data.clinicId||meta.clinicId||'particular';
+  const origin=data.origin||meta.origin||(clinicId==='particular'?'Particular':'Prestação');
+  const sourceTag=meta.sourceTag||'historico-csv';
   let added=0;
   data.records.forEach(rec=>{
     if(!rec?.importId || existing.has(rec.importId)) return;
@@ -3004,9 +3182,9 @@ async function importAllonHistorico(force=false){
     const patient={
       id:uid(),
       importId:rec.importId,
-      importSource:'allon-historico',
+      importSource:sourceTag,
       name:rec.name,
-      origin:'Prestação',
+      origin,
       clinicId,
       procedureId:procId,
       lines:[{
@@ -3022,9 +3200,9 @@ async function importAllonHistorico(force=false){
       due:rec.due||rec.date||todayISO(),
       status:rec.status||'À receber',
       cost:0,
-      lab:0,
-      components:0,
-      clinical:0,
+      lab:Number(rec.lab||0),
+      components:Number(rec.components||0),
+      clinical:Number(rec.clinical||0),
       progress:rec.progress||'Em tratamento',
       observation:rec.observation||'',
       notes:rec.notes||rec.observation||'',
@@ -3041,22 +3219,129 @@ async function importAllonHistorico(force=false){
       try{ syncProductionFromPatient(patient); }catch(e){ /* ignore */ }
     }
   });
-  const prev=state.imports.allonHistoricoV1||{};
-  state.imports.allonHistoricoV1={
-    at:todayISO(),
-    added:(Number(prev.added)||0)+added,
-    lastBatch:added,
-    total:data.records.length,
-    source:data.source||'Allon Roter histórico'
-  };
-  if(added) save();
   return added;
 }
-window.importAllonHistorico=importAllonHistorico;
 
-async function reimportAllonHistorico(){
-  // Reprocessa só IDs faltantes (não duplica)
-  const n=await importAllonHistorico(true);
-  renderAll();
-  toast(n?`${n} novos lançamentos Allon importados.`:'Histórico Allon já estava completo.');
+function importHistoricoCosts(data, meta){
+  if(!data?.records?.length) return 0;
+  if(!Array.isArray(state.costs)) state.costs=[];
+  const existing=new Set(state.costs.map(c=>c.importId).filter(Boolean));
+  let added=0;
+  data.records.forEach(rec=>{
+    if(!rec?.importId || existing.has(rec.importId)) return;
+    state.costs.push({
+      id:uid(),
+      importId:rec.importId,
+      importSource:meta.sourceTag||'custos-csv',
+      desc:rec.desc||'Custo',
+      type:rec.type||'OUTROS',
+      center:rec.center||'Geral',
+      date:rec.date||todayISO(),
+      due:rec.due||rec.date||todayISO(),
+      method:rec.method||'PIX',
+      value:Number(rec.value||0),
+      status:rec.status||'À PAGAR',
+      notes:rec.notes||'',
+      monthRef:rec.monthRef||''
+    });
+    existing.add(rec.importId);
+    added++;
+  });
+  return added;
 }
+
+async function importHistoricoSource(src, force=false){
+  state.imports=state.imports||{};
+  if(!force && state.imports[src.flag]) return {patients:0,costs:0};
+  const data=await fetchHistoricoJson(src.file);
+  if(!data?.records?.length){
+    state.imports[src.flag]={at:todayISO(),added:0,total:0,source:src.file,empty:true};
+    return {patients:0,costs:0};
+  }
+  let patients=0, costs=0;
+  if((data.kind||src.kind)==='costs') costs=importHistoricoCosts(data, src);
+  else patients=importHistoricoPatients(data, src);
+  const prev=state.imports[src.flag]||{};
+  state.imports[src.flag]={
+    at:todayISO(),
+    added:(Number(prev.added)||0)+patients+costs,
+    lastBatch:patients+costs,
+    total:data.records.length,
+    source:data.source||src.file
+  };
+  return {patients,costs};
+}
+
+async function applyBundledHistoricos(force=false){
+  let patients=0, costs=0;
+  for(const src of HISTORICO_SOURCES){
+    const r=await importHistoricoSource(src, force);
+    patients+=r.patients; costs+=r.costs;
+  }
+  if(patients||costs) save();
+  return {patients,costs};
+}
+window.applyBundledHistoricos=applyBundledHistoricos;
+window.importAllHistoricos=applyBundledHistoricos;
+
+function openImportSpreadsheetModal(){
+  const clinics=(state.clinics||[]).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  openModal('Importar planilha (CSV / HTML)', `
+    <div class="form-grid">
+      <div class="field full"><label>Arquivo</label>
+        <input id="importFile" type="file" class="input" accept=".csv,.html,.htm,text/csv,text/html">
+        <p class="cell-sub" style="margin-top:6px">Padrão: export Notion/Excel em CSV, ou tabela HTML. Honorários (coluna Nome) ou Custos (coluna Descrição).</p>
+      </div>
+      <div class="field"><label>Tipo</label>
+        <select id="importKind" class="input">
+          <option value="auto">Detectar automaticamente</option>
+          <option value="patients">Honorários / pacientes</option>
+          <option value="costs">Custos</option>
+        </select>
+      </div>
+      <div class="field"><label>Clínica (honorários)</label>
+        <select id="importClinic" class="input"><option value="">— selecione —</option>${clinics}</select>
+      </div>
+      <div class="field full"><label>Prévia</label><div id="importPreview" class="cell-sub">Nenhum arquivo ainda.</div></div>
+    </div>
+  `, ()=>commitImportSpreadsheet());
+  const saveBtn=document.getElementById('modalSave');
+  saveBtn.textContent='Importar';
+  const fileEl=document.getElementById('importFile');
+  fileEl?.addEventListener('change', async ()=>{
+    const f=fileEl.files?.[0];
+    const box=document.getElementById('importPreview');
+    if(!f){ box.textContent='Nenhum arquivo ainda.'; window.__importParsed=null; return; }
+    const text=await f.text();
+    const parsed=parseImportFileContent(text, f.name);
+    let kind=document.getElementById('importKind').value;
+    if(kind==='auto') kind=parsed.kind;
+    window.__importParsed={...parsed, kind, filename:f.name, text};
+    box.innerHTML=`<strong>${esc(f.name)}</strong> · ${parsed.rows.length} linha(s) · tipo: <strong>${esc(kind)}</strong><br>Colunas: ${esc(parsed.headers.slice(0,12).join(' · '))}`;
+  });
+}
+
+async function commitImportSpreadsheet(){
+  const parsed=window.__importParsed;
+  if(!parsed?.rows?.length){ toast('Selecione um arquivo CSV ou HTML.'); return; }
+  let kind=document.getElementById('importKind').value;
+  if(kind==='auto') kind=parsed.kind;
+  if(kind==='unknown'||!kind){ toast('Não reconheci o formato. Escolha Honorários ou Custos.'); return; }
+  let patients=0, costs=0;
+  if(kind==='costs'){
+    const data=mapCustoRows(parsed.rows,{source:parsed.filename});
+    costs=importHistoricoCosts(data,{sourceTag:'csv-upload'});
+  }else{
+    const clinicId=document.getElementById('importClinic').value;
+    if(!clinicId){ toast('Selecione a clínica dos honorários.'); return; }
+    const clinic=clinic(clinicId);
+    const origin=/particular/i.test(clinic.name||'')||clinicId==='particular'?'Particular':'Prestação';
+    const data=mapHonorarioRows(parsed.rows,{clinicId, origin, prefix:clinicId.slice(0,3), source:parsed.filename});
+    patients=importHistoricoPatients(data,{clinicId, origin, sourceTag:'csv-upload:'+clinicId});
+  }
+  if(patients||costs) save();
+  closeModal();
+  renderAll();
+  toast(patients||costs?`Importação: +${patients} casos, +${costs} custos.`:'Nada novo (IDs já existiam).');
+}
+window.openImportSpreadsheetModal=openImportSpreadsheetModal;
