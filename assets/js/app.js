@@ -539,10 +539,12 @@ function isProstheticProcedure(p){
 }
 function isSurgicalProcedure(p){
   if(!p) return false;
+  // "Coroa sobre implante", provisório, etc. ficam no fluxo protético
+  if(isProstheticProcedure(p)) return false;
   if(p.kind==='cirurgico') return true;
   if(p.specialty==='implante'||p.specialty==='cirurgia') return true;
   const n=String(p.name||'').toLowerCase();
-  return /implante|enxerto|exodont|cirurg|levantamento de seio|explante|bi[oó]psia|alveolo/.test(n);
+  return /\b(implante|enxerto|exodont|cirurg|levantamento de seio|explante|bi[oó]psia|alveolo)\b/.test(n);
 }
 function combinedProcedureMaterials(lines){
   const map={};
