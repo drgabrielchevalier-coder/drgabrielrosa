@@ -1,10 +1,10 @@
 {
-  "version": "2.5.1",
-  "name": "Fracionamento real + IA unificada",
+  "version": "2.6.0",
+  "name": "Fluxo protético e cirúrgico",
   "releasedAt": "2026-09-18",
   "changes": [
-    "Uma só ação “Recalcular com IA” (sem Sync materiais/custos/IA redundantes que geravam delay e falha).",
-    "Fracionamento por g/ml/un: cimento 8,5 g × uso 0,3 g por cimentação — não cobra o kit inteiro.",
-    "Atualizar tabela local sem OpenAI; catálogo com embalagens medidas; lock anti-pedido duplicado."
+    "Fluxo de produção com 3 visões: protético, cirúrgico e todos.",
+    "Fluxo cirúrgico: planejar, solicitar material, fila/agendado, pós-op, cicatrização, moldagem.",
+    "Laboratório só é criado automaticamente quando o tratamento tem procedimento protético — implante puro vai ao fluxo cirúrgico."
   ]
 }

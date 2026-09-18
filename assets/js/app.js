@@ -80,10 +80,13 @@ const seed = {
     {id:'f2',name:'Apoio administrativo',type:'Fixo',period:'09/2026',center:'Geral',value:450,status:'A pagar'}
   ],
   prostheses:[
-    {id:'pr1',code:'GR0001',patientId:'pt3',type:'Coroa sobre implante',tooth:'26',lab:'Precisão Lab',cost:450,stage:1,labStatus:'Em produção',entry:pastDays(18),due:addDays(5),urgent:false,shade:'A2',notes:'Componente CM enviado junto.',events:[{date:pastDays(18),stage:0,note:'Trabalho cadastrado'},{date:pastDays(12),stage:1,note:'Enviado ao laboratório'}]},
-    {id:'pr2',code:'GR0002',patientId:'pt4',type:'Coroa de zircônia',tooth:'16',lab:'Ateliê Dental',cost:450,stage:3,labStatus:'Recebido — aguardando agendamento',entry:pastDays(9),due:pastDays(1),urgent:true,shade:'A3',notes:'Aguardando cimentação.',events:[{date:pastDays(9),stage:0,note:'Moldagem registrada'},{date:pastDays(7),stage:1,note:'Enviado ao laboratório'},{date:pastDays(2),stage:2,note:'Prova realizada'},{date:pastDays(1),stage:3,note:'Peça pronta na clínica'}]},
-    {id:'pr3',code:'GR0003',patientId:'pt1',type:'Protocolo superior',tooth:'Superior',lab:'OralLab',cost:1900,stage:4,labStatus:'Entregue / instalado',entry:pastDays(40),due:pastDays(10),urgent:false,shade:'BL3',notes:'Instalado e alta.',events:[{date:pastDays(40),stage:0,note:'Trabalho cadastrado'},{date:pastDays(28),stage:1,note:'Em produção'},{date:pastDays(14),stage:2,note:'Prova de dentes'},{date:pastDays(10),stage:4,note:'Instalado'}]},
-    {id:'pr4',code:'GR0004',patientId:'pt5',type:'Faceta de porcelana',tooth:'11-21',lab:'Ateliê Dental',cost:620,stage:2,labStatus:'Prova / ajustes',entry:pastDays(6),due:addDays(4),urgent:false,shade:'A1',notes:'Ajuste de borda incisal.',events:[{date:pastDays(6),stage:0,note:'Trabalho cadastrado'},{date:pastDays(4),stage:1,note:'Enviado ao laboratório'},{date:pastDays(1),stage:2,note:'Prova em boca'}]}
+    {id:'pr1',code:'GR0001',flow:'protetico',patientId:'pt3',type:'Coroa sobre implante',tooth:'26',lab:'Precisão Lab',cost:450,stage:1,labStatus:'Em produção',entry:pastDays(18),due:addDays(5),urgent:false,shade:'A2',notes:'Componente CM enviado junto.',events:[{date:pastDays(18),stage:0,note:'Trabalho cadastrado'},{date:pastDays(12),stage:1,note:'Enviado ao laboratório'}]},
+    {id:'pr2',code:'GR0002',flow:'protetico',patientId:'pt4',type:'Coroa de zircônia',tooth:'16',lab:'Ateliê Dental',cost:450,stage:3,labStatus:'Recebido — aguardando agendamento',entry:pastDays(9),due:pastDays(1),urgent:true,shade:'A3',notes:'Aguardando cimentação.',events:[{date:pastDays(9),stage:0,note:'Moldagem registrada'},{date:pastDays(7),stage:1,note:'Enviado ao laboratório'},{date:pastDays(2),stage:2,note:'Prova realizada'},{date:pastDays(1),stage:3,note:'Peça pronta na clínica'}]},
+    {id:'pr3',code:'GR0003',flow:'protetico',patientId:'pt3',type:'Protocolo superior',tooth:'Superior',lab:'OralLab',cost:1900,stage:4,labStatus:'Entregue / instalado',entry:pastDays(40),due:pastDays(10),urgent:false,shade:'BL3',notes:'Instalado e alta.',events:[{date:pastDays(40),stage:0,note:'Trabalho cadastrado'},{date:pastDays(28),stage:1,note:'Em produção'},{date:pastDays(14),stage:2,note:'Prova de dentes'},{date:pastDays(10),stage:4,note:'Instalado'}]},
+    {id:'pr4',code:'GR0004',flow:'protetico',patientId:'pt4',type:'Faceta de porcelana',tooth:'11-21',lab:'Ateliê Dental',cost:620,stage:2,labStatus:'Prova / ajustes',entry:pastDays(6),due:addDays(4),urgent:false,shade:'A1',notes:'Ajuste de borda incisal.',events:[{date:pastDays(6),stage:0,note:'Trabalho cadastrado'},{date:pastDays(4),stage:1,note:'Enviado ao laboratório'},{date:pastDays(1),stage:2,note:'Prova em boca'}]},
+    {id:'pr5',code:'GR0005',flow:'cirurgico',patientId:'pt2',type:'Implante unitário (plantio)',tooth:'36',lab:'',cost:0,stage:3,labStatus:'Operado',entry:pastDays(12),due:addDays(20),urgent:false,shade:'',notes:'Enxerto associado. Aguardando cicatrização.',events:[{date:pastDays(12),stage:0,note:'Caso planejado'},{date:pastDays(10),stage:1,note:'Material solicitado'},{date:pastDays(8),stage:2,note:'Agendado'},{date:pastDays(6),stage:3,note:'Cirurgia realizada'}]},
+    {id:'pr6',code:'GR0006',flow:'cirurgico',patientId:'pt5',type:'Implante unitário (plantio)',tooth:'46',lab:'',cost:0,stage:1,labStatus:'Material solicitado',entry:pastDays(6),due:addDays(14),urgent:false,shade:'',notes:'',events:[{date:pastDays(6),stage:0,note:'Planejamento iniciado'},{date:pastDays(5),stage:1,note:'Kit de implante solicitado'}]},
+    {id:'pr7',code:'GR0007',flow:'cirurgico',patientId:'pt1',type:'Implante unitário (plantio)',tooth:'26',lab:'',cost:0,stage:5,labStatus:'Liberado para moldagem',entry:pastDays(40),due:pastDays(5),urgent:false,shade:'',notes:'Alta cirúrgica — liberado para prótese.',events:[{date:pastDays(40),stage:0,note:'Planejado'},{date:pastDays(30),stage:3,note:'Cirurgia'},{date:pastDays(10),stage:4,note:'Cicatrização ok'},{date:pastDays(5),stage:5,note:'Liberado para moldagem'}]}
   ],
   reminders:[],
   plans:[]
@@ -225,8 +228,8 @@ function collectNotifications(){
     sub:`${fmtDate(r.date)}${r.time?' · '+r.time:''}${r.type?' · '+r.type:''}`,
     go:'calendario'
   }));
-  (state.prostheses||[]).filter(w=>w.due && w.due<todayISO() && Number(w.stage)<4).forEach(w=>items.push({
-    title:`Prótese atrasada · ${patientById(w.patientId).name}`,
+  (state.prostheses||[]).filter(w=>w.due && w.due<todayISO() && Number(w.stage)<workFinalStage(w)).forEach(w=>items.push({
+    title:`${workFlow(w)==='cirurgico'?'Cirurgia':'Prótese'} atrasada · ${patientById(w.patientId).name}`,
     sub:`${w.type||'Trabalho'} · prazo ${fmtDate(w.due)}`,
     go:'entregas'
   }));
@@ -528,12 +531,28 @@ function patientProcedureLabel(p){
 function patientProcedureSearchText(p){
   return patientLines(p).map(l=>procedure(l.procedureId).name).join(' ');
 }
+function isProstheticProcedure(p){
+  if(!p) return false;
+  if(p.specialty==='protese') return true;
+  const n=String(p.name||'').toLowerCase();
+  return /coroa|faceta|pr[oó]tese|protocolo prot[eé]tico|overdenture|provis[oó]rio|moldagem|cimenta[cç]|onlay|inlay|overlay|pilar personalizado|n[uú]cleo fundido|ponte fixa|laminado/.test(n);
+}
+function isSurgicalProcedure(p){
+  if(!p) return false;
+  // "Coroa sobre implante", provisório, etc. ficam no fluxo protético
+  if(isProstheticProcedure(p)) return false;
+  if(p.kind==='cirurgico') return true;
+  if(p.specialty==='implante'||p.specialty==='cirurgia') return true;
+  const n=String(p.name||'').toLowerCase();
+  return /\b(implante|enxerto|exodont|cirurg|levantamento de seio|explante|bi[oó]psia|alveolo)\b/.test(n);
+}
 function combinedProcedureMaterials(lines){
   const map={};
   let lab=0;
   (lines||[]).forEach(l=>{
     const p=procedure(l.procedureId);
-    lab+=Number(p.extra||0)*Number(l.qty||1);
+    // Custo de laboratório só entra no fluxo protético — extras cirúrgicos não viram lab.
+    if(isProstheticProcedure(p)) lab+=Number(p.extra||0)*Number(l.qty||1);
     (p.items||[]).forEach(it=>{
       const key=it.materialId;
       if(!key) return;
@@ -1282,31 +1301,148 @@ function renderPrivate(){
   document.getElementById('privateTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong>`)}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} item(ns)</span>`)}${td('Contratado',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Lab',brl.format(p.lab||0))}${td('Componentes',brl.format(p.components||0))}${td('Clínica',brl.format(p.clinical||0))}${td('Lucro',`<strong>${brl.format(patientProfit(p))}</strong>`)}${td('Progresso',badge(p.progress))}<td class="actions-cell">${acts(`editPatient('${p.id}')`,`deletePatient('${p.id}')`)}</td></tr>`).join('')||'<tr><td colspan="10"><div class="empty">Sem casos particulares.</div></td></tr>';
 }
 const PROSTH_STAGES=['Entrada','Laboratório','Prova','Pronto / entrega','Instalado'];
+const SURG_STAGES=['Planejar caso','Solicitar material','Em fila / agendado','Pós-cirúrgico','Aguardando cicatrização','Aguardando moldagem'];
 const LAB_STATUS=['Aguardando envio','Enviado ao laboratório','Em produção','Recebido — aguardando agendamento','Prova / ajustes','Retornado ao laboratório','Entregue / instalado'];
+const SURG_STATUS=['Planejamento','Material solicitado','Agendado / em fila','Operado','Em cicatrização','Liberado para moldagem'];
+let productionFlowFilter=(typeof localStorage!=='undefined' && localStorage.getItem('chevalier_flow_filter'))||'protetico';
+
+function workFlow(w){return w?.flow==='cirurgico'?'cirurgico':'protetico'}
+function workStages(w){return workFlow(w)==='cirurgico'?SURG_STAGES:PROSTH_STAGES}
+function workStatuses(w){return workFlow(w)==='cirurgico'?SURG_STATUS:LAB_STATUS}
+function workFinalStage(w){return workStages(w).length-1}
+function workStageLabel(w,stage=w?.stage){return workStages(w)[Number(stage)]||'Etapa'}
+function patientHasProstheticLines(p){return patientLines(p).some(l=>isProstheticProcedure(procedure(l.procedureId)))}
+function patientHasSurgicalLines(p){return patientLines(p).some(l=>isSurgicalProcedure(procedure(l.procedureId)))}
+function primaryProcOfFlow(patient,flow){
+  const line=patientLines(patient).find(l=>flow==='cirurgico'?isSurgicalProcedure(procedure(l.procedureId)):isProstheticProcedure(procedure(l.procedureId)));
+  return line?{proc:procedure(line.procedureId),tooth:line.tooth||''}:{proc:null,tooth:''};
+}
+function prosthProgressStage(progress){
+  const map={'Moldagem':0,'Enviado para Laboratório':1,'Aguardando Prova':2,'Aguardando Cimentação':3,'Alta':4};
+  return map[progress];
+}
+function surgProgressStage(progress){
+  const map={
+    'Orçamento':0,'Em tratamento':0,'Planejar caso':0,
+    'Solicitar material':1,
+    'Em fila / agendado':2,'Agendado para cirurgia':2,
+    'Aguardo pós Cirúrgico':3,'Pós-cirúrgico':3,
+    'Aguardando cicatrização':4,
+    'Aguardando moldagem':5
+  };
+  return map[progress];
+}
 
 function patientById(id){return state.patients.find(x=>x.id===id)||{name:'Paciente não encontrado',id:''}}
 function initials(name){return String(name||'?').split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase()}
-function prosthLate(w){return Number(w.stage)<4 && w.due && w.due<todayISO()}
+function prosthLate(w){return Number(w.stage)<workFinalStage(w) && w.due && w.due<todayISO()}
 function prosthDeadlineBadge(w){
-  if(Number(w.stage)===4) return '<span class="badge b-green">Concluído</span>';
+  if(Number(w.stage)>=workFinalStage(w)) return '<span class="badge b-green">Concluído</span>';
   return prosthLate(w)?'<span class="badge b-red">Atrasado</span>':'<span class="badge b-green">No prazo</span>';
 }
-function prosthStageBadge(w){return badge(PROSTH_STAGES[Number(w.stage)]||'Etapa')}
+function prosthStageBadge(w){return badge(workStageLabel(w))}
+function flowPill(w){
+  return workFlow(w)==='cirurgico'
+    ?'<span class="flow-pill surg">Cirúrgico</span>'
+    :'<span class="flow-pill">Protético</span>';
+}
 function nextProsthCode(){
   const n=state.prostheses.map(w=>Number(String(w.code||'').replace(/\D/g,''))||0);
   return 'GR'+String(Math.max(0,...n)+1).padStart(4,'0');
 }
+function inferWorkFlow(w){
+  if(w.flow==='cirurgico'||w.flow==='protetico') return w.flow;
+  const pat=patientById(w.patientId);
+  const hasP=patientHasProstheticLines(pat);
+  const hasS=patientHasSurgicalLines(pat);
+  const typeSurg=isSurgicalProcedure({name:w.type,kind:'',specialty:''}) && !isProstheticProcedure({name:w.type,specialty:'',kind:''});
+  if(hasS && !hasP) return 'cirurgico';
+  if(hasP && !hasS) return 'protetico';
+  if(typeSurg) return 'cirurgico';
+  if(/lab|coroa|faceta|pr[oó]tese|zirc|protocolo/i.test(String(w.lab||'')+' '+String(w.type||'')) && !typeSurg) return 'protetico';
+  return 'protetico';
+}
+function normalizeProductionWorks(){
+  if(!Array.isArray(state.prostheses)) state.prostheses=[];
+  state.prostheses.forEach(w=>{
+    if(!w.flow) w.flow=inferWorkFlow(w);
+    const pat=patientById(w.patientId);
+    const hasP=patientHasProstheticLines(pat);
+    const hasS=patientHasSurgicalLines(pat);
+    // Repara cartões de laboratório criados por engano a partir de implante/cirurgia pura
+    const typeLooksSurg=isSurgicalProcedure({name:w.type,kind:'cirurgico',specialty:''}) && !isProstheticProcedure({name:w.type,specialty:'',kind:''});
+    if(w.flow==='protetico' && !hasP && (hasS || typeLooksSurg)){
+      w.flow='cirurgico';
+      const mapped=surgProgressStage(pat.progress);
+      w.stage=mapped!=null?mapped:Math.min(2,Number(w.stage)||0);
+      w.labStatus=SURG_STATUS[Math.min(Number(w.stage)||0,SURG_STATUS.length-1)];
+      if(!w.lab || w.lab==='Laboratório') w.lab='';
+      w.cost=0;
+    }
+    if(w.flow==='cirurgico'){
+      w.stage=Math.min(Number(w.stage)||0, SURG_STAGES.length-1);
+      if(!w.labStatus || LAB_STATUS.includes(w.labStatus)){
+        w.labStatus=SURG_STATUS[Math.min(Number(w.stage)||0,SURG_STATUS.length-1)];
+      }
+    }else{
+      w.flow='protetico';
+      w.stage=Math.min(Number(w.stage)||0, PROSTH_STAGES.length-1);
+    }
+  });
+}
+function makeProductionWork(patient, flow){
+  const {proc,tooth}=primaryProcOfFlow(patient,flow);
+  const isSurg=flow==='cirurgico';
+  const stage=isSurg?(surgProgressStage(patient.progress)??0):(prosthProgressStage(patient.progress)??0);
+  const statuses=isSurg?SURG_STATUS:LAB_STATUS;
+  return {
+    id:uid(),
+    code:nextProsthCode(),
+    flow,
+    patientId:patient.id,
+    type:proc?.name||(isSurg?'Caso cirúrgico':'Trabalho protético'),
+    tooth:tooth||'',
+    lab:isSurg?'':'Laboratório',
+    cost:isSurg?0:Number(patient.lab||0),
+    stage,
+    labStatus:statuses[Math.min(stage,statuses.length-1)],
+    entry:patient.date||todayISO(),
+    due:patient.due||addDays(isSurg?21:14),
+    urgent:false,
+    shade:'',
+    notes:'',
+    events:[{date:patient.date||todayISO(),stage,note:isSurg?'Caso cirúrgico criado a partir do tratamento':'Trabalho protético criado a partir do tratamento'}]
+  };
+}
+/** Cria automaticamente: protético só se houver procedimento de prótese; cirúrgico se houver cirurgia/implante. */
+function syncProductionFromPatient(patient){
+  if(!patient?.id) return;
+  if(!Array.isArray(state.prostheses)) state.prostheses=[];
+  const wantsP=patientHasProstheticLines(patient);
+  const wantsS=patientHasSurgicalLines(patient);
+  const existing=(state.prostheses||[]).filter(w=>w.patientId===patient.id);
+  if(wantsP && !existing.some(w=>workFlow(w)==='protetico')){
+    state.prostheses.unshift(makeProductionWork(patient,'protetico'));
+  }
+  if(wantsS && !existing.some(w=>workFlow(w)==='cirurgico')){
+    state.prostheses.unshift(makeProductionWork(patient,'cirurgico'));
+  }
+}
 function ensureProstheses(){
   if(!Array.isArray(state.prostheses)) state.prostheses=[];
+  normalizeProductionWorks();
   if(state.prostheses.length) return;
-  const map={'Moldagem':0,'Enviado para Laboratório':1,'Aguardando Prova':2,'Aguardando Cimentação':3,'Alta':4};
-  state.patients.filter(p=>map[p.progress]!=null || Number(p.lab)>0).forEach((p,i)=>{
-    const stage=map[p.progress]??1;
-    state.prostheses.push({
-      id:uid(),code:'GR'+String(i+1).padStart(4,'0'),patientId:p.id,type:procedure(p.procedureId).name,tooth:'',lab:'Laboratório',
-      cost:Number(p.lab||0),stage,labStatus:LAB_STATUS[Math.min(stage,LAB_STATUS.length-1)],entry:p.date,due:p.due||addDays(10),urgent:false,shade:'',notes:'',
-      events:[{date:p.date||todayISO(),stage,note:'Importado do progresso clínico'}]
-    });
+  // Seed inicial: só pacientes com linha de prótese entram no lab; cirúrgicos vão ao fluxo cirúrgico.
+  state.patients.forEach(p=>{
+    if(patientHasProstheticLines(p) || prosthProgressStage(p.progress)!=null){
+      // progresso protético sem linha de prótese (legado) — só se não for caso puramente cirúrgico
+      if(patientHasProstheticLines(p) || (!patientHasSurgicalLines(p) && Number(p.lab)>0)){
+        state.prostheses.push(makeProductionWork(p,'protetico'));
+      }
+    }
+    if(patientHasSurgicalLines(p)){
+      state.prostheses.push(makeProductionWork(p,'cirurgico'));
+    }
   });
 }
 function filteredProstheses(){
@@ -1314,16 +1450,17 @@ function filteredProstheses(){
   const f=document.getElementById('prosthFilter')?.value||'all';
   return state.prostheses.filter(w=>{
     const pat=patientById(w.patientId);
-    const hay=[pat.name,w.code,w.type,w.lab,w.tooth,w.shade].some(v=>String(v||'').toLowerCase().includes(q));
-    const ok=f==='all'||f==='active'&&w.stage<4||f==='late'&&prosthLate(w)||f==='urgent'&&w.urgent||String(w.stage)===f;
+    const hay=[pat.name,w.code,w.type,w.lab,w.tooth,w.shade,workFlow(w)].some(v=>String(v||'').toLowerCase().includes(q));
+    const done=workFinalStage(w);
+    const ok=f==='all'||f==='active'&&w.stage<done||f==='late'&&prosthLate(w)||f==='urgent'&&w.urgent||f==='protetico'&&workFlow(w)==='protetico'||f==='cirurgico'&&workFlow(w)==='cirurgico'||String(w.stage)===f;
     return hay&&ok;
   }).sort((a,b)=>(Number(b.urgent)-Number(a.urgent))||(Number(prosthLate(b))-Number(prosthLate(a)))||String(a.due).localeCompare(String(b.due)));
 }
 function renderTrabalhos(){
   const list=state.prostheses;
-  const active=list.filter(w=>w.stage<4);
+  const active=list.filter(w=>Number(w.stage)<workFinalStage(w));
   document.getElementById('prosthActive').textContent=active.length;
-  document.getElementById('prosthLab').textContent=list.filter(w=>w.stage===1).length;
+  document.getElementById('prosthLab').textContent=list.filter(w=>workFlow(w)==='protetico'&&Number(w.stage)===1).length;
   document.getElementById('prosthLate').textContent=active.filter(prosthLate).length;
   document.getElementById('prosthUrgent').textContent=active.filter(w=>w.urgent).length;
   const badgeEl=document.getElementById('badgeProtese');
@@ -1332,37 +1469,66 @@ function renderTrabalhos(){
   document.getElementById('prosthTable').innerHTML=rows.map(w=>{
     const pat=patientById(w.patientId);
     return `<tr class="${w.urgent?'urgent-row':''}">
-      ${td('Paciente',`<button class="row-link" onclick="openProsthesisDetail('${w.id}')"><strong>${esc(pat.name)}</strong><span>${esc(w.code)} · ${esc(w.type)}${w.tooth?' · '+esc(w.tooth):''}</span></button>${w.urgent?' <span class="badge b-red">Urgente</span>':''}`)}
-      ${td('Laboratório',`${esc(w.lab||'—')}<div class="cell-sub">${Number(w.cost)>0?brl.format(w.cost):'Custo não informado'}</div>`)}
+      ${td('Paciente',`<button class="row-link" onclick="openProsthesisDetail('${w.id}')"><strong>${esc(pat.name)}</strong><span>${esc(w.code)} · ${esc(w.type)}${w.tooth?' · '+esc(w.tooth):''}</span></button>${flowPill(w)}${w.urgent?' <span class="badge b-red">Urgente</span>':''}`)}
+      ${td('Laboratório',workFlow(w)==='cirurgico'?`<span class="cell-sub">Fluxo cirúrgico</span>`:`${esc(w.lab||'—')}<div class="cell-sub">${Number(w.cost)>0?brl.format(w.cost):'Custo não informado'}</div>`)}
       ${td('Previsão',fmtDate(w.due))}
       ${td('Prazo',prosthDeadlineBadge(w))}
       ${td('Etapa',`${prosthStageBadge(w)}<div class="cell-sub">${esc(w.labStatus||'')}</div>`)}
       <td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="openProsthesisDetail('${w.id}')">Abrir</button><button class="btn small" onclick="openProsthesisModal('${w.id}')">Editar</button><button class="btn small danger" onclick="deleteProsthesis('${w.id}')">Excluir</button></div></td>
     </tr>`;
-  }).join('')||'<tr><td colspan="6"><div class="empty">Nenhum trabalho protético encontrado.</div></td></tr>';
+  }).join('')||'<tr><td colspan="6"><div class="empty">Nenhum trabalho encontrado.</div></td></tr>';
+}
+function setProductionFlow(mode,btn){
+  productionFlowFilter=mode||'protetico';
+  try{localStorage.setItem('chevalier_flow_filter',productionFlowFilter)}catch(e){}
+  document.querySelectorAll('.flow-tab').forEach(b=>b.classList.toggle('active',b.dataset.flow===productionFlowFilter));
+  if(btn) btn.classList.add('active');
+  renderLab();
+}
+function kanbanCard(w){
+  const pat=patientById(w.patientId);
+  const sub=workFlow(w)==='cirurgico'
+    ? `${esc(w.type)} · ${esc(w.labStatus||'Cirurgia')}`
+    : `${esc(w.type)} · ${esc(w.lab||'Lab')}`;
+  return `<button class="list-item kanban-item" onclick="openProsthesisDetail('${w.id}')"><div class="avatar">${esc(initials(pat.name))}</div><div class="list-main"><strong>${esc(pat.name)}</strong><span>${sub}</span></div><div class="list-value">${prosthLate(w)?'<span class="badge b-red">Atraso</span>':fmtDate(w.due)}</div></button>`;
+}
+function renderFlowBoard(flow,stages){
+  const cols=stages.length;
+  return `<div class="lab-board ${cols>5?'cols-6':''}">${stages.map((stage,i)=>{
+    const arr=state.prostheses.filter(w=>workFlow(w)===flow && Number(w.stage)===i);
+    return `<div class="card"><div class="card-head"><h3>${stage}</h3><div class="right"><span class="badge b-gray">${arr.length}</span></div></div><div class="card-body list">${arr.length?arr.map(kanbanCard).join(''):'<div class="empty">Nenhum trabalho.</div>'}</div></div>`;
+  }).join('')}</div>`;
 }
 function renderLab(){
-  document.getElementById('labColumns').innerHTML=PROSTH_STAGES.map((stage,i)=>{
-    const arr=state.prostheses.filter(w=>Number(w.stage)===i);
-    return `<div class="card"><div class="card-head"><h3>${stage}</h3><div class="right"><span class="badge b-gray">${arr.length}</span></div></div><div class="card-body list">${arr.length?arr.map(w=>{
-      const pat=patientById(w.patientId);
-      return `<button class="list-item kanban-item" onclick="openProsthesisDetail('${w.id}')"><div class="avatar">${esc(initials(pat.name))}</div><div class="list-main"><strong>${esc(pat.name)}</strong><span>${esc(w.type)} · ${esc(w.lab||'Lab')}</span></div><div class="list-value">${prosthLate(w)?'<span class="badge b-red">Atraso</span>':fmtDate(w.due)}</div></button>`;
-    }).join(''):'<div class="empty">Nenhum trabalho.</div>'}</div></div>`;
-  }).join('');
+  const mode=productionFlowFilter||'protetico';
+  const sub=document.getElementById('flowSubtitle');
+  document.querySelectorAll('.flow-tab').forEach(b=>b.classList.toggle('active',b.dataset.flow===mode));
+  if(mode==='protetico'){
+    if(sub) sub.textContent='Do cadastro à instalação: entrada, laboratório, prova, entrega e alta.';
+    document.getElementById('labColumns').innerHTML=renderFlowBoard('protetico',PROSTH_STAGES);
+  }else if(mode==='cirurgico'){
+    if(sub) sub.textContent='Do planejamento à moldagem: material, fila cirúrgica, pós-op e cicatrização.';
+    document.getElementById('labColumns').innerHTML=renderFlowBoard('cirurgico',SURG_STAGES);
+  }else{
+    if(sub) sub.textContent='Visão unificada dos fluxos protético e cirúrgico.';
+    document.getElementById('labColumns').innerHTML=`
+      <div class="flow-board-block"><div class="flow-board-title"><h3>Fluxo protético</h3><p>Laboratório e instalação</p></div>${renderFlowBoard('protetico',PROSTH_STAGES)}</div>
+      <div class="flow-board-block"><div class="flow-board-title"><h3>Fluxo cirúrgico</h3><p>Planejamento até moldagem</p></div>${renderFlowBoard('cirurgico',SURG_STAGES)}</div>`;
+  }
 }
 function renderEntregas(){
   const limit=addDays(14);
-  const rows=state.prostheses.filter(w=>w.stage<4 && w.due && w.due<=limit).sort((a,b)=>String(a.due).localeCompare(String(b.due)));
+  const rows=state.prostheses.filter(w=>Number(w.stage)<workFinalStage(w) && w.due && w.due<=limit).sort((a,b)=>String(a.due).localeCompare(String(b.due)));
   document.getElementById('entregasTable').innerHTML=rows.map(w=>{
     const pat=patientById(w.patientId);
-    return `<tr>${td('Quando',fmtDate(w.due))}${td('Paciente',`<strong>${esc(pat.name)}</strong>`)}${td('Trabalho',`${esc(w.type)}<div class="cell-sub">${esc(w.code)}</div>`)}${td('Laboratório',esc(w.lab||'—'))}${td('Etapa',prosthStageBadge(w))}${td('Prazo',prosthDeadlineBadge(w))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="openProsthesisDetail('${w.id}')">Abrir</button><button class="btn small danger" onclick="deleteProsthesis('${w.id}')">Excluir</button></div></td></tr>`;
-  }).join('')||'<tr><td colspan="7"><div class="empty">Nenhuma entrega ou prova nos próximos 14 dias.</div></td></tr>';
+    return `<tr>${td('Quando',fmtDate(w.due))}${td('Paciente',`<strong>${esc(pat.name)}</strong>${flowPill(w)}`)}${td('Trabalho',`${esc(w.type)}<div class="cell-sub">${esc(w.code)}</div>`)}${td('Laboratório',workFlow(w)==='cirurgico'?'—':esc(w.lab||'—'))}${td('Etapa',prosthStageBadge(w))}${td('Prazo',prosthDeadlineBadge(w))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="openProsthesisDetail('${w.id}')">Abrir</button><button class="btn small danger" onclick="deleteProsthesis('${w.id}')">Excluir</button></div></td></tr>`;
+  }).join('')||'<tr><td colspan="7"><div class="empty">Nenhuma entrega, prova ou cirurgia nos próximos 14 dias.</div></td></tr>';
 }
 function renderTimeline(){
   const events=state.prostheses.flatMap(w=>(w.events||[]).map(e=>({...e,w}))).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
   document.getElementById('prosthTimeline').innerHTML=events.length?`<div class="timeline">${events.map(e=>{
     const pat=patientById(e.w.patientId);
-    return `<div class="timeline-item"><span class="timeline-dot"></span><div><strong>${esc(pat.name)} · ${esc(e.w.type)}</strong><span>${fmtDate(e.date)} · ${esc(PROSTH_STAGES[e.stage]||'Movimentação')} · ${esc(e.w.code)}</span><p>${esc(e.note||'Etapa atualizada')}</p></div></div>`;
+    return `<div class="timeline-item"><span class="timeline-dot"></span><div><strong>${esc(pat.name)} · ${esc(e.w.type)}</strong><span>${fmtDate(e.date)} · ${esc(workStageLabel(e.w,e.stage)||'Movimentação')} · ${esc(e.w.code)} · ${workFlow(e.w)==='cirurgico'?'Cirúrgico':'Protético'}</span><p>${esc(e.note||'Etapa atualizada')}</p></div></div>`;
   }).join('')}</div>`:'<div class="empty">Ainda não há movimentações registradas.</div>';
 }
 function lookupProsthesis(){
@@ -1372,48 +1538,89 @@ function lookupProsthesis(){
   const w=state.prostheses.find(x=>String(x.code).toUpperCase()===raw||x.id===raw);
   if(!w){box.innerHTML='<div class="empty">Código não encontrado.</div>';return;}
   const pat=patientById(w.patientId);
-  box.innerHTML=`<div class="lookup-card"><strong>${esc(pat.name)}</strong><span class="code">${esc(w.code)}</span><p>${esc(w.type)} · ${esc(w.lab||'Lab')} · ${esc(PROSTH_STAGES[w.stage])}</p><p>Previsão ${fmtDate(w.due)} · ${esc(w.labStatus||'')}</p><button class="btn primary" onclick="openProsthesisDetail('${w.id}')">Abrir ficha</button></div>`;
+  box.innerHTML=`<div class="lookup-card"><strong>${esc(pat.name)}</strong><span class="code">${esc(w.code)}</span><p>${esc(w.type)} · ${esc(workFlow(w)==='cirurgico'?(w.labStatus||'Cirúrgico'):(w.lab||'Lab'))} · ${esc(workStageLabel(w))}</p><p>Previsão ${fmtDate(w.due)} · ${esc(w.labStatus||'')}</p><button class="btn primary" onclick="openProsthesisDetail('${w.id}')">Abrir ficha</button></div>`;
 }
 function openProsthesisModal(editId=''){
   if(!state.patients.length){toast('Cadastre um paciente antes.');return;}
   const w=state.prostheses.find(x=>x.id===editId)||{};
-  openModal(editId?'Editar trabalho protético':'Novo trabalho protético',`
+  const flow0=w.flow||(productionFlowFilter==='cirurgico'?'cirurgico':'protetico');
+  const stages0=flow0==='cirurgico'?SURG_STAGES:PROSTH_STAGES;
+  const status0=flow0==='cirurgico'?SURG_STATUS:LAB_STATUS;
+  openModal(editId?'Editar trabalho':'Novo trabalho',`
     <div class="form-grid">
+      <div class="field full"><label>Fluxo</label><select id="wFlow" class="select" onchange="onWorkFlowChange()">
+        <option value="protetico" ${flow0!=='cirurgico'?'selected':''}>Protético (laboratório)</option>
+        <option value="cirurgico" ${flow0==='cirurgico'?'selected':''}>Cirúrgico</option>
+      </select></div>
       <div class="field full"><label>Paciente</label><select id="wPatient" class="select">${state.patients.map(p=>`<option value="${p.id}" ${p.id===(w.patientId||'')?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
-      <div class="field"><label>Tipo de trabalho</label><input id="wType" class="input" value="${esc(w.type||'')}" placeholder="Ex.: Coroa sobre implante"></div>
+      <div class="field"><label>Tipo de trabalho</label><input id="wType" class="input" value="${esc(w.type||'')}" placeholder="Ex.: Coroa sobre implante ou Implante unitário"></div>
       <div class="field"><label>Dente / região</label><input id="wTooth" class="input" value="${esc(w.tooth||'')}" placeholder="Ex.: 16 ou arcada superior"></div>
-      <div class="field"><label>Laboratório</label><input id="wLab" class="input" value="${esc(w.lab||'')}" placeholder="Nome do laboratório"></div>
-      <div class="field"><label>Custo do laboratório (R$)</label><input id="wCost" type="number" step="0.01" class="input" value="${w.cost??''}"></div>
-      <div class="field"><label>Cor / escala</label><input id="wShade" class="input" value="${esc(w.shade||'')}" placeholder="Ex.: A2"></div>
-      <div class="field"><label>Etapa atual</label><select id="wStage" class="select">${PROSTH_STAGES.map((s,i)=>`<option value="${i}" ${Number(w.stage)===i?'selected':''}>${s}</option>`).join('')}</select></div>
-      <div class="field"><label>Status laboratorial</label><select id="wLabStatus" class="select">${LAB_STATUS.map(s=>`<option ${s===(w.labStatus||'Aguardando envio')?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field" id="wLabWrap"><label>Laboratório</label><input id="wLab" class="input" value="${esc(w.lab||'')}" placeholder="Nome do laboratório"></div>
+      <div class="field" id="wCostWrap"><label>Custo do laboratório (R$)</label><input id="wCost" type="number" step="0.01" class="input" value="${w.cost??''}"></div>
+      <div class="field" id="wShadeWrap"><label>Cor / escala</label><input id="wShade" class="input" value="${esc(w.shade||'')}" placeholder="Ex.: A2"></div>
+      <div class="field"><label>Etapa atual</label><select id="wStage" class="select">${stages0.map((s,i)=>`<option value="${i}" ${Number(w.stage)===i?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label id="wStatusLabel">Status</label><select id="wLabStatus" class="select">${status0.map(s=>`<option ${s===(w.labStatus||status0[0])?'selected':''}>${s}</option>`).join('')}</select></div>
       <div class="field"><label>Início</label><input id="wEntry" type="date" class="input" value="${w.entry||todayISO()}"></div>
-      <div class="field"><label>Previsão de entrega</label><input id="wDue" type="date" class="input" value="${w.due||addDays(14)}"></div>
+      <div class="field"><label>Previsão</label><input id="wDue" type="date" class="input" value="${w.due||addDays(14)}"></div>
       <div class="field full"><label class="check-row"><input type="checkbox" id="wUrgent" ${w.urgent?'checked':''}> <strong>URGENTE</strong> — prioriza este trabalho</label></div>
       <div class="field full"><label>Observações</label><textarea id="wNotes" class="textarea" rows="3">${esc(w.notes||'')}</textarea></div>
     </div>`,()=>{
       if(!getv('wType')) return toast('Informe o tipo de trabalho.');
-      if(!getv('wLab')) return toast('Informe o laboratório.');
+      const flow=getv('wFlow')||'protetico';
+      if(flow==='protetico' && !getv('wLab')) return toast('Informe o laboratório.');
       const stage=Number(getv('wStage')||0);
+      const payload={
+        patientId:getv('wPatient'),type:getv('wType'),tooth:getv('wTooth'),flow,
+        lab:flow==='cirurgico'?(getv('wLab')||''):getv('wLab'),
+        cost:flow==='cirurgico'?num('wCost'):num('wCost'),
+        shade:getv('wShade'),stage,labStatus:getv('wLabStatus'),
+        entry:getv('wEntry'),due:getv('wDue'),
+        urgent:document.getElementById('wUrgent').checked,notes:getv('wNotes')
+      };
       if(editId){
         const found=state.prostheses.find(x=>x.id===editId); if(!found)return;
-        Object.assign(found,{patientId:getv('wPatient'),type:getv('wType'),tooth:getv('wTooth'),lab:getv('wLab'),cost:num('wCost'),shade:getv('wShade'),stage,labStatus:getv('wLabStatus'),entry:getv('wEntry'),due:getv('wDue'),urgent:document.getElementById('wUrgent').checked,notes:getv('wNotes')});
+        Object.assign(found,payload);
       }else{
-        state.prostheses.unshift({id:uid(),code:nextProsthCode(),patientId:getv('wPatient'),type:getv('wType'),tooth:getv('wTooth'),lab:getv('wLab'),cost:num('wCost'),shade:getv('wShade'),stage,labStatus:getv('wLabStatus'),entry:getv('wEntry'),due:getv('wDue'),urgent:document.getElementById('wUrgent').checked,notes:getv('wNotes'),events:[{date:getv('wEntry')||todayISO(),stage,note:'Trabalho cadastrado'}]});
+        state.prostheses.unshift({id:uid(),code:nextProsthCode(),...payload,events:[{date:getv('wEntry')||todayISO(),stage,note:'Trabalho cadastrado'}]});
       }
-      save();closeModal();renderAll();toast('Trabalho protético salvo.');
+      save();closeModal();renderAll();toast('Trabalho salvo.');
     });
+  onWorkFlowChange();
+}
+function onWorkFlowChange(){
+  const flow=getv('wFlow')||'protetico';
+  const surg=flow==='cirurgico';
+  const stages=surg?SURG_STAGES:PROSTH_STAGES;
+  const statuses=surg?SURG_STATUS:LAB_STATUS;
+  const stageEl=document.getElementById('wStage');
+  const statusEl=document.getElementById('wLabStatus');
+  const curStage=stageEl?stageEl.value:'0';
+  const curStatus=statusEl?statusEl.value:'';
+  if(stageEl) stageEl.innerHTML=stages.map((s,i)=>`<option value="${i}" ${String(i)===String(curStage)?'selected':''}>${s}</option>`).join('');
+  if(statusEl) statusEl.innerHTML=statuses.map(s=>`<option ${s===curStatus||(!statuses.includes(curStatus)&&s===statuses[0])?'selected':''}>${s}</option>`).join('');
+  const labWrap=document.getElementById('wLabWrap');
+  const costWrap=document.getElementById('wCostWrap');
+  const shadeWrap=document.getElementById('wShadeWrap');
+  const statusLabel=document.getElementById('wStatusLabel');
+  if(labWrap) labWrap.style.display=surg?'none':'';
+  if(costWrap) costWrap.style.display=surg?'none':'';
+  if(shadeWrap) shadeWrap.style.display=surg?'none':'';
+  if(statusLabel) statusLabel.textContent=surg?'Status cirúrgico':'Status laboratorial';
 }
 function openProsthesisDetail(id){
   const w=state.prostheses.find(x=>x.id===id); if(!w)return;
   const pat=patientById(w.patientId);
-  const flow=PROSTH_STAGES.map((s,i)=>`<div class="workflow-step ${Number(w.stage)===i?'current':''} ${i<Number(w.stage)?'done':''}"><span>${i+1}</span><div><strong>${s}</strong></div></div>`).join('');
-  const hist=(w.events||[]).slice().reverse().map(e=>`<div class="detail-event"><span class="event-dot"></span><div><strong>${esc(PROSTH_STAGES[e.stage]||'Movimentação')}</strong><p>${fmtDate(e.date)}${e.note?' · '+esc(e.note):''}</p></div></div>`).join('');
+  const stages=workStages(w);
+  const flow=stages.map((s,i)=>`<div class="workflow-step ${Number(w.stage)===i?'current':''} ${i<Number(w.stage)?'done':''}"><span>${i+1}</span><div><strong>${s}</strong></div></div>`).join('');
+  const hist=(w.events||[]).slice().reverse().map(e=>`<div class="detail-event"><span class="event-dot"></span><div><strong>${esc(workStageLabel(w,e.stage)||'Movimentação')}</strong><p>${fmtDate(e.date)}${e.note?' · '+esc(e.note):''}</p></div></div>`).join('');
+  const meta=workFlow(w)==='cirurgico'
+    ?[['Tipo',w.type],['Dente / região',w.tooth||'—'],['Fluxo','Cirúrgico'],['Status',w.labStatus||'—'],['Etapa',workStageLabel(w)],['Previsão',fmtDate(w.due)]]
+    :[['Tipo',w.type],['Dente / região',w.tooth||'—'],['Laboratório',w.lab||'—'],['Cor',w.shade||'—'],['Custo',Number(w.cost)?brl.format(w.cost):'—'],['Etapa',workStageLabel(w)],['Status lab',w.labStatus||'—'],['Previsão',fmtDate(w.due)]];
   openModal('Ficha do trabalho',`
-    <div class="detail-top"><div><h3 style="margin:0 0 4px">${esc(pat.name)}</h3><span class="code">${esc(w.code)}</span> ${w.urgent?'<span class="badge b-red">Urgente</span>':''} ${prosthDeadlineBadge(w)}</div></div>
-    <div class="detail-grid">${[['Tipo',w.type],['Dente / região',w.tooth||'—'],['Laboratório',w.lab||'—'],['Cor',w.shade||'—'],['Custo',Number(w.cost)?brl.format(w.cost):'—'],['Etapa',PROSTH_STAGES[w.stage]],['Status lab',w.labStatus||'—'],['Previsão',fmtDate(w.due)]].map(([k,v])=>`<div><span>${k}</span><strong>${esc(v)}</strong></div>`).join('')}</div>
-    ${prosthLate(w)?'<div class="warning-banner">Este trabalho está atrasado. A previsão foi ultrapassada e o caso ainda não foi instalado.</div>':''}
-    <h3 class="section-title">Fluxo protético</h3><div class="workflow-stepper">${flow}</div>
+    <div class="detail-top"><div><h3 style="margin:0 0 4px">${esc(pat.name)}</h3><span class="code">${esc(w.code)}</span> ${flowPill(w)} ${w.urgent?'<span class="badge b-red">Urgente</span>':''} ${prosthDeadlineBadge(w)}</div></div>
+    <div class="detail-grid">${meta.map(([k,v])=>`<div><span>${k}</span><strong>${esc(v)}</strong></div>`).join('')}</div>
+    ${prosthLate(w)?'<div class="warning-banner">Este trabalho está atrasado. A previsão foi ultrapassada.</div>':''}
+    <h3 class="section-title">${workFlow(w)==='cirurgico'?'Fluxo cirúrgico':'Fluxo protético'}</h3><div class="workflow-stepper">${flow}</div>
     ${w.notes?`<h3 class="section-title">Observações</h3><p class="note-text">${esc(w.notes)}</p>`:''}
     <h3 class="section-title">Histórico</h3><div class="detail-timeline">${hist||'<div class="empty">Sem movimentações.</div>'}</div>
     <div class="form-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
@@ -1425,17 +1632,21 @@ function openProsthesisDetail(id){
 }
 function openAdvanceProsthesis(id){
   const w=state.prostheses.find(x=>x.id===id); if(!w)return;
-  const next=Math.min(4,Number(w.stage)+1);
+  const stages=workStages(w);
+  const statuses=workStatuses(w);
+  const next=Math.min(workFinalStage(w),Number(w.stage)+1);
   openModal('Registrar evolução',`
     <div class="form-grid">
-      <div class="field full"><label>Próxima etapa</label><select id="aStage" class="select">${PROSTH_STAGES.map((s,i)=>`<option value="${i}" ${i===next?'selected':''}>${i===Number(w.stage)?'Manter em · ':''}${s}</option>`).join('')}</select></div>
-      <div class="field full"><label>Status laboratorial</label><select id="aLabStatus" class="select">${LAB_STATUS.map(s=>`<option ${s===w.labStatus?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field full"><label>Próxima etapa</label><select id="aStage" class="select">${stages.map((s,i)=>`<option value="${i}" ${i===next?'selected':''}>${i===Number(w.stage)?'Manter em · ':''}${s}</option>`).join('')}</select></div>
+      <div class="field full"><label>${workFlow(w)==='cirurgico'?'Status cirúrgico':'Status laboratorial'}</label><select id="aLabStatus" class="select">${statuses.map(s=>`<option ${s===w.labStatus?'selected':''}>${s}</option>`).join('')}</select></div>
       <div class="field"><label>Data</label><input id="aDate" type="date" class="input" value="${todayISO()}"></div>
-      <div class="field full"><label>Observação</label><textarea id="aNote" class="textarea" rows="3" placeholder="Ex.: prova insatisfatória, alterar cor, retornar ao laboratório..."></textarea></div>
+      <div class="field full"><label>Observação</label><textarea id="aNote" class="textarea" rows="3" placeholder="Ex.: material solicitado, prova insatisfatória, retornar ao laboratório..."></textarea></div>
     </div>`,()=>{
       const stage=Number(getv('aStage')||0);
       w.stage=stage; w.labStatus=getv('aLabStatus');
-      if(stage===4) w.labStatus='Entregue / instalado';
+      if(stage>=workFinalStage(w)){
+        w.labStatus=workFlow(w)==='cirurgico'?'Liberado para moldagem':'Entregue / instalado';
+      }
       w.events=w.events||[]; w.events.push({date:getv('aDate')||todayISO(),stage,note:getv('aNote')||'Etapa atualizada'});
       save();closeModal();renderAll();openProsthesisDetail(id);toast('Movimentação registrada.');
     });
@@ -1595,7 +1806,7 @@ function deleteMaterial(id){
   if(used){toast('Este material está na ficha de um procedimento. Remova-o de lá antes.');return;}
   confirmDelete('Excluir este material do banco de custos?',()=>{state.materials=state.materials.filter(x=>x.id!==id);});
 }
-function deleteProsthesis(id){confirmDelete('Excluir este trabalho protético e o histórico?',()=>{state.prostheses=state.prostheses.filter(x=>x.id!==id);});}
+function deleteProsthesis(id){confirmDelete('Excluir este trabalho e o histórico?',()=>{state.prostheses=state.prostheses.filter(x=>x.id!==id);});}
 
 function materialSelect(selected=''){
   return state.materials.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).map(m=>`<option value="${m.id}" ${m.id===selected?'selected':''}>${esc(m.name)} · ${brl.format(m.unitCost)}</option>`).join('');
@@ -1706,7 +1917,7 @@ function openPatientModal(origin='',editId=''){
       <div class="field"><label>Laboratório</label><input id="fLab" type="number" step="0.01" class="input" value="${seedLab}"></div>
       <div class="field"><label>Componentes</label><input id="fComponents" type="number" step="0.01" class="input" value="${seedComp}"></div>
       <div class="field"><label>Custo clínico / sala</label><input id="fClinical" type="number" step="0.01" class="input" value="${p.clinical??0}"></div>
-      <div class="field full"><label>Progresso clínico/protético</label><select id="fProgress" class="select">${['Orçamento','Em tratamento','Aguardo pós Cirúrgico','Moldagem','Enviado para Laboratório','Aguardando Prova','Aguardando Cimentação','Alta'].map(s=>`<option ${s===(p.progress||'Em tratamento')?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field full"><label>Progresso clínico</label><select id="fProgress" class="select">${['Orçamento','Em tratamento','Planejar caso','Solicitar material','Em fila / agendado','Aguardo pós Cirúrgico','Aguardando cicatrização','Aguardando moldagem','Moldagem','Enviado para Laboratório','Aguardando Prova','Aguardando Cimentação','Alta'].map(s=>`<option ${s===(p.progress||'Em tratamento')?'selected':''}>${s}</option>`).join('')}</select></div>
     </div>`,()=>{
       if(!getv('fName')) return toast('Informe o nome do paciente.');
       const lines=collectTreatmentLines();
@@ -1738,6 +1949,7 @@ function openPatientModal(origin='',editId=''){
         state.patients=state.patients.map(x=>x.id===editId?obj:x);
       }else state.patients.unshift(obj);
       applyStockConsumption(consumed,false);
+      syncProductionFromPatient(obj);
       save();closeModal();renderAll();toast('Tratamento salvo.');
     });
   document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
@@ -2112,7 +2324,7 @@ function openReceivableModal(type=''){
     <div class="field"><label>Recebido</label><input id="rReceived" type="number" class="input" value="0"></div>
     <div class="field"><label>Vencimento</label><input id="rDue" type="date" class="input" value="${addDays(7)}"></div>
     <div class="field"><label>Status</label><select id="rStatus" class="select">${statusOptions()}</select></div>
-    <div class="field full"><label>Progresso</label><select id="rProgress" class="select"><option>Orçamento</option><option selected>Em tratamento</option><option>Aguardo pós Cirúrgico</option><option>Alta</option></select></div>
+    <div class="field full"><label>Progresso</label><select id="rProgress" class="select"><option>Orçamento</option><option selected>Em tratamento</option><option>Planejar caso</option><option>Em fila / agendado</option><option>Aguardo pós Cirúrgico</option><option>Aguardando cicatrização</option><option>Aguardando moldagem</option><option>Moldagem</option><option>Enviado para Laboratório</option><option>Alta</option></select></div>
   </div>`,()=>{
     if(!getv('rName'))return toast('Informe o paciente.');
     const lines=collectTreatmentLines();
@@ -2127,6 +2339,7 @@ function openReceivableModal(type=''){
       billingSnap:{cardFee:settled.cardFee,reimbursement:settled.reimbursement,netShare:settled.netShare}
     });
     applyStockConsumption(bom.items,false);
+    syncProductionFromPatient(state.patients[0]);
     save();closeModal();renderAll();toast('Lançamento salvo com composição.');
   });
   document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');

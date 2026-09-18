@@ -58,7 +58,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
     </div>
 
     <div class="nav-group">
-      <div class="nav-label">Acompanhamento protético</div>
+      <div class="nav-label">Acompanhamento</div>
       <button class="nav-btn" data-page="trabalhos"><span class="nav-icon">♙</span>Trabalhos <span class="nav-badge" id="badgeProtese">0</span></button>
       <button class="nav-btn" data-page="protese"><span class="nav-icon">⌁</span>Fluxo</button>
       <button class="nav-btn" data-page="entregas"><span class="nav-icon">◷</span>Agenda de entregas</button>
@@ -314,7 +314,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
       <!-- TRABALHOS PROTÉTICOS -->
       <section class="page" id="page-trabalhos">
         <div class="page-head">
-          <div><h2>Trabalhos protéticos</h2><p>Paciente, tipo, laboratório, prazo e etapa — no mesmo fluxo do Prótea.</p></div>
+          <div><h2>Trabalhos</h2><p>Casos protéticos e cirúrgicos — paciente, etapa, prazo e fluxo.</p></div>
           <div class="page-actions"><button class="btn primary" onclick="openProsthesisModal()">＋ Novo trabalho</button></div>
         </div>
         <div class="grid kpi-grid" style="grid-template-columns:repeat(4,1fr)">
@@ -327,14 +327,11 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <input class="input" id="prosthSearch" placeholder="Buscar paciente, código, lab..." oninput="renderTrabalhos()">
           <select class="select" id="prosthFilter" onchange="renderTrabalhos()">
             <option value="all">Todos</option>
+            <option value="protetico">Só protéticos</option>
+            <option value="cirurgico">Só cirúrgicos</option>
             <option value="active">Em andamento</option>
             <option value="late">Atrasados</option>
             <option value="urgent">Urgentes</option>
-            <option value="0">Entrada</option>
-            <option value="1">Laboratório</option>
-            <option value="2">Prova</option>
-            <option value="3">Pronto / entrega</option>
-            <option value="4">Instalado</option>
           </select>
         </div>
         <div class="card"><div class="table-wrap"><table>
@@ -343,13 +340,21 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
         </table></div></div>
       </section>
 
-      <!-- PROTESE FLUXO -->
+      <!-- FLUXO DE PRODUÇÃO -->
       <section class="page" id="page-protese">
         <div class="page-head">
-          <div><h2>Fluxo de produção</h2><p>Do cadastro à instalação: entrada, laboratório, prova, entrega e alta.</p></div>
+          <div>
+            <h2>Fluxo de produção</h2>
+            <p id="flowSubtitle">Acompanhe casos protéticos e cirúrgicos em quadros separados.</p>
+          </div>
           <div class="page-actions"><button class="btn primary" onclick="openProsthesisModal()">＋ Novo trabalho</button></div>
         </div>
-        <div class="lab-board" id="labColumns"></div>
+        <div class="flow-tabs" role="tablist" aria-label="Tipo de fluxo">
+          <button type="button" class="flow-tab active" data-flow="protetico" onclick="setProductionFlow('protetico',this)">Fluxo protético</button>
+          <button type="button" class="flow-tab" data-flow="cirurgico" onclick="setProductionFlow('cirurgico',this)">Fluxo cirúrgico</button>
+          <button type="button" class="flow-tab" data-flow="todos" onclick="setProductionFlow('todos',this)">Todos</button>
+        </div>
+        <div id="labColumns"></div>
       </section>
 
       <!-- ENTREGAS -->

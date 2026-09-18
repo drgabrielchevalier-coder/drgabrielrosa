@@ -218,7 +218,17 @@
   .cell-sub{font-size:10px;color:var(--muted);margin-top:3px}
   .urgent-row td{background:#fbf4e6}
   .kanban-item{width:100%;border:0;background:transparent;cursor:pointer;text-align:left}
+  .flow-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
+  .flow-tab{height:38px;padding:0 16px;border:1px solid var(--line);background:var(--panel);border-radius:999px;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer}
+  .flow-tab.active{background:#262724;color:#fff;border-color:#262724}
+  .flow-board-block{margin-bottom:22px}
+  .flow-board-block > .flow-board-title{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 10px}
+  .flow-board-block > .flow-board-title h3{margin:0;font-size:14px}
+  .flow-board-block > .flow-board-title p{margin:0;font-size:11px;color:var(--muted)}
   .lab-board{display:grid;grid-template-columns:repeat(5,minmax(180px,1fr));gap:14px}
+  .lab-board.cols-6{grid-template-columns:repeat(6,minmax(170px,1fr))}
+  .flow-pill{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.02em;padding:2px 7px;border-radius:999px;background:#ece8e0;color:#5c574e;margin-left:6px}
+  .flow-pill.surg{background:#e4ece8;color:#3d5c4e}
   .lookup-lead{font-size:12px;color:var(--muted);margin:0 0 14px}
   .lookup-row{display:flex;gap:8px}
   .lookup-row .input{flex:1}
@@ -387,6 +397,7 @@
   @media(max-width:1200px){
     .kpi-grid{grid-template-columns:repeat(3,1fr)}
     .layout-3,.lab-board{grid-template-columns:1fr 1fr}
+    .lab-board.cols-6{grid-template-columns:1fr 1fr}
     .report-grid{grid-template-columns:1fr 1fr}
   }
   @media(max-width:900px){
