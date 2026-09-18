@@ -440,10 +440,21 @@ function ensureCatalog(force=false){
       if(!existing.name) existing.name=name;
       if(!existing.brand) existing.brand=brand;
       if(!existing.pack) existing.pack=pack;
+      // Atualiza embalagens genéricas "1 kit" quando o catálogo traz medida (g/ml)
+      const vague=/^(1\s+)?(kit|kits|frasco|seringas?)$/i.test(String(existing.pack||'').trim());
+      const catalogMeasured=/\d/.test(pack) && /(g|ml|un|tubete|par)\b/i.test(pack);
+      if((force || !versionOk) && (vague || Number(existing.unitCost)===Number(existing.price)) && catalogMeasured){
+        existing.pack=pack;
+        if(Number(price)>0) existing.price=price;
+        existing.unitCost=unitCost;
+        existing.updated=todayISO();
+      }
+      ensureMaterialFraction(existing);
       return;
     }
     const barcode='789'+String(String(id).replace(/\D/g,'')||'0').padStart(10,'0').slice(-10);
     const row={id,name,brand,type,supplier:'Catálogo odontológico',pack,price,unitCost,stock:0,min:1,barcode,updated:todayISO()};
+    ensureMaterialFraction(row);
     state.materials.push(row);
     byId[id]=row;
     added++;
@@ -637,226 +648,265 @@ function procOptionsGrouped(selected=''){
   return Object.entries(groups).map(([g,arr])=>`<optgroup label="${esc(g)}">${arr.map(p=>`<option value="${p.id}" ${p.id===selected?'selected':''}>${esc(p.name)}${p.kind==='cirurgico'?' · cirúrgico':''}</option>`).join('')}</optgroup>`).join('');
 }
 
-function parsePackUnits(pack){
-  const s=String(pack||'').toLowerCase();
-  const m=s.match(/(\d+[.,]?\d*)\s*(un|unid|unidade|unidades|tubete|tubetes|par|pares|pct|pcts|envelope|envelopes|kit|kits|bolsa|bolsas|seringa|seringas|frasco|frascos|cx|caixa|caixas|g|ml|comp)?/);
-  if(m){const n=Number(String(m[1]).replace(',','.')); return n>0?n:1;}
-  return 1;
+function parsePackMeta(pack, materialName=''){
+  const s=String(pack||'').toLowerCase().trim();
+  const name=String(materialName||'').toLowerCase();
+  // Prefer measure units (g, ml, kg) over vague "1 kit"
+  const measured=s.match(/(\d+[.,]?\d*)\s*(kg|g|ml|l|cm|m)\b/);
+  if(measured){
+    let n=Number(String(measured[1]).replace(',','.'));
+    let u=measured[2];
+    if(u==='kg'){n*=1000;u='g';}
+    if(u==='l'){n*=1000;u='ml';}
+    return {content:n>0?n:1, unit:u, label:`${n} ${u}`};
+  }
+  const counted=s.match(/(\d+[.,]?\d*)\s*(un|unid|unidade|unidades|tubete|tubetes|par|pares|pct|pcts|envelope|envelopes|bolsa|bolsas|comp|doses?)?\b/);
+  if(counted && !/^(1\s+)?(kit|kits|frasco|seringas?|cartucho|pote|cx|caixa)\b/.test(s)){
+    const n=Number(String(counted[1]).replace(',','.'));
+    let u=(counted[2]||'un').replace(/unid(?:ade|ades)?/,'un').replace(/tubetes?/,'tubete').replace(/pares?/,'par');
+    if(u==='tubete') u='tubete';
+    return {content:n>0?n:1, unit:u||'un', label:`${n} ${u||'un'}`};
+  }
+  // Heurísticas para kits/frascos sem medida (cimentos, adesivos…)
+  if(/cimento\s+resinoso|relyx|u200|dual/.test(name)) return {content:8.5, unit:'g', label:'8.5 g'};
+  if(/cimento\s+provis|tempbond/.test(name)) return {content:25, unit:'g', label:'25 g'};
+  if(/ion[oô]mero/.test(name)) return {content:15, unit:'g', label:'15 g'};
+  if(/fosfato\s+de\s+zinco/.test(name)) return {content:32, unit:'g', label:'32 g'};
+  if(/[aá]cido\s+fosf[oó]rico|fluor[ií]drico/.test(name)) return {content:2.5, unit:'ml', label:'2.5 ml'};
+  if(/adesivo|primer|silano/.test(name)) return {content:5, unit:'ml', label:'5 ml'};
+  if(/microbrush|aplicador/.test(name)) return {content:100, unit:'un', label:'100 un'};
+  if(/luva/.test(name)) return {content:100, unit:'par', label:'100 par'};
+  if(/m[aá]scara/.test(name)) return {content:50, unit:'un', label:'50 un'};
+  if(/anest[eé]sico|tubete/.test(name)) return {content:50, unit:'tubete', label:'50 tubete'};
+  if(/fio\s+retrator/.test(name)) return {content:1, unit:'un', label:'1 un'};
+  // Fallback: 1 unidade = embalagem inteira (evitar se possível)
+  return {content:1, unit:'un', label:s||'1 un'};
 }
-function unitCostFromPack(price,pack){
-  const units=parsePackUnits(pack);
-  return units>0?Math.round((Number(price||0)/units)*1000)/1000:Number(price||0);
+function parsePackUnits(pack){
+  return parsePackMeta(pack).content;
+}
+function unitCostFromPack(price,pack,materialName=''){
+  const meta=parsePackMeta(pack,materialName);
+  const units=meta.content>0?meta.content:1;
+  return Math.round((Number(price||0)/units)*1000)/1000;
+}
+function ensureMaterialFraction(m){
+  if(!m) return m;
+  const meta=parsePackMeta(m.pack, m.name);
+  m.packContent=meta.content;
+  m.packUnit=meta.unit;
+  // Se pack genérico "1 kit", reescreve com medida inferida
+  if(/^(1\s+)?(kit|kits|frasco|seringas?)$/i.test(String(m.pack||'').trim()) && meta.content>1){
+    m.pack=meta.label;
+  }
+  const next=unitCostFromPack(m.price, m.pack, m.name);
+  if(next>0) m.unitCost=next;
+  return m;
+}
+function ensureAllMaterialFractions(){
+  let n=0;
+  (state.materials||[]).forEach(m=>{
+    const before=`${m.pack}|${m.unitCost}|${m.packContent||''}`;
+    ensureMaterialFraction(m);
+    const after=`${m.pack}|${m.unitCost}|${m.packContent||''}`;
+    if(before!==after){ m.updated=todayISO(); n++; }
+  });
+  return n;
+}
+function lineCost(materialId, qty){
+  const m=ensureMaterialFraction(material(materialId));
+  return Math.round(Number(m.unitCost||0)*Number(qty||0)*1000)/1000;
+}
+function yieldLabel(m, qty){
+  const content=Number(m.packContent||parsePackMeta(m.pack,m.name).content||0);
+  const q=Number(qty||0);
+  if(content>0 && q>0) return Math.max(1, Math.round(content/q));
+  return null;
 }
 function recalcAllUnitCosts(){
-  let n=0;
-  state.materials.forEach(m=>{
-    const next=unitCostFromPack(m.price,m.pack);
-    if(next>0 && Math.abs(next-Number(m.unitCost||0))>0.0005){m.unitCost=next;m.updated=todayISO();n++;}
-  });
-  save();renderAll();toast(n?`${n} custos unitários recalculados.`:'Nada a recalcular.');
+  const n=ensureAllMaterialFractions();
+  save();renderAll();toast(n?`${n} materiais fracionados (g/ml/un).`:'Custos unitários já estavam atualizados.');
 }
 function procedureMaterialsCost(procId){
   const p=procedure(procId);
-  const materials=(p.items||[]).reduce((s,i)=>s+material(i.materialId).unitCost*Number(i.qty||0),0);
+  const materials=(p.items||[]).reduce((s,i)=>s+lineCost(i.materialId,i.qty),0);
   return {materials:Math.round(materials*100)/100, lab:Number(p.extra||0), items:(p.items||[]).map(i=>({materialId:i.materialId,qty:Number(i.qty||0)}))};
 }
-function materialCatalogPayload(limit=180){
-  return state.materials.slice(0,limit).map(m=>({
-    id:m.id,name:m.name,brand:m.brand,type:m.type,pack:m.pack,price:Number(m.price||0),unitCost:Number(m.unitCost||0)
-  }));
+function materialCatalogForProcedure(p, limit=55){
+  const used=new Set((p.items||[]).map(i=>i.materialId));
+  const keys=(`${p.name||''} ${p.specialty||''} ${p.kind||''}`).toLowerCase();
+  const scored=state.materials.map(m=>{
+    let score=used.has(m.id)?100:0;
+    const blob=`${m.name||''} ${m.type||''} ${m.brand||''}`.toLowerCase();
+    if(/ciment|coroa|pr[oó]tese|resinoso|adesivo|fosf[oó]rico/.test(keys) && /ciment|adesivo|fosf|silano|retrator|luva|m[aá]scara|anest/.test(blob)) score+=20;
+    if(/implante|enxerto|cirurg/.test(keys) && /implante|cirurg|enxerto|anest|campo|sutura/.test(blob)) score+=15;
+    if(/endo/.test(keys) && /endo|limas|hipoclorito/.test(blob)) score+=15;
+    return {m,score};
+  }).sort((a,b)=>b.score-a.score||a.m.name.localeCompare(b.m.name,'pt-BR'));
+  return scored.slice(0,limit).map(({m})=>{
+    ensureMaterialFraction(m);
+    return {id:m.id,name:m.name,brand:m.brand,type:m.type,pack:m.pack,packContent:Number(m.packContent||0),packUnit:m.packUnit||'',price:Number(m.price||0),unitCost:Number(m.unitCost||0)};
+  });
+}
+
+let __aiBusy=false;
+let __aiAbort=null;
+function setAiBusy(on, label=''){
+  __aiBusy=!!on;
+  document.querySelectorAll('[data-ai-busy]').forEach(btn=>{
+    btn.disabled=!!on;
+    if(on && btn.dataset.aiBusy==='primary') btn.dataset._label=btn.textContent, btn.textContent=label||'Aguarde…';
+    if(!on && btn.dataset._label){ btn.textContent=btn.dataset._label; delete btn.dataset._label; }
+  });
 }
 async function callProcedureCostAi(payload){
-  const res=await fetch('api/procedure-cost-ai.php',{
-    method:'POST',
-    headers:csrfHeaders({'Content-Type':'application/json'}),
-    credentials:'same-origin',
-    body:JSON.stringify({...payload,csrf:csrfToken()})
-  });
-  const data=await res.json().catch(()=>({}));
-  applyCsrfFromResponse(data);
-  if(res.status===401){location.href='login.php';return null;}
-  if(data.needsOpenAI){
-    toast(data.error||'Configure a chave OpenAI em Configurações.');
-    go('config');
-    refreshOpenAiSettings();
+  if(__aiBusy){
+    toast('Já há uma consulta OpenAI em andamento. Aguarde.');
     return null;
   }
-  if(!data.ok){
-    toast(data.error||'Falha na IA de custos.');
-    return null;
-  }
-  return data;
-}
-/** 1) Sincroniza materiais usados na ficha via OpenAI (qty clínicas). */
-async function syncProcedureMaterials(procId, opts={}){
-  const p=procedure(procId);
-  if(!p||p.name==='—') return toast('Procedimento inválido.');
-  toast('IA sincronizando materiais…');
-  const data=await callProcedureCostAi({
-    mode:'suggest_materials',
-    name:p.name,
-    specialty:p.specialty||'',
-    kind:p.kind||'clinico',
-    items:p.items||[],
-    materials:materialCatalogPayload(),
-    price:Number(p.price||0),
-    extra:Number(p.extra||0)
-  });
-  if(!data) return;
-  if(!data.items?.length) return toast('A IA não retornou materiais do catálogo.');
-  const target=state.procedures.find(x=>x.id===procId);
-  if(!target) return;
-  target.items=data.items.map(i=>({materialId:i.materialId,qty:Number(i.qty||1)}));
-  if(data.extra!=null && Number(target.extra||0)===0) target.extra=Number(data.extra)||0;
-  if(data.suggestedPrice!=null && Number(target.price||0)===0) target.price=Number(data.suggestedPrice)||0;
-  ensureClinicPrices();
-  save();renderAll();showCostSheet(procId);
-  if(opts.openModal) openProcedureModal(procId);
-  toast(`${data.items.length} materiais sincronizados pela OpenAI.`);
-}
-/** 2) Sincroniza custos: fraciona embalagens (IA) + recalcula unitCost da tabela. */
-async function syncProcedureCosts(procId){
-  toast('Sincronizando custos e fracionamento…');
-  // Fracionamento de embalagens no catálogo (amostra dos materiais da ficha + gerais)
-  const p=procedure(procId);
-  const usedIds=new Set((p.items||[]).map(i=>i.materialId));
-  const used=state.materials.filter(m=>usedIds.has(m.id));
-  const rest=state.materials.filter(m=>!usedIds.has(m.id));
-  const mats=[...used,...rest].slice(0,80);
-  const data=await callProcedureCostAi({
-    mode:'fraction_packs',
-    name:p.name,
-    specialty:p.specialty||'',
-    kind:p.kind||'clinico',
-    items:p.items||[],
-    materials:mats.map(m=>({id:m.id,name:m.name,brand:m.brand,type:m.type,pack:m.pack,price:Number(m.price||0),unitCost:Number(m.unitCost||0)})),
-    price:Number(p.price||0),
-    extra:Number(p.extra||0)
-  });
-  if(!data) return;
-  let packs=0;
-  (data.materials||[]).forEach(row=>{
-    const m=state.materials.find(x=>x.id===row.id);
-    if(!m) return;
-    if(row.pack){ m.pack=row.pack; packs++; }
-    const units=Number(row.packUnits||0)||parsePackUnits(m.pack);
-    if(units>0 && Number(m.price||0)>0){
-      m.unitCost=Math.round((Number(m.price)/units)*1000)/1000;
-      m.updated=todayISO();
+  if(__aiAbort){ try{__aiAbort.abort();}catch(_){} }
+  __aiAbort=typeof AbortController!=='undefined'?new AbortController():null;
+  setAiBusy(true, 'OpenAI…');
+  const timer=__aiAbort?setTimeout(()=>__aiAbort.abort(),58000):null;
+  try{
+    const res=await fetch('api/procedure-cost-ai.php',{
+      method:'POST',
+      headers:csrfHeaders({'Content-Type':'application/json'}),
+      credentials:'same-origin',
+      signal:__aiAbort?.signal,
+      body:JSON.stringify({...payload,csrf:csrfToken()})
+    });
+    const data=await res.json().catch(()=>({}));
+    applyCsrfFromResponse(data);
+    if(res.status===401){location.href='login.php';return null;}
+    if(data.needsOpenAI){
+      toast(data.error||'Configure a chave OpenAI em Configurações.');
+      go('config'); refreshOpenAiSettings();
+      return null;
     }
-  });
-  // Sempre recalcula fracionados a partir da tabela (preço ÷ embalagem)
-  let n=0;
-  state.materials.forEach(m=>{
-    const next=unitCostFromPack(m.price,m.pack);
-    if(next>0 && Math.abs(next-Number(m.unitCost||0))>0.0005){m.unitCost=next;m.updated=todayISO();n++;}
+    if(!data.ok){
+      toast(data.error||'Falha na IA de custos.');
+      return null;
+    }
+    return data;
+  }catch(e){
+    if(e?.name==='AbortError') toast('Consulta cancelada ou demorou demais. Tente de novo.');
+    else toast('Falha de rede com a OpenAI.');
+    return null;
+  }finally{
+    if(timer) clearTimeout(timer);
+    setAiBusy(false);
+    __aiAbort=null;
+  }
+}
+/** Atualiza só a tabela (sem IA): fraciona embalagens e recalcula unitários. */
+function atualizarCustosDaTabela(procId){
+  const n=ensureAllMaterialFractions();
+  // Corrige fichas que ainda usam qty=1 em kits (custo cheio)
+  let fixed=0;
+  (state.procedures||[]).forEach(p=>{
+    (p.items||[]).forEach(it=>{
+      const m=material(it.materialId);
+      const meta=parsePackMeta(m.pack,m.name);
+      if(Number(it.qty)===1 && meta.content>1 && /cimento|adesivo|ácido|acido|silano|primer/i.test(m.name||'')){
+        // uso típico fracionado padrão até a IA ajustar
+        if(/cimento/.test((m.name||'').toLowerCase())) it.qty=0.3;
+        else if(/ml/.test(meta.unit)) it.qty=0.1;
+        else it.qty=1;
+        fixed++;
+      }
+    });
   });
   save();renderAll();
   if(procId) showCostSheet(procId);
-  const notes=(data.packNotes||[]).slice(0,3).join(' · ');
-  toast(`Custos sincronizados · ${packs} embalagens IA · ${n} unitários · ${notes||'tabela atualizada'}`);
+  toast(`Tabela atualizada · ${n} embalagens · ${fixed} consumos ajustados.`);
 }
-/** Análise completa de custo do procedimento (OpenAI). */
-async function analyzeProcedureCostsAi(procId){
+/** Uma única chamada OpenAI: materiais + fracionamento + análise. */
+async function recalcularFichaComIa(procId, opts={}){
   const p=procedure(procId);
-  if(!p||p.name==='—') return toast('Selecione um procedimento.');
-  toast('OpenAI analisando custos…');
+  if(!p||p.name==='—') return toast('Selecione um procedimento na ficha.');
+  toast('OpenAI recalculando ficha (consumo fracionado)…');
   const data=await callProcedureCostAi({
-    mode:'analyze',
     name:p.name,
     specialty:p.specialty||'',
     kind:p.kind||'clinico',
     items:p.items||[],
-    materials:materialCatalogPayload(),
+    materials:materialCatalogForProcedure(p),
     price:Number(p.price||0),
     extra:Number(p.extra||0)
   });
   if(!data) return;
-  const findings=(data.findings||[]).map(x=>`<li>${esc(x)}</li>`).join('');
-  const packs=(data.packNotes||[]).map(x=>`<li>${esc(x)}</li>`).join('');
-  const risks=(data.risks||[]).map(x=>`<li>${esc(x)}</li>`).join('');
-  const itemsPreview=(data.items||[]).slice(0,12).map(i=>{
-    const m=material(i.materialId);
-    return `<tr><td>${esc(m.name)}</td><td>${i.qty}</td><td>${brl.format(m.unitCost*i.qty)}</td><td class="cell-sub">${esc(i.rationale||'')}</td></tr>`;
-  }).join('');
-  openModal(`IA · custos · ${p.name}`,`
-    <p class="field-hint">Modelo: ${esc(data.model||'OpenAI')} · análise ao vivo (sem resposta pronta).</p>
-    <p style="font-size:13px;line-height:1.5">${esc(data.analysis||'—')}</p>
-    <div class="summary-bar" style="margin:12px 0">
-      <div><small>Custo estimado</small><strong>${brl.format(data.estimatedCost||0)}</strong></div>
-      <div><small>Preço sugerido</small><strong>${brl.format(data.suggestedPrice||0)}</strong></div>
-      <div><small>Margem</small><strong>${data.marginPct!=null?data.marginPct+'%':'—'}</strong></div>
-      <div><small>Lab/extra</small><strong>${brl.format(data.extra||0)}</strong></div>
-    </div>
-    ${findings?`<h4 class="sheet-subtitle">Achados</h4><ul>${findings}</ul>`:''}
-    ${packs?`<h4 class="sheet-subtitle">Fracionamento</h4><ul>${packs}</ul>`:''}
-    ${risks?`<h4 class="sheet-subtitle">Atenções</h4><ul>${risks}</ul>`:''}
-    ${itemsPreview?`<h4 class="sheet-subtitle">Ficha sugerida</h4><div class="table-wrap"><table><thead><tr><th>Material</th><th>Qtd</th><th>Custo</th><th>Nota</th></tr></thead><tbody>${itemsPreview}</tbody></table></div>`:''}
-    <div class="row-actions" style="margin-top:12px">
-      <button type="button" class="btn primary" id="aiApplyMats">Aplicar materiais na ficha</button>
-      <button type="button" class="btn" id="aiApplyPrice">Aplicar preço sugerido</button>
-    </div>
-  `,()=>closeModal());
-  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
-  const saveBtn=document.getElementById('modalSave');
-  if(saveBtn) saveBtn.textContent='Fechar';
-  document.getElementById('aiApplyMats')?.addEventListener('click',()=>{
-    if(!data.items?.length) return toast('Sem itens para aplicar.');
-    const target=state.procedures.find(x=>x.id===procId);
-    if(!target) return;
-    target.items=data.items.map(i=>({materialId:i.materialId,qty:Number(i.qty||1)}));
-    if(data.extra!=null) target.extra=Number(data.extra)||0;
-    ensureClinicPrices();save();renderAll();showCostSheet(procId);toast('Ficha atualizada pela IA.');
+  // 1) Atualiza embalagens no banco de materiais
+  (data.materials||[]).forEach(row=>{
+    const m=state.materials.find(x=>x.id===row.id);
+    if(!m) return;
+    if(row.pack) m.pack=row.pack;
+    if(row.packContent>0){ m.packContent=row.packContent; m.packUnit=row.packUnit||m.packUnit; }
+    ensureMaterialFraction(m);
+    m.updated=todayISO();
   });
-  document.getElementById('aiApplyPrice')?.addEventListener('click',()=>{
-    if(data.suggestedPrice==null) return toast('Sem preço sugerido.');
-    const target=state.procedures.find(x=>x.id===procId);
-    if(!target) return;
-    target.price=Number(data.suggestedPrice)||0;
-    ensureClinicPrices();save();renderAll();showCostSheet(procId);toast('Preço base atualizado.');
-  });
-}
-async function syncAllVisibleProcedureMaterials(){
-  const q=(document.getElementById('procSearch')?.value||'').toLowerCase();
-  const sf=document.getElementById('procSpecialtyFilter')?.value||'';
-  const kf=document.getElementById('procKindFilter')?.value||'';
-  const rows=state.procedures.filter(p=>{
-    if(q && !`${p.name} ${specialtyName(p.specialty)}`.toLowerCase().includes(q)) return false;
-    if(sf && p.specialty!==sf) return false;
-    if(kf && (p.kind||'clinico')!==kf) return false;
-    return true;
-  }).slice(0,8);
-  if(!rows.length) return toast('Nenhum procedimento no filtro.');
-  if(!confirm(`Sincronizar materiais com OpenAI nos ${rows.length} primeiros procedimentos do filtro?`)) return;
-  for(const p of rows){
-    await syncProcedureMaterials(p.id);
+  ensureAllMaterialFractions();
+  // 2) Atualiza ficha do procedimento
+  const target=state.procedures.find(x=>x.id===procId);
+  if(target && data.items?.length){
+    target.items=data.items.map(i=>({materialId:i.materialId,qty:Number(i.qty||0),useUnit:i.useUnit||'',yield:i.yield||null,note:i.rationale||''}));
   }
-  toast('Lote de materiais concluído.');
+  if(target && data.extra!=null) target.extra=Number(data.extra)||0;
+  if(target && data.suggestedPrice!=null && (opts.applyPrice || Number(target.price||0)===0)){
+    target.price=Number(data.suggestedPrice)||0;
+  }
+  ensureClinicPrices();
+  save();renderAll();showCostSheet(procId);
+  const notes=(data.packNotes||[]).slice(0,2).join(' · ');
+  toast(`Ficha atualizada · ${data.items?.length||0} itens · ${notes||data.analysis||'OK'}`);
+  if(opts.showAnalysis && (data.analysis||data.findings?.length)){
+    openModal(`Análise · ${p.name}`,`
+      <p class="field-hint">${esc(data.model||'OpenAI')} · consumo fracionado</p>
+      <p style="font-size:13px;line-height:1.5">${esc(data.analysis||'')}</p>
+      <div class="summary-bar" style="margin:12px 0">
+        <div><small>Custo estimado</small><strong>${brl.format(data.estimatedCost||procedureCost(target||p))}</strong></div>
+        <div><small>Preço sugerido</small><strong>${brl.format(data.suggestedPrice||0)}</strong></div>
+        <div><small>Margem</small><strong>${data.marginPct!=null?data.marginPct+'%':'—'}</strong></div>
+      </div>
+      ${(data.packNotes||[]).length?`<h4 class="sheet-subtitle">Fracionamento</h4><ul>${data.packNotes.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
+      ${(data.findings||[]).length?`<h4 class="sheet-subtitle">Achados</h4><ul>${data.findings.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
+      <div class="row-actions"><button type="button" class="btn primary" onclick="closeModal();const t=state.procedures.find(x=>x.id==='${procId}');if(t&&${Number(data.suggestedPrice||0)}){t.price=${Number(data.suggestedPrice||0)};ensureClinicPrices();save();renderAll();showCostSheet('${procId}');toast('Preço aplicado.');}">Aplicar preço sugerido</button></div>
+    `,()=>closeModal());
+    document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+    const saveBtn=document.getElementById('modalSave');
+    if(saveBtn) saveBtn.textContent='Fechar';
+  }
 }
+// Compat: botões antigos apontam para o fluxo unificado
+async function syncProcedureMaterials(procId){ return recalcularFichaComIa(procId); }
+async function syncProcedureCosts(procId){ return atualizarCustosDaTabela(procId); }
+async function analyzeProcedureCostsAi(procId){ return recalcularFichaComIa(procId,{showAnalysis:true,applyPrice:false}); }
 async function applySuggestedMaterialsToProcedureForm(){
   const name=getv('pName');
   if(!name) return toast('Informe o nome do procedimento.');
-  toast('Consultando OpenAI…');
+  const fake={name,specialty:getv('pSpecialty')||'',kind:getv('pKind')||'clinico',items:collectProcItems(),price:num('pPrice'),extra:num('pExtra')};
+  toast('OpenAI sugerindo consumo fracionado…');
   const data=await callProcedureCostAi({
-    mode:'suggest_materials',
-    name,
-    specialty:getv('pSpecialty')||'',
-    kind:getv('pKind')||'clinico',
-    items:collectProcItems(),
-    materials:materialCatalogPayload(),
-    price:num('pPrice'),
-    extra:num('pExtra')
+    name:fake.name,specialty:fake.specialty,kind:fake.kind,items:fake.items,
+    materials:materialCatalogForProcedure(fake),price:fake.price,extra:fake.extra
   });
   if(!data) return;
-  if(!data.items?.length) return toast('A IA não encontrou materiais no seu catálogo.');
+  (data.materials||[]).forEach(row=>{
+    const m=state.materials.find(x=>x.id===row.id);
+    if(!m) return;
+    if(row.pack) m.pack=row.pack;
+    if(row.packContent>0){ m.packContent=row.packContent; m.packUnit=row.packUnit||''; }
+    ensureMaterialFraction(m);
+  });
+  if(!data.items?.length) return toast('A IA não encontrou materiais no catálogo.');
   const box=document.getElementById('procItems');
   if(!box) return;
   box.innerHTML=data.items.map(i=>procItemRow({materialId:i.materialId,qty:i.qty})).join('');
   if(data.extra!=null && document.getElementById('pExtra') && !num('pExtra')) document.getElementById('pExtra').value=data.extra;
   if(data.suggestedPrice!=null && document.getElementById('pPrice') && !num('pPrice')) document.getElementById('pPrice').value=data.suggestedPrice;
-  toast(`${data.items.length} materiais via OpenAI.`);
+  toast(`${data.items.length} itens com fracionamento.`);
 }
-const PROC_AI_RULES=[]; // legado removido — sugestões passam pela OpenAI
+const PROC_AI_RULES=[];
 function suggestMaterialsForProcedureName(){return []}
 function consumeRow(item={}){
   return `<div class="consume-row"><select class="select ci-mat">${materialSelect(item.materialId||'')}</select><input class="input ci-qty" type="number" min="0" step="0.01" value="${item.qty??1}" oninput="refreshConsumeTotals()"><input class="input ci-total" disabled value=""><button type="button" class="btn small icon-x" onclick="this.parentElement.remove();refreshConsumeTotals()">×</button></div>`;
@@ -1153,7 +1203,7 @@ function renderClinics(){
     </div>`;
   }).join('');
 }
-function procedureCost(p){return (p.items||[]).reduce((s,i)=>s+material(i.materialId).unitCost*Number(i.qty||0),0)+Number(p.extra||0)}
+function procedureCost(p){return (p.items||[]).reduce((s,i)=>s+lineCost(i.materialId,i.qty),0)+Number(p.extra||0)}
 function renderProcedures(){
   const specSel=document.getElementById('procSpecialtyFilter');
   if(specSel && specSel.options.length<=1){
@@ -1171,10 +1221,11 @@ function renderProcedures(){
   document.getElementById('proceduresTable').innerHTML=rows.map(p=>{
     const cost=procedureCost(p), m=pct(p.price-cost,p.price);
     const kind=p.kind==='cirurgico'?'Cirúrgico':'Clínico';
-    return `<tr>${td('Procedimento',`<strong>${esc(p.name)}</strong><span class="cell-sub">${esc(specialtyName(p.specialty))} · ${kind}</span>`)}${td('Preço',brl.format(p.price))}${td('Custo',brl.format(cost))}${td('Margem',badge(m+'%'))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="showCostSheet('${p.id}')">Ficha</button><button class="btn small" onclick="analyzeProcedureCostsAi('${p.id}')">IA custos</button><button class="btn small" onclick="openProcedureModal('${p.id}')">Editar</button><button class="btn small danger" onclick="deleteProcedure('${p.id}')">Excluir</button></div></td></tr>`;
+    return `<tr>${td('Procedimento',`<strong>${esc(p.name)}</strong><span class="cell-sub">${esc(specialtyName(p.specialty))} · ${kind}</span>`)}${td('Preço',brl.format(p.price))}${td('Custo',brl.format(cost))}${td('Margem',badge(m+'%'))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="showCostSheet('${p.id}')">Ficha</button><button class="btn small" onclick="openProcedureModal('${p.id}')">Editar</button><button class="btn small danger" onclick="deleteProcedure('${p.id}')">Excluir</button></div></td></tr>`;
   }).join('')||'<tr><td colspan="5"><div class="empty">Nenhum procedimento neste filtro.</div></td></tr>';
 }
 function showCostSheet(id){
+  window.__costSheetId=id;
   const p=procedure(id);
   document.getElementById('costSheetTitle').textContent=p.name;
   const cost=procedureCost(p);
@@ -1183,21 +1234,24 @@ function showCostSheet(id){
     const mode=r.receiveMode==='percent'?`Porcentagem · ${r.receivePercent}%`:'Valor fechado';
     return `<div class="cost-row"><div>${esc(clinic(r.clinicId).name)}</div><div>${brl.format(r.practicedValue)}</div><div>${esc(mode)}</div><div><strong>${brl.format(honorariumFromPrice(r))}</strong></div></div>`;
   }).join('')||'<div class="empty">Nenhuma clínica configurada. Edite o procedimento para definir valores.</div>';
-  const fracNotes=(p.items||[]).slice(0,6).map(i=>{
-    const m=material(i.materialId);
-    const units=parsePackUnits(m.pack);
-    return `<div class="cost-row"><div>${esc(m.name)}<span class="cell-sub">${esc(m.pack||'—')} → ${units} un · unit. ${brl.format(m.unitCost)}</span></div><div>${i.qty}</div><div>${brl.format(m.unitCost)}</div><div><strong>${brl.format(m.unitCost*i.qty)}</strong></div></div>`;
+  const fracNotes=(p.items||[]).map(i=>{
+    const m=ensureMaterialFraction(material(i.materialId));
+    const meta=parsePackMeta(m.pack,m.name);
+    const y=yieldLabel(m,i.qty);
+    const total=lineCost(i.materialId,i.qty);
+    const unitLbl=m.packUnit||meta.unit||'un';
+    return `<div class="cost-row"><div>${esc(m.name)}<span class="cell-sub">Embalagem ${esc(m.pack||meta.label)} · ${brl.format(m.price||0)} → ${brl.format(m.unitCost)}/${esc(unitLbl)}${y?` · rende ~${y}×`:''}${i.note?` · ${esc(i.note)}`:''}</span></div><div>${i.qty} ${esc(unitLbl)}</div><div>${brl.format(m.unitCost)}</div><div><strong>${brl.format(total)}</strong></div></div>`;
   }).join('');
   document.getElementById('costSheet').innerHTML=`
     <div class="row-actions" style="margin-bottom:12px;flex-wrap:wrap">
-      <button class="btn small primary" onclick="syncProcedureMaterials('${id}')">↻ Sync materiais</button>
-      <button class="btn small primary" onclick="syncProcedureCosts('${id}')">↻ Sync custos</button>
-      <button class="btn small" onclick="analyzeProcedureCostsAi('${id}')">✦ IA analisar custos</button>
+      <button class="btn small" data-ai-busy onclick="atualizarCustosDaTabela('${id}')">↻ Atualizar tabela</button>
+      <button class="btn small primary" data-ai-busy="primary" onclick="recalcularFichaComIa('${id}',{showAnalysis:true})">✦ Recalcular com IA</button>
       <button class="btn small" onclick="openProcedureModal('${id}')">Editar</button>
     </div>
+    <p class="field-hint">Custo = (preço da embalagem ÷ conteúdo) × uso no procedimento. Ex.: cimento 8,5 g → uso 0,3 g por coroa.</p>
     <div class="cost-sheet">
-      <div class="cost-row header"><div>Item / embalagem fracionada</div><div>Qtd.</div><div>Unitário</div><div>Total</div></div>
-      ${p.items?.length?fracNotes:'<div class="empty">Nenhum material nesta ficha. Use Sync materiais (OpenAI) ou edite o procedimento.</div>'}
+      <div class="cost-row header"><div>Item / fracionamento</div><div>Uso</div><div>Unitário</div><div>Total</div></div>
+      ${p.items?.length?fracNotes:'<div class="empty">Sem materiais. Use “Recalcular com IA” ou edite o procedimento.</div>'}
       <div class="cost-row"><div>Laboratório / custos adicionais</div><div>1</div><div>${brl.format(p.extra)}</div><div><strong>${brl.format(p.extra)}</strong></div></div>
     </div>
     <div class="summary-bar"><div><small>Preço base</small><strong>${brl.format(p.price)}</strong></div><div><small>Custo previsto</small><strong>${brl.format(cost)}</strong></div><div><small>Lucro projetado</small><strong>${brl.format(p.price-cost)}</strong></div><div><small>Margem</small><strong>${pct(p.price-cost,p.price)}%</strong></div></div>
@@ -1547,7 +1601,10 @@ function materialSelect(selected=''){
   return state.materials.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).map(m=>`<option value="${m.id}" ${m.id===selected?'selected':''}>${esc(m.name)} · ${brl.format(m.unitCost)}</option>`).join('');
 }
 function procItemRow(item={}){
-  return `<div class="proc-item"><select class="select pi-mat">${materialSelect(item.materialId||'')}</select><input class="input pi-qty" type="number" min="0" step="0.01" value="${item.qty??1}"><button type="button" class="btn small icon-x" onclick="this.parentElement.remove()">×</button></div>`;
+  const m=material(item.materialId||'');
+  const meta=parsePackMeta(m.pack,m.name);
+  const unit=item.useUnit||m.packUnit||meta.unit||'un';
+  return `<div class="proc-item"><select class="select pi-mat" onchange="this.parentElement.querySelector('.pi-unit').textContent=parsePackMeta(material(this.value).pack,material(this.value).name).unit">${materialSelect(item.materialId||'')}</select><input class="input pi-qty" type="number" min="0" step="0.01" value="${item.qty??1}" title="Uso no procedimento"><span class="pi-unit cell-sub">${esc(unit)}</span><button type="button" class="btn small icon-x" onclick="this.parentElement.remove()">×</button></div>`;
 }
 function collectProcItems(){
   return [...document.querySelectorAll('.proc-item')].map(row=>({materialId:row.querySelector('.pi-mat').value,qty:Number(row.querySelector('.pi-qty').value||0)})).filter(x=>x.materialId&&x.qty>0);
@@ -1976,7 +2033,7 @@ function openProcedureModal(editId=''){
       <p class="field-hint">Em cada clínica, informe o valor praticado e se você recebe valor fechado (integral) ou porcentagem desse valor.</p>
       <div id="clinicPrices" class="clinic-price-list">${clinicRows}</div>
     </div>
-    <div class="field full"><label>Materiais utilizados (qtd. × custo unitário fracionado)</label><p class="field-hint">“Sugerir com OpenAI” monta a ficha com consumo clínico (ex.: 3 microbrush de uma caixa com 100). Depois use Sync custos na ficha.</p><div id="procItems">${rows}</div><div class="row-actions"><button type="button" class="btn small" onclick="document.getElementById('procItems').insertAdjacentHTML('beforeend', procItemRow())">＋ Material</button><button type="button" class="btn small primary" onclick="applySuggestedMaterialsToProcedureForm()">✦ Sugerir com OpenAI</button></div></div>
+    <div class="field full"><label>Materiais utilizados (uso fracionado × custo unitário)</label><p class="field-hint">Informe o uso real (ex.: 0,3 g de cimento). “Sugerir com OpenAI” preenche consumo clínico fracionado.</p><div id="procItems">${rows}</div><div class="row-actions"><button type="button" class="btn small" onclick="document.getElementById('procItems').insertAdjacentHTML('beforeend', procItemRow())">＋ Material</button><button type="button" class="btn small primary" data-ai-busy="primary" onclick="applySuggestedMaterialsToProcedureForm()">✦ Sugerir com OpenAI</button></div></div>
   </div>`,()=>{
     if(!getv('pName'))return toast('Informe o nome do procedimento.');
     const obj={id:editId||uid(),name:getv('pName'),specialty:getv('pSpecialty')||'clinica',kind:getv('pKind')||'clinico',price:num('pPrice'),extra:num('pExtra'),items:collectProcItems(),clinicPrices:collectClinicPrices()};
@@ -2563,6 +2620,7 @@ async function boot(){
   }catch(e){ /* fallback localStorage */ }
   ensureSettings();
   const catalogAdded=ensureCatalog()||0;
+  const fracN=ensureAllMaterialFractions()||0;
   const procAdded=ensureProcedureCatalog()||0;
   const linesMigrated=migratePatientLines()||0;
   ensureProstheses();
@@ -2575,7 +2633,7 @@ async function boot(){
       seeded=!!ChevalierPlan.seedDefaults();
     }
   }catch(e){ console.warn('ChevalierPlan boot', e); }
-  if(seeded||catalogAdded||procAdded||linesMigrated||billingMigrated) save();
+  if(seeded||catalogAdded||procAdded||linesMigrated||billingMigrated||fracN) save();
   renderAll();
   setBancoTab(bancoTab);
 }
