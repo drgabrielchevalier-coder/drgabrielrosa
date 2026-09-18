@@ -1368,7 +1368,8 @@ function normalizeProductionWorks(){
     const hasP=patientHasProstheticLines(pat);
     const hasS=patientHasSurgicalLines(pat);
     // Repara cartões de laboratório criados por engano a partir de implante/cirurgia pura
-    if(w.flow==='protetico' && hasS && !hasP){
+    const typeLooksSurg=isSurgicalProcedure({name:w.type,kind:'cirurgico',specialty:''}) && !isProstheticProcedure({name:w.type,specialty:'',kind:''});
+    if(w.flow==='protetico' && !hasP && (hasS || typeLooksSurg)){
       w.flow='cirurgico';
       const mapped=surgProgressStage(pat.progress);
       w.stage=mapped!=null?mapped:Math.min(2,Number(w.stage)||0);
