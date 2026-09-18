@@ -524,7 +524,7 @@ function patientLines(p){
 }
 function patientProcedureLabel(p){
   if(p?.observation) return p.observation;
-  if(p?.notes && p.importSource==='allon-historico') return String(p.notes).split(' [')[0];
+  if(p?.notes && String(p.importSource||'').includes('historico')) return String(p.notes).split(' [')[0];
   const lines=patientLines(p);
   if(!lines.length) return procedure(p?.procedureId).name;
   const names=lines.map(l=>procedure(l.procedureId).name);
@@ -2976,26 +2976,36 @@ async function boot(){
   if(seeded||catalogAdded||procAdded||linesMigrated||billingMigrated||fracN) save();
   renderAll();
   setBancoTab(bancoTab);
-  importAllonHistorico().then(n=>{
-    if(n>0){ renderAll(); toast(`${n} lançamentos históricos Allon Roter importados.`); }
-  }).catch(e=>console.warn('import Allon', e));
+  importAllHistoricos().then(sum=>{
+    const n=(sum?.patients||0)+(sum?.costs||0);
+    if(n>0){ renderAll(); toast(`${sum.patients||0} casos e ${sum.costs||0} custos históricos importados.`); }
+  }).catch(e=>console.warn('import historicos', e));
 }
 boot();
 
-async function importAllonHistorico(force=false){
-  state.imports=state.imports||{};
-  if(!force && state.imports.allonHistoricoV1) return 0;
-  let data=window.ALLON_HISTORICO;
-  if(!data?.records?.length){
-    try{
-      const r=await fetch('assets/data/allon-historico.json',{cache:'no-store'});
-      if(r.ok) data=await r.json();
-    }catch(e){ console.warn('allon historico fetch', e); }
-  }
+const HISTORICO_SOURCES=[
+  {id:'allon',file:'allon-historico.json',flag:'allonHistoricoV1',kind:'patients',clinicId:'allon',origin:'Prestação',sourceTag:'allon-historico'},
+  {id:'daniele',file:'daniele-historico.json',flag:'danieleHistoricoV1',kind:'patients',clinicId:'daniele',origin:'Prestação',sourceTag:'daniele-historico'},
+  {id:'gerlucia',file:'gerlucia-historico.json',flag:'gerluciaHistoricoV1',kind:'patients',clinicId:'gerlucia',origin:'Prestação',sourceTag:'gerlucia-historico'},
+  {id:'particular',file:'particular-historico.json',flag:'particularHistoricoV1',kind:'patients',clinicId:'particular',origin:'Particular',sourceTag:'particular-historico'},
+  {id:'custos',file:'custos-historico.json',flag:'custosHistoricoV1',kind:'costs',sourceTag:'custos-historico'}
+];
+
+async function fetchHistoricoJson(file){
+  try{
+    const r=await fetch('assets/data/'+file,{cache:'no-store'});
+    if(r.ok) return await r.json();
+  }catch(e){ console.warn('historico fetch', file, e); }
+  return null;
+}
+
+function importHistoricoPatients(data, meta){
   if(!data?.records?.length) return 0;
   if(!Array.isArray(state.patients)) state.patients=[];
   const existing=new Set(state.patients.map(p=>p.importId).filter(Boolean));
-  const clinicId=data.clinicId||'allon';
+  const clinicId=data.clinicId||meta.clinicId||'allon';
+  const origin=data.origin||meta.origin||'Prestação';
+  const sourceTag=meta.sourceTag||'historico';
   let added=0;
   data.records.forEach(rec=>{
     if(!rec?.importId || existing.has(rec.importId)) return;
@@ -3004,9 +3014,9 @@ async function importAllonHistorico(force=false){
     const patient={
       id:uid(),
       importId:rec.importId,
-      importSource:'allon-historico',
+      importSource:sourceTag,
       name:rec.name,
-      origin:'Prestação',
+      origin,
       clinicId,
       procedureId:procId,
       lines:[{
@@ -3022,9 +3032,9 @@ async function importAllonHistorico(force=false){
       due:rec.due||rec.date||todayISO(),
       status:rec.status||'À receber',
       cost:0,
-      lab:0,
-      components:0,
-      clinical:0,
+      lab:Number(rec.lab||0),
+      components:Number(rec.components||0),
+      clinical:Number(rec.clinical||0),
       progress:rec.progress||'Em tratamento',
       observation:rec.observation||'',
       notes:rec.notes||rec.observation||'',
@@ -3041,22 +3051,88 @@ async function importAllonHistorico(force=false){
       try{ syncProductionFromPatient(patient); }catch(e){ /* ignore */ }
     }
   });
-  const prev=state.imports.allonHistoricoV1||{};
-  state.imports.allonHistoricoV1={
-    at:todayISO(),
-    added:(Number(prev.added)||0)+added,
-    lastBatch:added,
-    total:data.records.length,
-    source:data.source||'Allon Roter histórico'
-  };
-  if(added) save();
   return added;
 }
+
+function importHistoricoCosts(data, meta){
+  if(!data?.records?.length) return 0;
+  if(!Array.isArray(state.costs)) state.costs=[];
+  const existing=new Set(state.costs.map(c=>c.importId).filter(Boolean));
+  let added=0;
+  data.records.forEach(rec=>{
+    if(!rec?.importId || existing.has(rec.importId)) return;
+    state.costs.push({
+      id:uid(),
+      importId:rec.importId,
+      importSource:meta.sourceTag||'custos-historico',
+      desc:rec.desc||'Custo',
+      type:rec.type||'OUTROS',
+      center:rec.center||'Geral',
+      date:rec.date||todayISO(),
+      due:rec.due||rec.date||todayISO(),
+      method:rec.method||'PIX',
+      value:Number(rec.value||0),
+      status:rec.status||'À PAGAR',
+      notes:rec.notes||'',
+      monthRef:rec.monthRef||''
+    });
+    existing.add(rec.importId);
+    added++;
+  });
+  return added;
+}
+
+async function importHistoricoSource(src, force=false){
+  state.imports=state.imports||{};
+  if(!force && state.imports[src.flag]) return {patients:0,costs:0};
+  const data=await fetchHistoricoJson(src.file);
+  if(!data?.records?.length){
+    state.imports[src.flag]={at:todayISO(),added:0,total:0,source:src.file,empty:true};
+    return {patients:0,costs:0};
+  }
+  let patients=0, costs=0;
+  if((data.kind||src.kind)==='costs') costs=importHistoricoCosts(data, src);
+  else patients=importHistoricoPatients(data, src);
+  const prev=state.imports[src.flag]||{};
+  state.imports[src.flag]={
+    at:todayISO(),
+    added:(Number(prev.added)||0)+patients+costs,
+    lastBatch:patients+costs,
+    total:data.records.length,
+    source:data.source||src.file
+  };
+  return {patients,costs};
+}
+
+async function importAllHistoricos(force=false){
+  let patients=0, costs=0;
+  for(const src of HISTORICO_SOURCES){
+    const r=await importHistoricoSource(src, force);
+    patients+=r.patients; costs+=r.costs;
+  }
+  if(patients||costs) save();
+  return {patients,costs};
+}
+
+// Compat: botão antigo Allon
+async function importAllonHistorico(force=false){
+  const src=HISTORICO_SOURCES.find(s=>s.id==='allon');
+  const r=await importHistoricoSource(src, force);
+  if(r.patients) save();
+  return r.patients;
+}
 window.importAllonHistorico=importAllonHistorico;
+window.importAllHistoricos=importAllHistoricos;
 
 async function reimportAllonHistorico(){
-  // Reprocessa só IDs faltantes (não duplica)
   const n=await importAllonHistorico(true);
   renderAll();
   toast(n?`${n} novos lançamentos Allon importados.`:'Histórico Allon já estava completo.');
 }
+async function reimportAllHistoricos(){
+  const sum=await importAllHistoricos(true);
+  renderAll();
+  const n=(sum.patients||0)+(sum.costs||0);
+  toast(n?`Históricos: +${sum.patients||0} casos, +${sum.costs||0} custos.`:'Todos os históricos já estavam importados.');
+}
+window.reimportAllHistoricos=reimportAllHistoricos;

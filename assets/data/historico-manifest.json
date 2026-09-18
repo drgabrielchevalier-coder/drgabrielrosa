@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": "allon",
+      "file": "allon-historico.json",
+      "flag": "allonHistoricoV1",
+      "label": "Allon Roter (honorários)"
+    },
+    {
+      "id": "daniele",
+      "file": "daniele-historico.json",
+      "flag": "danieleHistoricoV1",
+      "label": "Daniele Belmiro (honorários)"
+    },
+    {
+      "id": "gerlucia",
+      "file": "gerlucia-historico.json",
+      "flag": "gerluciaHistoricoV1",
+      "label": "Gerlúcia (honorários)"
+    },
+    {
+      "id": "particular",
+      "file": "particular-historico.json",
+      "flag": "particularHistoricoV1",
+      "label": "Particular (honorários)"
+    },
+    {
+      "id": "custos",
+      "file": "custos-historico.json",
+      "flag": "custosHistoricoV1",
+      "label": "Controle de custos"
+    }
+  ]
+}
