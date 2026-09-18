@@ -713,10 +713,10 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <div class="card">
             <div class="card-head"><h3>Integrações</h3></div>
             <div class="card-body">
-              <div class="settings-row"><div class="desc"><strong>Notion</strong><span>Fonte atual para migração de pacientes, custos, honorários e estoque.</span></div><span class="badge b-green">Referência conectada</span></div>
-              <div class="settings-row"><div class="desc"><strong>Históricos Notion</strong><span>Allon, Daniele, Gerlúcia, Particular e Controle de Custos — importação sem duplicar.</span></div>
-                <button type="button" class="btn small" onclick="reimportAllHistoricos()">Importar / completar</button>
+              <div class="settings-row"><div class="desc"><strong>Importar planilha</strong><span>Padrão CSV (ou HTML com tabela). Honorários por clínica ou Controle de Custos — detecta colunas e não duplica.</span></div>
+                <button type="button" class="btn small" onclick="openImportSpreadsheetModal()">Escolher arquivo</button>
               </div>
+              <div class="settings-row"><div class="desc"><strong>Históricos já carregados</strong><span>Allon, Daniele, Gerlúcia, Particular e Custos entram sozinhos na abertura do sistema (sem vínculo a uma clínica só).</span></div><span class="badge b-green">Automático</span></div>
               <div class="settings-row"><div class="desc"><strong>Banco de preços</strong><span>Assistente busca Dental Cremer, Dental Speed e Surya Dental e calcula custo fracionado.</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>Consumo automático</strong><span>Ao lançar procedimento, materiais da ficha preenchem o custo (editável).</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>Leitor de boletos</strong><span>Escaneia boleto (câmera/arquivo/linha digitável), lança em Custos e alerta duplicatas.</span></div><span class="badge b-green">Ativo</span></div>
