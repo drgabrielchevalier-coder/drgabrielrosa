@@ -192,7 +192,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
             <div class="card-head"><h3>Últimos pacientes / lançamentos</h3><div class="right"><button class="btn small" onclick="go('pacientes')">Ver todos</button></div></div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Paciente</th><th>Origem</th><th>Procedimento</th><th>Financeiro</th><th>Resultado</th></tr></thead>
+                <thead><tr><th>Paciente</th><th>Origem</th><th>Tratamento</th><th>Financeiro</th><th>Resultado</th></tr></thead>
                 <tbody id="dashboardPatients"></tbody>
               </table>
             </div>
@@ -227,7 +227,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
         <div class="card">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Paciente</th><th>Origem / Clínica</th><th>Procedimento</th><th>Data</th><th>Valor</th><th>Custos</th><th>Lucro</th><th>Status</th><th></th></tr></thead>
+              <thead><tr><th>Paciente</th><th>Origem / Clínica</th><th>Tratamento</th><th>Data</th><th>Valor</th><th>Custos</th><th>Lucro</th><th>Status</th><th></th></tr></thead>
               <tbody id="patientsTable"></tbody>
             </table>
           </div>
@@ -246,8 +246,19 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
       <!-- PROCEDIMENTOS -->
       <section class="page" id="page-procedimentos">
         <div class="page-head">
-          <div><h2>Procedimentos</h2><p>Catálogo clínico com preço por clínica, forma de recebimento (valor fechado ou %) e ficha de custo.</p></div>
+          <div><h2>Procedimentos</h2><p>Catálogo clínico e cirúrgico — componha tratamentos somando procedimentos. Preços por clínica (valor fechado ou %).</p></div>
           <div class="page-actions"><button class="btn primary" onclick="openProcedureModal()">＋ Novo procedimento</button></div>
+        </div>
+        <div class="toolbar">
+          <input class="input" id="procSearch" placeholder="Buscar procedimento..." oninput="renderProcedures()">
+          <select class="select" id="procSpecialtyFilter" onchange="renderProcedures()">
+            <option value="">Todas as especialidades</option>
+          </select>
+          <select class="select" id="procKindFilter" onchange="renderProcedures()">
+            <option value="">Clínicos e cirúrgicos</option>
+            <option value="clinico">Só clínicos</option>
+            <option value="cirurgico">Só cirúrgicos</option>
+          </select>
         </div>
         <div class="grid layout-2">
           <div class="card">
@@ -269,9 +280,10 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
       <!-- PRESTACAO -->
       <section class="page" id="page-prestacao">
         <div class="page-head">
-          <div><h2>Prestação de serviço</h2><p>Honorários a receber de clínicas parceiras com cobrança e saldo automático.</p></div>
+          <div><h2>Prestação de serviço</h2><p>Honorários por clínica parceira — componha tratamentos (plantio + enxerto + prótese) e cobre por centro.</p></div>
           <div class="page-actions"><button class="btn primary" onclick="openReceivableModal('prestacao')">＋ Lançar honorário</button></div>
         </div>
+        <div class="subtabs" id="serviceClinicTabs" role="tablist"></div>
         <div class="grid kpi-grid" style="grid-template-columns:repeat(4,1fr)">
           <div class="kpi"><div class="label">Honorários lançados</div><div class="value" id="svcTotal">R$ 0</div></div>
           <div class="kpi"><div class="label">Recebidos</div><div class="value" id="svcReceived">R$ 0</div></div>
@@ -279,7 +291,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <div class="kpi"><div class="label">Vencidos</div><div class="value" id="svcOverdue">R$ 0</div></div>
         </div>
         <div class="card"><div class="table-wrap"><table>
-          <thead><tr><th>Paciente</th><th>Clínica</th><th>Procedimento</th><th>Honorário</th><th>Recebido</th><th>Vencimento</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Paciente</th><th>Clínica</th><th>Tratamento</th><th>Honorário</th><th>Recebido</th><th>Vencimento</th><th>Status</th><th></th></tr></thead>
           <tbody id="serviceTable"></tbody>
         </table></div></div>
       </section>
@@ -287,11 +299,11 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
       <!-- PARTICULAR -->
       <section class="page" id="page-particular">
         <div class="page-head">
-          <div><h2>Pacientes particulares</h2><p>Receita contratada, laboratório, componentes, custo clínico e margem por caso.</p></div>
+          <div><h2>Pacientes particulares</h2><p>Componha o tratamento (plantio + enxerto + prótese), com receita, laboratório, componentes e margem por caso.</p></div>
           <div class="page-actions"><button class="btn primary" onclick="openPatientModal('Particular')">＋ Novo caso particular</button></div>
         </div>
         <div class="card"><div class="table-wrap"><table>
-          <thead><tr><th>Paciente</th><th>Procedimento</th><th>Contratado</th><th>Recebido</th><th>Lab</th><th>Componentes</th><th>Clínica</th><th>Lucro proj.</th><th>Progresso</th><th></th></tr></thead>
+          <thead><tr><th>Paciente</th><th>Tratamento</th><th>Contratado</th><th>Recebido</th><th>Lab</th><th>Componentes</th><th>Clínica</th><th>Lucro proj.</th><th>Progresso</th><th></th></tr></thead>
           <tbody id="privateTable"></tbody>
         </table></div></div>
       </section>
@@ -671,6 +683,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
 
 <script src="<?= chevalier_asset_url('assets/js/scan-tools.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/dental-catalog.js') ?>"></script>
+<script src="<?= chevalier_asset_url('assets/js/procedure-catalog.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/planning-calendar.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/app.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/update-manager.js') ?>" defer></script>

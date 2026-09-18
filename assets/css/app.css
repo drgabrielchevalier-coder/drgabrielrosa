@@ -297,6 +297,16 @@
   .consume-row{display:grid;grid-template-columns:1.4fr 70px 90px 36px;gap:8px;align-items:center}
   .consume-total{margin-top:8px;font-size:12px;color:var(--muted)}
   .consume-total strong{color:var(--text)}
+  .treat-list{display:grid;gap:8px;margin:8px 0 10px}
+  .treat-line{
+    display:grid;grid-template-columns:1fr minmax(110px,160px) 36px;gap:8px;align-items:center;
+    padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,#fcfbf8,#f7f5ef)
+  }
+  .treat-line-main strong{display:block;font-size:12px}
+  .treat-line-main .cell-sub{display:block;margin-top:2px}
+  .treat-line .tl-tooth{height:36px;font-size:12px}
+  .treat-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .treat-add .select{flex:1;min-width:200px}
   .sync-row{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;background:#fcfbf8}
   .sync-row-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
   .sync-offers{display:grid;gap:6px;margin-top:8px;font-size:11px;color:var(--muted)}
@@ -396,6 +406,8 @@
     .field.full{grid-column:auto}
     .clinic-price-grid{grid-template-columns:1fr}
     .modal.modal-wide{width:100%}
+    .treat-line{grid-template-columns:1fr 36px}
+    .treat-line .tl-tooth{grid-column:1/-1}
     .ai-banner{flex-direction:column;align-items:stretch}
     .ai-banner .btn{width:100%;justify-content:center}
     .consume-row{grid-template-columns:1fr 64px 80px 36px}
