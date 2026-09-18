@@ -1,10 +1,10 @@
 {
-  "version": "2.6.2",
-  "name": "Histórico Allon Roter",
+  "version": "2.6.3",
+  "name": "Sidebar organizada e logo corrigido",
   "releasedAt": "2026-09-18",
   "changes": [
-    "Importa 405 lançamentos do controle de honorários Allon Roter (Notion) para Prestação.",
-    "Mapeia status financeiro, lab (moldagem/prova/cimentado), honorário e valor praticado.",
-    "Casos em moldagem/prova entram no fluxo de produção."
+    "Seções do menu minimizáveis (estado lembrado) com fluxo didático: Início → Cadastros → Atendimento → Produção → Financeiro → Estoque → Sistema.",
+    "Logo do sidebar: monograma oficial com padding correto + tipografia da marca (sem corte/enquadramento errado).",
+    "Indicador visual na página ativa e scrollbar discreta no menu."
   ]
 }
