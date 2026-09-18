@@ -523,13 +523,15 @@ function patientLines(p){
   return [];
 }
 function patientProcedureLabel(p){
+  if(p?.observation) return p.observation;
+  if(p?.notes && p.importSource==='allon-historico') return String(p.notes).split(' [')[0];
   const lines=patientLines(p);
   if(!lines.length) return procedure(p?.procedureId).name;
   const names=lines.map(l=>procedure(l.procedureId).name);
   return names.length<=2?names.join(' + '):`${names[0]} + ${names.length-1} outros`;
 }
 function patientProcedureSearchText(p){
-  return patientLines(p).map(l=>procedure(l.procedureId).name).join(' ');
+  return [patientProcedureLabel(p), p?.notes, p?.observation, p?.monthRef].filter(Boolean).join(' ');
 }
 function isProstheticProcedure(p){
   if(!p) return false;
@@ -2918,5 +2920,87 @@ async function boot(){
   if(seeded||catalogAdded||procAdded||linesMigrated||billingMigrated||fracN) save();
   renderAll();
   setBancoTab(bancoTab);
+  importAllonHistorico().then(n=>{
+    if(n>0){ renderAll(); toast(`${n} lançamentos históricos Allon Roter importados.`); }
+  }).catch(e=>console.warn('import Allon', e));
 }
 boot();
+
+async function importAllonHistorico(force=false){
+  state.imports=state.imports||{};
+  if(!force && state.imports.allonHistoricoV1) return 0;
+  let data=window.ALLON_HISTORICO;
+  if(!data?.records?.length){
+    try{
+      const r=await fetch('assets/data/allon-historico.json',{cache:'no-store'});
+      if(r.ok) data=await r.json();
+    }catch(e){ console.warn('allon historico fetch', e); }
+  }
+  if(!data?.records?.length) return 0;
+  if(!Array.isArray(state.patients)) state.patients=[];
+  const existing=new Set(state.patients.map(p=>p.importId).filter(Boolean));
+  const clinicId=data.clinicId||'allon';
+  let added=0;
+  data.records.forEach(rec=>{
+    if(!rec?.importId || existing.has(rec.importId)) return;
+    let procId=rec.procedureId||'proc-historico-livre';
+    if(!state.procedures.some(p=>p.id===procId)) procId='proc-historico-livre';
+    const patient={
+      id:uid(),
+      importId:rec.importId,
+      importSource:'allon-historico',
+      name:rec.name,
+      origin:'Prestação',
+      clinicId,
+      procedureId:procId,
+      lines:[{
+        procedureId:procId,
+        qty:1,
+        tooth:rec.tooth||'',
+        honorarium:Number(rec.value||0),
+        practicedValue:Number(rec.practicedValue||0)
+      }],
+      date:rec.date||todayISO(),
+      value:Number(rec.value||0),
+      received:Number(rec.received||0),
+      due:rec.due||rec.date||todayISO(),
+      status:rec.status||'À receber',
+      cost:0,
+      lab:0,
+      components:0,
+      clinical:0,
+      progress:rec.progress||'Em tratamento',
+      observation:rec.observation||'',
+      notes:rec.notes||rec.observation||'',
+      monthRef:rec.monthRef||'',
+      labFlag:rec.labFlag||'',
+      practicedValue:Number(rec.practicedValue||0),
+      consumedItems:[],
+      billingSnap:{practiced:Number(rec.practicedValue||0),netShare:Number(rec.value||0)}
+    };
+    state.patients.push(patient);
+    existing.add(rec.importId);
+    added++;
+    if(rec.syncFlow){
+      try{ syncProductionFromPatient(patient); }catch(e){ /* ignore */ }
+    }
+  });
+  const prev=state.imports.allonHistoricoV1||{};
+  state.imports.allonHistoricoV1={
+    at:todayISO(),
+    added:(Number(prev.added)||0)+added,
+    lastBatch:added,
+    total:data.records.length,
+    source:data.source||'Allon Roter histórico'
+  };
+  if(added) save();
+  return added;
+}
+window.importAllonHistorico=importAllonHistorico;
+
+async function reimportAllonHistorico(){
+  // Reprocessa só IDs faltantes (não duplica)
+  const n=await importAllonHistorico(true);
+  renderAll();
+  toast(n?`${n} novos lançamentos Allon importados.`:'Histórico Allon já estava completo.');
+}
