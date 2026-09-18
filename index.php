@@ -34,67 +34,99 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
 <div class="app">
   <aside class="sidebar" id="sidebar">
     <div class="brand">
-      <img class="brand-logo" src="<?= chevalier_asset_url('assets/img/logo-gabriel-rosa-wide.png') ?>" alt="Dr Gabriel Rosa">
+      <button type="button" class="brand-link" onclick="go('dashboard')" title="Ir ao dashboard">
+        <img class="brand-mark-img" src="<?= chevalier_asset_url('assets/img/logo-mark-sidebar.png') ?>" alt="">
+        <span class="brand-text">
+          <strong>Dr Gabriel Rosa</strong>
+          <small>Reabilitação oral &amp; estética</small>
+        </span>
+      </button>
     </div>
 
-    <div class="nav-group">
-      <div class="nav-label">Visão geral</div>
-      <button class="nav-btn active" data-page="dashboard"><span class="nav-icon">◫</span>Dashboard</button>
-      <button class="nav-btn" data-page="calendario"><span class="nav-icon">◷</span>Calendário / Lembretes</button>
-      <button class="nav-btn" data-page="planejamento"><span class="nav-icon">⌖</span>Planejamento</button>
-    </div>
+    <nav class="sidebar-nav" id="sidebarNav" aria-label="Menu principal">
+      <div class="nav-group" data-nav-group="inicio">
+        <button type="button" class="nav-label" aria-expanded="true" onclick="toggleNavGroup(this)">
+          <span>Início</span><span class="nav-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="nav-items">
+          <button class="nav-btn active" data-page="dashboard"><span class="nav-icon">◫</span>Dashboard</button>
+          <button class="nav-btn" data-page="calendario"><span class="nav-icon">◷</span>Calendário</button>
+          <button class="nav-btn" data-page="planejamento"><span class="nav-icon">⌖</span>Planejamento</button>
+        </div>
+      </div>
 
-    <div class="nav-group">
-      <div class="nav-label">Clínica</div>
-      <button class="nav-btn" data-page="pacientes"><span class="nav-icon">◉</span>Pacientes</button>
-      <button class="nav-btn" data-page="clinicas"><span class="nav-icon">⌂</span>Clínicas</button>
-      <button class="nav-btn" data-page="procedimentos"><span class="nav-icon">✦</span>Procedimentos</button>
-    </div>
+      <div class="nav-group" data-nav-group="cadastros">
+        <button type="button" class="nav-label" aria-expanded="true" onclick="toggleNavGroup(this)">
+          <span>Cadastros</span><span class="nav-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="nav-items">
+          <button class="nav-btn" data-page="pacientes"><span class="nav-icon">◉</span>Pacientes</button>
+          <button class="nav-btn" data-page="clinicas"><span class="nav-icon">⌂</span>Clínicas</button>
+          <button class="nav-btn" data-page="procedimentos"><span class="nav-icon">✦</span>Procedimentos</button>
+        </div>
+      </div>
 
-    <div class="nav-group">
-      <div class="nav-label">Operação</div>
-      <button class="nav-btn" data-page="prestacao"><span class="nav-icon">↗</span>Prestação de serviço <span class="nav-badge" id="badgeReceber">0</span></button>
-      <button class="nav-btn" data-page="particular"><span class="nav-icon">◇</span>Particular</button>
-    </div>
+      <div class="nav-group" data-nav-group="atendimento">
+        <button type="button" class="nav-label" aria-expanded="true" onclick="toggleNavGroup(this)">
+          <span>Atendimento</span><span class="nav-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="nav-items">
+          <button class="nav-btn" data-page="prestacao"><span class="nav-icon">↗</span>Prestação de serviço <span class="nav-badge" id="badgeReceber">0</span></button>
+          <button class="nav-btn" data-page="particular"><span class="nav-icon">◇</span>Particular</button>
+        </div>
+      </div>
 
-    <div class="nav-group">
-      <div class="nav-label">Acompanhamento</div>
-      <button class="nav-btn" data-page="trabalhos"><span class="nav-icon">♙</span>Trabalhos <span class="nav-badge" id="badgeProtese">0</span></button>
-      <button class="nav-btn" data-page="protese"><span class="nav-icon">⌁</span>Fluxo</button>
-      <button class="nav-btn" data-page="entregas"><span class="nav-icon">◷</span>Agenda de entregas</button>
-      <button class="nav-btn" data-page="timeline"><span class="nav-icon">≋</span>Timeline</button>
-      <button class="nav-btn" data-page="consulta"><span class="nav-icon">⌕</span>Consultar código</button>
-    </div>
+      <div class="nav-group" data-nav-group="producao">
+        <button type="button" class="nav-label" aria-expanded="true" onclick="toggleNavGroup(this)">
+          <span>Produção</span><span class="nav-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="nav-items">
+          <button class="nav-btn" data-page="protese"><span class="nav-icon">⌁</span>Fluxo de produção</button>
+          <button class="nav-btn" data-page="trabalhos"><span class="nav-icon">♙</span>Trabalhos <span class="nav-badge" id="badgeProtese">0</span></button>
+          <button class="nav-btn" data-page="entregas"><span class="nav-icon">◷</span>Agenda de entregas</button>
+          <button class="nav-btn" data-page="timeline"><span class="nav-icon">≋</span>Timeline</button>
+          <button class="nav-btn" data-page="consulta"><span class="nav-icon">⌕</span>Consultar código</button>
+        </div>
+      </div>
 
-    <div class="nav-group">
-      <div class="nav-label">Financeiro</div>
-      <button class="nav-btn" data-page="recebiveis"><span class="nav-icon">◌</span>Recebíveis</button>
-      <button class="nav-btn" data-page="custos"><span class="nav-icon">↓</span>Custos</button>
-      <button class="nav-btn" data-page="folha"><span class="nav-icon">♙</span>Folha</button>
-      <button class="nav-btn" data-page="relatorios"><span class="nav-icon">▤</span>Relatórios</button>
-    </div>
+      <div class="nav-group" data-nav-group="financeiro">
+        <button type="button" class="nav-label" aria-expanded="false" onclick="toggleNavGroup(this)">
+          <span>Financeiro</span><span class="nav-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="nav-items">
+          <button class="nav-btn" data-page="recebiveis"><span class="nav-icon">◌</span>Recebíveis</button>
+          <button class="nav-btn" data-page="custos"><span class="nav-icon">↓</span>Custos</button>
+          <button class="nav-btn" data-page="folha"><span class="nav-icon">₿</span>Folha</button>
+          <button class="nav-btn" data-page="relatorios"><span class="nav-icon">▤</span>Relatórios</button>
+        </div>
+      </div>
 
-    <div class="nav-group">
-      <div class="nav-label">Materiais</div>
-      <button class="nav-btn" data-page="materiais"><span class="nav-icon">⬡</span>Materiais</button>
-      <button class="nav-btn" data-page="estoque"><span class="nav-icon">▦</span>Estoque</button>
-    </div>
+      <div class="nav-group" data-nav-group="estoque">
+        <button type="button" class="nav-label" aria-expanded="false" onclick="toggleNavGroup(this)">
+          <span>Estoque &amp; preços</span><span class="nav-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="nav-items">
+          <button class="nav-btn" data-page="materiais"><span class="nav-icon">⬡</span>Materiais</button>
+          <button class="nav-btn" data-page="estoque"><span class="nav-icon">▦</span>Estoque</button>
+          <button class="nav-btn" data-page="banco" data-tab="materiais"><span class="nav-icon">▣</span>Custos de materiais</button>
+          <button class="nav-btn" data-page="banco" data-tab="procedimentos"><span class="nav-icon">☰</span>Banco de procedimentos</button>
+        </div>
+      </div>
 
-    <div class="nav-group">
-      <div class="nav-label">Banco de dados</div>
-      <button class="nav-btn" data-page="banco" data-tab="materiais"><span class="nav-icon">▣</span>Custos de materiais</button>
-      <button class="nav-btn" data-page="banco" data-tab="procedimentos"><span class="nav-icon">✦</span>Procedimentos</button>
-    </div>
-
-    <div class="nav-group">
-      <div class="nav-label">Sistema</div>
-      <button class="nav-btn" data-page="config"><span class="nav-icon">⚙</span>Configurações</button>
-    </div>
+      <div class="nav-group" data-nav-group="sistema">
+        <button type="button" class="nav-label" aria-expanded="false" onclick="toggleNavGroup(this)">
+          <span>Sistema</span><span class="nav-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="nav-items">
+          <button class="nav-btn" data-page="config"><span class="nav-icon">⚙</span>Configurações</button>
+        </div>
+      </div>
+    </nav>
 
     <div class="sidebar-foot">
       <strong>Dr Gabriel Rosa</strong>
       <p>Conectado como <span id="sidebarUser"><?= htmlspecialchars($chevalierUser, ENT_QUOTES, 'UTF-8') ?></span>.</p>
-      <p><a href="api/auth.php?action=logout" style="color:#c4b086;text-decoration:none">Sair da conta</a></p>
+      <p><a href="api/auth.php?action=logout" class="sidebar-logout">Sair da conta</a></p>
     </div>
   </aside>
 

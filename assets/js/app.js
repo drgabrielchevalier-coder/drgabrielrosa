@@ -1791,6 +1791,60 @@ function syncMobileNav(page){
   document.querySelectorAll('.mb-nav-btn[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===cur));
 }
 
+const NAV_GROUP_PAGES={
+  inicio:['dashboard','calendario','planejamento'],
+  cadastros:['pacientes','clinicas','procedimentos'],
+  atendimento:['prestacao','particular'],
+  producao:['protese','trabalhos','entregas','timeline','consulta'],
+  financeiro:['recebiveis','custos','folha','relatorios'],
+  estoque:['materiais','estoque','banco'],
+  sistema:['config']
+};
+function loadNavGroupState(){
+  try{return JSON.parse(localStorage.getItem('chevalier_nav_groups')||'{}')||{}}catch(e){return {}}
+}
+function saveNavGroupState(map){
+  try{localStorage.setItem('chevalier_nav_groups',JSON.stringify(map))}catch(e){}
+}
+function setNavGroupCollapsed(groupEl, collapsed){
+  if(!groupEl) return;
+  groupEl.classList.toggle('is-collapsed', !!collapsed);
+  const btn=groupEl.querySelector('.nav-label');
+  if(btn) btn.setAttribute('aria-expanded', collapsed?'false':'true');
+}
+function toggleNavGroup(btn){
+  const group=btn?.closest('.nav-group');
+  if(!group) return;
+  const next=!group.classList.contains('is-collapsed')?true:false;
+  setNavGroupCollapsed(group, next);
+  const key=group.dataset.navGroup;
+  if(key){
+    const map=loadNavGroupState();
+    map[key]=next;
+    saveNavGroupState(map);
+  }
+}
+function expandNavGroupForPage(page){
+  const entry=Object.entries(NAV_GROUP_PAGES).find(([,pages])=>pages.includes(page));
+  if(!entry) return;
+  const [key]=entry;
+  const group=document.querySelector(`.nav-group[data-nav-group="${key}"]`);
+  if(group) setNavGroupCollapsed(group, false);
+}
+function initNavGroups(){
+  const saved=loadNavGroupState();
+  document.querySelectorAll('.nav-group[data-nav-group]').forEach(group=>{
+    const key=group.dataset.navGroup;
+    const label=group.querySelector('.nav-label');
+    const defaultCollapsed=label?.getAttribute('aria-expanded')==='false';
+    const collapsed=saved[key]!=null?!!saved[key]:defaultCollapsed;
+    setNavGroupCollapsed(group, collapsed);
+  });
+  const active=document.querySelector('.nav-btn.active')?.dataset.page;
+  if(active) expandNavGroupForPage(active);
+}
+window.toggleNavGroup=toggleNavGroup;
+
 function go(page){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+page)?.classList.add('active');
@@ -1798,6 +1852,7 @@ function go(page){
     const on=b.dataset.page===page && (!b.dataset.tab || b.dataset.tab===bancoTab);
     b.classList.toggle('active',on);
   });
+  expandNavGroupForPage(page);
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('overlay').classList.remove('open');
   document.body.classList.remove('nav-open');
@@ -1809,6 +1864,7 @@ document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>{
   go(b.dataset.page);
   if(b.dataset.page==='banco') setBancoTab(bancoTab);
 });
+initNavGroups();
 function openMobileNav(){
   document.getElementById('sidebar').classList.add('open');
   document.getElementById('overlay').classList.add('open');
