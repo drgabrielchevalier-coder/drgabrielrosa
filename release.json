@@ -1,10 +1,11 @@
 {
-  "version": "2.2.0",
-  "name": "Landing page Dr Gabriel Rosa",
+  "version": "2.3.0",
+  "name": "Catálogo e composição de tratamentos",
   "releasedAt": "2026-09-18",
   "changes": [
-    "Home pública mobile-first para bio do Instagram, com botão discreto Entrar.",
-    "Identidade visual oficial: logo GR, paleta e tipografia do manual de marca.",
-    "Login deixa de ser a primeira tela; o sistema continua em /login.php."
+    "Catálogo completo de procedimentos clínicos e cirúrgicos (cirurgia, implante, prótese, endo, perio, orto, pedo, HOF).",
+    "Composição de tratamento: some procedimentos (ex.: plantio + enxerto + coroa) em orçamento, prestação e custos.",
+    "Prestação de serviço dividida por clínicas parceiras (abas por centro).",
+    "Preços base em 0 para precificar depois; preços por clínica preservados."
   ]
 }

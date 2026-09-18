@@ -24,37 +24,37 @@ const seed = {
     {id:'m8',name:'Análogo de implante',brand:'Implacil',type:'Implante — Transfer / análogo',supplier:'Dental fornecedor',pack:'1 un',price:45,unitCost:45,stock:3,min:2,barcode:'7891000000008',updated:pastDays(7)}
   ],
   procedures:[
-    {id:'p1',name:'Implante unitário',price:1500,items:[{materialId:'m1',qty:1},{materialId:'m4',qty:4},{materialId:'m5',qty:1},{materialId:'m6',qty:1}],extra:44,clinicPrices:[
+    {id:'p1',name:'Implante unitário (plantio)',specialty:'implante',kind:'cirurgico',price:1500,items:[{materialId:'m1',qty:1},{materialId:'m4',qty:4},{materialId:'m5',qty:1},{materialId:'m6',qty:1}],extra:44,clinicPrices:[
       {clinicId:'allon',practicedValue:1500,receiveMode:'fixed',receiveAmount:490,receivePercent:100},
       {clinicId:'daniele',practicedValue:1500,receiveMode:'fixed',receiveAmount:700,receivePercent:100},
       {clinicId:'gerlucia',practicedValue:1500,receiveMode:'percent',receiveAmount:0,receivePercent:40},
       {clinicId:'particular',practicedValue:1500,receiveMode:'fixed',receiveAmount:1500,receivePercent:100}
     ]},
-    {id:'p2',name:'Implante + enxerto',price:1700,items:[{materialId:'m1',qty:1},{materialId:'m3',qty:1},{materialId:'m4',qty:4},{materialId:'m5',qty:1},{materialId:'m6',qty:1}],extra:44,clinicPrices:[
+    {id:'p2',name:'Implante + enxerto (pacote)',specialty:'implante',kind:'cirurgico',price:1700,items:[{materialId:'m1',qty:1},{materialId:'m3',qty:1},{materialId:'m4',qty:4},{materialId:'m5',qty:1},{materialId:'m6',qty:1}],extra:44,clinicPrices:[
       {clinicId:'allon',practicedValue:1700,receiveMode:'fixed',receiveAmount:490,receivePercent:100},
       {clinicId:'daniele',practicedValue:1700,receiveMode:'fixed',receiveAmount:750,receivePercent:100},
       {clinicId:'gerlucia',practicedValue:1700,receiveMode:'percent',receiveAmount:0,receivePercent:40},
       {clinicId:'particular',practicedValue:1700,receiveMode:'fixed',receiveAmount:1700,receivePercent:100}
     ]},
-    {id:'p3',name:'Coroa sobre implante',price:1500,items:[{materialId:'m7',qty:1},{materialId:'m8',qty:1}],extra:450,clinicPrices:[
+    {id:'p3',name:'Coroa sobre implante',specialty:'protese',kind:'clinico',price:1500,items:[{materialId:'m7',qty:1},{materialId:'m8',qty:1}],extra:450,clinicPrices:[
       {clinicId:'allon',practicedValue:1500,receiveMode:'fixed',receiveAmount:850,receivePercent:100},
       {clinicId:'daniele',practicedValue:1500,receiveMode:'fixed',receiveAmount:850,receivePercent:100},
       {clinicId:'gerlucia',practicedValue:1500,receiveMode:'fixed',receiveAmount:850,receivePercent:100},
       {clinicId:'particular',practicedValue:1500,receiveMode:'fixed',receiveAmount:1500,receivePercent:100}
     ]},
-    {id:'p4',name:'Implante + coroa',price:2400,items:[{materialId:'m1',qty:1},{materialId:'m4',qty:4},{materialId:'m5',qty:1},{materialId:'m6',qty:1},{materialId:'m7',qty:1},{materialId:'m8',qty:1}],extra:450,clinicPrices:[
+    {id:'p4',name:'Implante + coroa (pacote)',specialty:'protese',kind:'clinico',price:2400,items:[{materialId:'m1',qty:1},{materialId:'m4',qty:4},{materialId:'m5',qty:1},{materialId:'m6',qty:1},{materialId:'m7',qty:1},{materialId:'m8',qty:1}],extra:450,clinicPrices:[
       {clinicId:'allon',practicedValue:2400,receiveMode:'percent',receiveAmount:0,receivePercent:50},
       {clinicId:'daniele',practicedValue:2400,receiveMode:'percent',receiveAmount:0,receivePercent:50},
       {clinicId:'gerlucia',practicedValue:2400,receiveMode:'percent',receiveAmount:0,receivePercent:45},
       {clinicId:'particular',practicedValue:2400,receiveMode:'fixed',receiveAmount:2400,receivePercent:100}
     ]},
-    {id:'p5',name:'Protocolo por arcada',price:13000,items:[{materialId:'m1',qty:4},{materialId:'m4',qty:8},{materialId:'m5',qty:1},{materialId:'m6',qty:2},{materialId:'m2',qty:4}],extra:1900,clinicPrices:[
+    {id:'p5',name:'Protocolo por arcada (cirurgia)',specialty:'implante',kind:'cirurgico',price:13000,items:[{materialId:'m1',qty:4},{materialId:'m4',qty:8},{materialId:'m5',qty:1},{materialId:'m6',qty:2},{materialId:'m2',qty:4}],extra:1900,clinicPrices:[
       {clinicId:'allon',practicedValue:13000,receiveMode:'percent',receiveAmount:0,receivePercent:35},
       {clinicId:'daniele',practicedValue:13000,receiveMode:'percent',receiveAmount:0,receivePercent:35},
       {clinicId:'gerlucia',practicedValue:13000,receiveMode:'percent',receiveAmount:0,receivePercent:30},
       {clinicId:'particular',practicedValue:13000,receiveMode:'fixed',receiveAmount:13000,receivePercent:100}
     ]},
-    {id:'p6',name:'Restauração simples',price:230,items:[],extra:32,clinicPrices:[
+    {id:'p6',name:'Restauração simples',specialty:'clinica',kind:'clinico',price:230,items:[],extra:32,clinicPrices:[
       {clinicId:'allon',practicedValue:230,receiveMode:'fixed',receiveAmount:150,receivePercent:100},
       {clinicId:'daniele',practicedValue:230,receiveMode:'fixed',receiveAmount:150,receivePercent:100},
       {clinicId:'gerlucia',practicedValue:230,receiveMode:'percent',receiveAmount:0,receivePercent:60},
@@ -62,11 +62,11 @@ const seed = {
     ]}
   ],
   patients:[
-    {id:'pt1',name:'Paciente Exemplo 01',origin:'Prestação',clinicId:'allon',procedureId:'p1',date:pastDays(20),value:490,received:490,due:pastDays(10),status:'Faturado / Recebido',cost:224.86,lab:0,components:0,clinical:0,progress:'Alta'},
-    {id:'pt2',name:'Paciente Exemplo 02',origin:'Prestação',clinicId:'allon',procedureId:'p2',date:pastDays(12),value:490,received:0,due:pastDays(2),status:'À receber',cost:323.86,lab:0,components:0,clinical:0,progress:'Aguardo pós Cirúrgico'},
-    {id:'pt3',name:'Paciente Exemplo 03',origin:'Particular',clinicId:'particular',procedureId:'p4',date:pastDays(18),value:2400,received:1200,due:addDays(12),status:'Recebido parcial',cost:224.86,lab:450,components:75,clinical:300,progress:'Enviado para Laboratório'},
-    {id:'pt4',name:'Paciente Exemplo 04',origin:'Prestação',clinicId:'gerlucia',procedureId:'p3',date:pastDays(9),value:850,received:400,due:pastDays(1),status:'Recebido parcial',cost:0,lab:450,components:75,clinical:0,progress:'Aguardando Cimentação'},
-    {id:'pt5',name:'Paciente Exemplo 05',origin:'Prestação',clinicId:'daniele',procedureId:'p1',date:pastDays(6),value:700,received:0,due:addDays(7),status:'Aguardando acerto',cost:224.86,lab:0,components:0,clinical:0,progress:'Em tratamento'}
+    {id:'pt1',name:'Paciente Exemplo 01',origin:'Prestação',clinicId:'allon',procedureId:'p1',lines:[{procedureId:'p1',qty:1,tooth:'26'}],date:pastDays(20),value:490,received:490,due:pastDays(10),status:'Faturado / Recebido',cost:224.86,lab:0,components:0,clinical:0,progress:'Alta'},
+    {id:'pt2',name:'Paciente Exemplo 02',origin:'Prestação',clinicId:'allon',procedureId:'p1',lines:[{procedureId:'p1',qty:1,tooth:'36'},{procedureId:'proc-enxerto-osseo',qty:1,tooth:'36'}],date:pastDays(12),value:490,received:0,due:pastDays(2),status:'À receber',cost:323.86,lab:0,components:0,clinical:0,progress:'Aguardo pós Cirúrgico'},
+    {id:'pt3',name:'Paciente Exemplo 03',origin:'Particular',clinicId:'particular',procedureId:'p1',lines:[{procedureId:'p1',qty:1,tooth:'15'},{procedureId:'p3',qty:1,tooth:'15'}],date:pastDays(18),value:2400,received:1200,due:addDays(12),status:'Recebido parcial',cost:224.86,lab:450,components:75,clinical:300,progress:'Enviado para Laboratório'},
+    {id:'pt4',name:'Paciente Exemplo 04',origin:'Prestação',clinicId:'gerlucia',procedureId:'p3',lines:[{procedureId:'p3',qty:1,tooth:'16'}],date:pastDays(9),value:850,received:400,due:pastDays(1),status:'Recebido parcial',cost:0,lab:450,components:75,clinical:0,progress:'Aguardando Cimentação'},
+    {id:'pt5',name:'Paciente Exemplo 05',origin:'Prestação',clinicId:'daniele',procedureId:'p1',lines:[{procedureId:'p1',qty:1,tooth:'46'}],date:pastDays(6),value:700,received:0,due:addDays(7),status:'Aguardando acerto',cost:224.86,lab:0,components:0,clinical:0,progress:'Em tratamento'}
   ],
   costs:[
     {id:'c1',desc:'Aluguel sala clínica',type:'ALUGUEL',center:'Particular',date:pastDays(5),due:pastDays(5),method:'PIX',value:300,status:'PAGO'},
@@ -191,7 +191,7 @@ function exportReportCsv(){
   patients.forEach(p=>rows.push([
     p.name,
     clinic(p.clinicId).name,
-    procedure(p.procedureId).name,
+    patientProcedureLabel(p),
     p.date||'',
     Number(p.value||0),
     Number(p.received||0),
@@ -287,6 +287,13 @@ let bancoTab='materiais';
 const CATALOG_VERSION=Number(window.CHEVALIER_CATALOG_VERSION||2);
 const DENTAL_CATALOG=Array.isArray(window.DENTAL_CATALOG)?window.DENTAL_CATALOG:[];
 const DENTAL_SPECIALTIES=Array.isArray(window.DENTAL_SPECIALTIES)?window.DENTAL_SPECIALTIES:[];
+const PROC_CATALOG_VERSION=Number(window.CHEVALIER_PROCEDURE_CATALOG_VERSION||1);
+const DENTAL_PROCEDURE_CATALOG=Array.isArray(window.DENTAL_PROCEDURE_CATALOG)?window.DENTAL_PROCEDURE_CATALOG:[];
+const DENTAL_PROCEDURE_SPECIALTIES=Array.isArray(window.DENTAL_PROCEDURE_SPECIALTIES)?window.DENTAL_PROCEDURE_SPECIALTIES:[];
+let serviceClinicFilter='';
+function specialtyName(id){
+  return (DENTAL_PROCEDURE_SPECIALTIES.find(s=>s.id===id)||DENTAL_SPECIALTIES.find(s=>s.id===id)||{name:id||'—'}).name;
+}
 function catalogTypeOptions(selected=''){
   const fromSpec=DENTAL_SPECIALTIES.flatMap(s=>s.categories||[]);
   const fromMats=[...new Set((state.materials||[]).map(m=>m.type).filter(Boolean))];
@@ -322,6 +329,180 @@ function ensureCatalog(force=false){
   state.catalogVersion=CATALOG_VERSION;
   state.catalogReady=true;
   return added;
+}
+
+function ensureProcedureCatalog(force=false){
+  if(!Array.isArray(state.procedures)) state.procedures=[];
+  const versionOk=Number(state.procedureCatalogVersion||0)===PROC_CATALOG_VERSION;
+  if(state.procedureCatalogReady && versionOk && !force) return 0;
+  const byId=Object.fromEntries(state.procedures.map(p=>[p.id,p]));
+  let added=0;
+  DENTAL_PROCEDURE_CATALOG.forEach(([id,specialty,name,kind,price,extra,matIds])=>{
+    const items=(matIds||[]).filter(mid=>state.materials.some(m=>m.id===mid)||DENTAL_CATALOG.some(t=>t[0]===mid)).map(mid=>({materialId:mid,qty:1}));
+    const existing=byId[id];
+    if(existing){
+      existing.specialty=existing.specialty||specialty;
+      existing.kind=existing.kind||kind;
+      if(!existing.name) existing.name=name;
+      // Não sobrescreve preços já definidos pelo usuário
+      if(Number(existing.price||0)===0 && Number(price||0)>0) existing.price=price;
+      if((!existing.items||!existing.items.length) && items.length) existing.items=items;
+      if(Number(existing.extra||0)===0 && Number(extra||0)>0) existing.extra=extra;
+      return;
+    }
+    const row={
+      id,name,specialty,kind,
+      price:Number(price||0),
+      extra:Number(extra||0),
+      items,
+      clinicPrices:[]
+    };
+    state.procedures.push(row);
+    byId[id]=row;
+    added++;
+  });
+  state.procedureCatalogVersion=PROC_CATALOG_VERSION;
+  state.procedureCatalogReady=true;
+  ensureClinicPrices();
+  return added;
+}
+
+function patientLines(p){
+  if(!p) return [];
+  if(Array.isArray(p.lines) && p.lines.length){
+    return p.lines.filter(l=>l&&l.procedureId).map(l=>({
+      procedureId:l.procedureId,
+      qty:Number(l.qty||1)||1,
+      tooth:l.tooth||'',
+      honorarium:l.honorarium!=null?Number(l.honorarium):undefined,
+      practicedValue:l.practicedValue!=null?Number(l.practicedValue):undefined
+    }));
+  }
+  if(p.procedureId) return [{procedureId:p.procedureId,qty:1,tooth:''}];
+  return [];
+}
+function patientProcedureLabel(p){
+  const lines=patientLines(p);
+  if(!lines.length) return procedure(p?.procedureId).name;
+  const names=lines.map(l=>procedure(l.procedureId).name);
+  return names.length<=2?names.join(' + '):`${names[0]} + ${names.length-1} outros`;
+}
+function patientProcedureSearchText(p){
+  return patientLines(p).map(l=>procedure(l.procedureId).name).join(' ');
+}
+function combinedProcedureMaterials(lines){
+  const map={};
+  let lab=0;
+  (lines||[]).forEach(l=>{
+    const p=procedure(l.procedureId);
+    lab+=Number(p.extra||0)*Number(l.qty||1);
+    (p.items||[]).forEach(it=>{
+      const key=it.materialId;
+      if(!key) return;
+      map[key]=(map[key]||0)+Number(it.qty||0)*Number(l.qty||1);
+    });
+  });
+  const items=Object.entries(map).map(([materialId,qty])=>({materialId,qty}));
+  let materials=0, components=0;
+  items.forEach(it=>{
+    const m=material(it.materialId);
+    const total=Number(m.unitCost||0)*Number(it.qty||0);
+    const t=`${m.name||''} ${m.type||''}`.toLowerCase();
+    if(/componente|pilar|transfer|análogo|analogo|cicatrizador|multi-unit|parafuso/.test(t)) components+=total;
+    else materials+=total;
+  });
+  return {items,materials,components,lab,total:materials+components+lab};
+}
+function honorariumForLines(lines,clinicId){
+  return (lines||[]).reduce((s,l)=>{
+    if(l.honorarium!=null && l.honorarium!=='') return s+Number(l.honorarium||0)*Number(l.qty||1);
+    return s+procedureHonorarium(l.procedureId,clinicId)*Number(l.qty||1);
+  },0);
+}
+function treatmentLineRow(line={}){
+  const id=line.procedureId||'';
+  const p=procedure(id);
+  const kind=p.kind==='cirurgico'?'Cirúrgico':'Clínico';
+  return `<div class="treat-line" data-proc="${esc(id)}">
+    <div class="treat-line-main">
+      <strong>${esc(p.name)}</strong>
+      <span class="cell-sub">${esc(specialtyName(p.specialty))} · ${kind}</span>
+    </div>
+    <input class="input tl-tooth" placeholder="Dente / região" value="${esc(line.tooth||'')}">
+    <button type="button" class="btn small icon-x" onclick="this.closest('.treat-line').remove();recalcTreatmentTotals()" title="Remover">×</button>
+  </div>`;
+}
+function collectTreatmentLines(){
+  return [...document.querySelectorAll('.treat-line')].map(row=>({
+    procedureId:row.dataset.proc,
+    qty:1,
+    tooth:row.querySelector('.tl-tooth')?.value||''
+  })).filter(x=>x.procedureId);
+}
+function addTreatmentLine(){
+  const sel=document.getElementById('fAddProc');
+  const id=sel?.value||'';
+  if(!id) return toast('Escolha um procedimento para adicionar.');
+  const box=document.getElementById('fTreatLines');
+  if(!box) return;
+  // Permite repetir o mesmo procedimento (ex.: plantio em dentes diferentes)
+  box.insertAdjacentHTML('beforeend', treatmentLineRow({procedureId:id}));
+  recalcTreatmentTotals();
+}
+function migratePatientLines(){
+  let n=0;
+  (state.patients||[]).forEach(p=>{
+    if(!Array.isArray(p.lines) || !p.lines.length){
+      if(p.procedureId){
+        p.lines=[{procedureId:p.procedureId,qty:1,tooth:''}];
+        n++;
+      }
+    }else if(!p.procedureId && p.lines[0]?.procedureId){
+      p.procedureId=p.lines[0].procedureId;
+      n++;
+    }
+  });
+  return n;
+}
+function recalcTreatmentTotals(){
+  const clinicId=getv('fClinic')||getv('rClinic')||'';
+  const lines=collectTreatmentLines();
+  const valueEl=document.getElementById('fValue')||document.getElementById('rValue');
+  if(valueEl && clinicId){
+    valueEl.value=String(Math.round(honorariumForLines(lines,clinicId)*100)/100);
+  }
+  const hint=document.getElementById('fHonorHint');
+  if(hint){
+    hint.textContent=lines.length
+      ? `Composição: ${lines.length} procedimento(s) · honorário sugerido pela clínica.`
+      : 'Adicione procedimentos para montar o tratamento.';
+  }
+  if(document.getElementById('fConsumeList')){
+    fillConsumeFromLines(lines);
+  }
+}
+function fillConsumeFromLines(lines){
+  const bom=combinedProcedureMaterials(lines);
+  const list=document.getElementById('fConsumeList');
+  if(list){
+    list.innerHTML=(bom.items.length?bom.items:[{}]).map(consumeRow).join('');
+    refreshConsumeTotals();
+  }
+  const costEl=document.getElementById('fCost');
+  const labEl=document.getElementById('fLab');
+  const compEl=document.getElementById('fComponents');
+  if(costEl) costEl.value=String(Math.round(bom.materials*100)/100);
+  if(labEl) labEl.value=String(Math.round(bom.lab*100)/100);
+  if(compEl) compEl.value=String(Math.round(bom.components*100)/100);
+}
+function procOptionsGrouped(selected=''){
+  const groups={};
+  state.procedures.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).forEach(p=>{
+    const g=specialtyName(p.specialty||'clinica');
+    if(!groups[g]) groups[g]=[];
+    groups[g].push(p);
+  });
+  return Object.entries(groups).map(([g,arr])=>`<optgroup label="${esc(g)}">${arr.map(p=>`<option value="${p.id}" ${p.id===selected?'selected':''}>${esc(p.name)}${p.kind==='cirurgico'?' · cirúrgico':''}</option>`).join('')}</optgroup>`).join('');
 }
 
 function parsePackUnits(pack){
@@ -574,9 +755,13 @@ function renderDashboard(){
   if(top){
     const map={};
     patients.forEach(p=>{
-      const name=procedure(p.procedureId).name;
-      if(!map[name]) map[name]={name,profit:0,cases:0};
-      map[name].profit+=patientProfit(p); map[name].cases+=1;
+      const lines=patientLines(p);
+      const share=lines.length?patientProfit(p)/lines.length:patientProfit(p);
+      (lines.length?lines:[{procedureId:p.procedureId}]).forEach(l=>{
+        const name=procedure(l.procedureId).name;
+        if(!map[name]) map[name]={name,profit:0,cases:0};
+        map[name].profit+=share; map[name].cases+=1;
+      });
     });
     const rows=Object.values(map).sort((a,b)=>b.profit-a.profit).slice(0,5);
     const maxP=Math.max(1,...rows.map(r=>Math.abs(r.profit)));
@@ -607,7 +792,7 @@ function renderDashboard(){
   document.getElementById('clinicSummary').innerHTML=clinicSummary;
 
   document.getElementById('dashboardPatients').innerHTML=[...patients].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6).map(p=>`
-    <tr>${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${fmtDate(p.date)}</span>`)}${td('Origem',esc(clinic(p.clinicId).name))}${td('Procedimento',esc(procedure(p.procedureId).name))}${td('Financeiro',badge(p.status))}${td('Resultado',`<strong>${brl.format(patientProfit(p))}</strong>`)}</tr>
+    <tr>${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${fmtDate(p.date)}</span>`)}${td('Origem',esc(clinic(p.clinicId).name))}${td('Tratamento',esc(patientProcedureLabel(p)))}${td('Financeiro',badge(p.status))}${td('Resultado',`<strong>${brl.format(patientProfit(p))}</strong>`)}</tr>
   `).join('')||'<tr><td colspan="5"><div class="empty">Sem lançamentos no período.</div></td></tr>';
 
   const costCats={};
@@ -633,11 +818,11 @@ function renderPatients(){
   const q=(document.getElementById('patientSearch')?.value||'').toLowerCase();
   const cf=document.getElementById('patientClinicFilter')?.value||'';
   const sf=document.getElementById('patientStatusFilter')?.value||'';
-  const rows=state.patients.filter(p=>(!q||p.name.toLowerCase().includes(q)||procedure(p.procedureId).name.toLowerCase().includes(q))&&(!cf||p.clinicId===cf)&&(!sf||p.status===sf));
+  const rows=state.patients.filter(p=>(!q||p.name.toLowerCase().includes(q)||patientProcedureSearchText(p).toLowerCase().includes(q))&&(!cf||p.clinicId===cf)&&(!sf||p.status===sf));
   document.getElementById('patientsTable').innerHTML=rows.map(p=>`
     <tr>
-      ${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${esc(p.origin)}</span>`)}
-      ${td('Clínica',esc(clinic(p.clinicId).name))}${td('Procedimento',esc(procedure(p.procedureId).name))}${td('Data',fmtDate(p.date))}
+      ${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${esc(p.origin)}${p.progress==='Orçamento'?' · Orçamento':''}</span>`)}
+      ${td('Clínica',esc(clinic(p.clinicId).name))}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} item(ns)</span>`)}${td('Data',fmtDate(p.date))}
       ${td('Valor',brl.format(p.value))}${td('Custos',brl.format(patientCost(p)))}${td('Lucro',`<strong>${brl.format(patientProfit(p))}</strong>`)}
       ${td('Status',badge(p.status))}<td class="actions-cell">${acts(`editPatient('${p.id}')`,`deletePatient('${p.id}')`)}</td>
     </tr>`).join('')||'<tr><td colspan="9"><div class="empty">Nenhum paciente encontrado.</div></td></tr>';
@@ -655,11 +840,24 @@ function renderClinics(){
 }
 function procedureCost(p){return (p.items||[]).reduce((s,i)=>s+material(i.materialId).unitCost*Number(i.qty||0),0)+Number(p.extra||0)}
 function renderProcedures(){
-  document.getElementById('proceduresTable').innerHTML=state.procedures.map(p=>{
+  const specSel=document.getElementById('procSpecialtyFilter');
+  if(specSel && specSel.options.length<=1){
+    specSel.innerHTML='<option value="">Todas as especialidades</option>'+DENTAL_PROCEDURE_SPECIALTIES.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+  }
+  const q=(document.getElementById('procSearch')?.value||'').toLowerCase();
+  const sf=document.getElementById('procSpecialtyFilter')?.value||'';
+  const kf=document.getElementById('procKindFilter')?.value||'';
+  const rows=state.procedures.filter(p=>{
+    if(q && !`${p.name} ${specialtyName(p.specialty)}`.toLowerCase().includes(q)) return false;
+    if(sf && p.specialty!==sf) return false;
+    if(kf && (p.kind||'clinico')!==kf) return false;
+    return true;
+  }).slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+  document.getElementById('proceduresTable').innerHTML=rows.map(p=>{
     const cost=procedureCost(p), m=pct(p.price-cost,p.price);
-    const clinics=(p.clinicPrices||[]).filter(x=>Number(x.practicedValue||0)>0||Number(x.receiveAmount||0)>0||Number(x.receivePercent||0)>0).length || (p.clinicPrices||[]).length;
-    return `<tr>${td('Procedimento',`<strong>${esc(p.name)}</strong><span class="cell-sub">${clinics} clínica(s) com valor configurado</span>`)}${td('Preço',brl.format(p.price))}${td('Custo',brl.format(cost))}${td('Margem',badge(m+'%'))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="showCostSheet('${p.id}')">Ficha</button><button class="btn small" onclick="openProcedureModal('${p.id}')">Editar</button><button class="btn small danger" onclick="deleteProcedure('${p.id}')">Excluir</button></div></td></tr>`;
-  }).join('');
+    const kind=p.kind==='cirurgico'?'Cirúrgico':'Clínico';
+    return `<tr>${td('Procedimento',`<strong>${esc(p.name)}</strong><span class="cell-sub">${esc(specialtyName(p.specialty))} · ${kind}</span>`)}${td('Preço',brl.format(p.price))}${td('Custo',brl.format(cost))}${td('Margem',badge(m+'%'))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="showCostSheet('${p.id}')">Ficha</button><button class="btn small" onclick="openProcedureModal('${p.id}')">Editar</button><button class="btn small danger" onclick="deleteProcedure('${p.id}')">Excluir</button></div></td></tr>`;
+  }).join('')||'<tr><td colspan="5"><div class="empty">Nenhum procedimento neste filtro.</div></td></tr>';
 }
 function showCostSheet(id){
   const p=procedure(id);
@@ -685,14 +883,24 @@ function showCostSheet(id){
     <div class="row-actions" style="margin-top:12px"><button class="btn small" onclick="openProcedureModal('${id}')">Editar procedimento</button></div>`;
 }
 function renderService(){
-  const arr=state.patients.filter(p=>p.origin==='Prestação');
+  const tabs=document.getElementById('serviceClinicTabs');
+  if(tabs){
+    const partnerClinics=state.clinics.filter(c=>c.id!=='particular' && c.type!=='Próprio');
+    const list=[{id:'',name:'Todas'},...partnerClinics.map(c=>({id:c.id,name:c.name}))];
+    tabs.innerHTML=list.map(c=>`<button type="button" class="subtab ${serviceClinicFilter===c.id?'active':''}" data-clinic="${esc(c.id)}" onclick="setServiceClinicFilter('${c.id}')">${esc(c.name)}</button>`).join('');
+  }
+  const arr=state.patients.filter(p=>p.origin==='Prestação' && (!serviceClinicFilter || p.clinicId===serviceClinicFilter));
   const total=arr.reduce((s,p)=>s+Number(p.value||0),0), rec=arr.reduce((s,p)=>s+Number(p.received||0),0), open=arr.reduce((s,p)=>s+balance(p),0), od=arr.filter(isOverdue).reduce((s,p)=>s+balance(p),0);
   document.getElementById('svcTotal').textContent=brl.format(total);document.getElementById('svcReceived').textContent=brl.format(rec);document.getElementById('svcOpen').textContent=brl.format(open);document.getElementById('svcOverdue').textContent=brl.format(od);
-  document.getElementById('serviceTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong>`)}${td('Clínica',esc(clinic(p.clinicId).name))}${td('Procedimento',esc(procedure(p.procedureId).name))}${td('Honorário',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(isOverdue(p)?'À receber':p.status))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="markReceived('${p.id}')">Receber</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('');
+  document.getElementById('serviceTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${p.progress==='Orçamento'?'Orçamento':esc(p.progress||'')}</span>`)}${td('Clínica',esc(clinic(p.clinicId).name))}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} procedimento(s)</span>`)}${td('Honorário',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(isOverdue(p)?'À receber':p.status))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="markReceived('${p.id}')">Receber</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('')||'<tr><td colspan="8"><div class="empty">Nenhum lançamento nesta clínica.</div></td></tr>';
+}
+function setServiceClinicFilter(id){
+  serviceClinicFilter=id||'';
+  renderService();
 }
 function renderPrivate(){
   const arr=state.patients.filter(p=>p.clinicId==='particular'||p.origin==='Particular');
-  document.getElementById('privateTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong>`)}${td('Procedimento',esc(procedure(p.procedureId).name))}${td('Contratado',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Lab',brl.format(p.lab||0))}${td('Componentes',brl.format(p.components||0))}${td('Clínica',brl.format(p.clinical||0))}${td('Lucro',`<strong>${brl.format(patientProfit(p))}</strong>`)}${td('Progresso',badge(p.progress))}<td class="actions-cell">${acts(`editPatient('${p.id}')`,`deletePatient('${p.id}')`)}</td></tr>`).join('')||'<tr><td colspan="10"><div class="empty">Sem casos particulares.</div></td></tr>';
+  document.getElementById('privateTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong>`)}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} item(ns)</span>`)}${td('Contratado',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Lab',brl.format(p.lab||0))}${td('Componentes',brl.format(p.components||0))}${td('Clínica',brl.format(p.clinical||0))}${td('Lucro',`<strong>${brl.format(patientProfit(p))}</strong>`)}${td('Progresso',badge(p.progress))}<td class="actions-cell">${acts(`editPatient('${p.id}')`,`deletePatient('${p.id}')`)}</td></tr>`).join('')||'<tr><td colspan="10"><div class="empty">Sem casos particulares.</div></td></tr>';
 }
 const PROSTH_STAGES=['Entrada','Laboratório','Prova','Pronto / entrega','Instalado'];
 const LAB_STATUS=['Aguardando envio','Enviado ao laboratório','Em produção','Recebido — aguardando agendamento','Prova / ajustes','Retornado ao laboratório','Entregue / instalado'];
@@ -877,7 +1085,19 @@ function renderPayroll(){
 }
 function renderReports(){
   const clinics=state.clinics.map(c=>{const a=state.patients.filter(p=>p.clinicId===c.id),r=a.reduce((s,p)=>s+p.value,0),co=a.reduce((s,p)=>s+patientCost(p),0);return {name:c.name,revenue:r,cost:co,profit:r-co,margin:pct(r-co,r)}}).sort((a,b)=>b.margin-a.margin);
-  const procs=state.procedures.map(pr=>{const a=state.patients.filter(p=>p.procedureId===pr.id),r=a.reduce((s,p)=>s+p.value,0),co=a.reduce((s,p)=>s+patientCost(p),0);return {name:pr.name,revenue:r,cost:co,profit:r-co,margin:pct(r-co,r),cases:a.length}}).filter(x=>x.cases).sort((a,b)=>b.profit-a.profit);
+  const procMap={};
+  state.patients.forEach(p=>{
+    const lines=patientLines(p);
+    const list=lines.length?lines:[{procedureId:p.procedureId,qty:1}];
+    const shareV=Number(p.value||0)/list.length;
+    const shareC=patientCost(p)/list.length;
+    list.forEach(l=>{
+      const id=l.procedureId; if(!id) return;
+      if(!procMap[id]) procMap[id]={id,name:procedure(id).name,revenue:0,cost:0,cases:0};
+      procMap[id].revenue+=shareV; procMap[id].cost+=shareC; procMap[id].cases+=1;
+    });
+  });
+  const procs=Object.values(procMap).map(x=>({...x,profit:x.revenue-x.cost,margin:pct(x.revenue-x.cost,x.revenue)})).sort((a,b)=>b.profit-a.profit);
   const total=state.patients.reduce((s,p)=>s+p.value,0), costs=state.patients.reduce((s,p)=>s+patientCost(p),0);
   document.getElementById('reportBestClinic').textContent=clinics[0]?.name||'—';document.getElementById('reportBestProcedure').textContent=procs[0]?.name||'—';document.getElementById('reportTicket').textContent=brl.format(state.patients.length?total/state.patients.length:0);document.getElementById('reportAvgCost').textContent=brl.format(state.patients.length?costs/state.patients.length:0);
   document.getElementById('reportClinics').innerHTML=clinics.map(x=>`<div style="margin-bottom:15px"><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:6px"><span>${esc(x.name)}</span><strong>${x.margin}% · ${brl.format(x.profit)}</strong></div><div class="progress"><span style="width:${Math.max(0,Math.min(100,x.margin))}%"></span></div></div>`).join('');
@@ -1067,51 +1287,80 @@ function statusOptions(selected='À receber'){return ['À receber','Recebido par
 function openPatientModal(origin='',editId=''){
   const p=state.patients.find(x=>x.id===editId)||{};
   const initialClinic=p.clinicId||(origin==='Particular'?'particular':'allon');
-  const initialProc=p.procedureId||'p1';
-  const suggested=editId?null:procedureHonorarium(initialProc,initialClinic);
-  const seedConsume=editId?(p.consumedItems||procedureMaterialsCost(initialProc).items):procedureMaterialsCost(initialProc).items;
-  const seedCost=editId?(p.cost??0):procedureMaterialsCost(initialProc).materials;
-  const seedLab=editId?(p.lab??0):procedureMaterialsCost(initialProc).lab;
-  openModal(editId?'Editar paciente':'Novo paciente',`
+  const lines=patientLines(p);
+  const seedLines=lines.length?lines:[{procedureId:state.procedures[0]?.id||'p1',qty:1}];
+  const bom=combinedProcedureMaterials(seedLines);
+  const suggested=editId?null:honorariumForLines(seedLines,initialClinic);
+  const seedConsume=editId?(p.consumedItems||bom.items):bom.items;
+  const seedCost=editId?(p.cost??0):bom.materials;
+  const seedLab=editId?(p.lab??0):bom.lab;
+  const seedComp=editId?(p.components??0):bom.components;
+  openModal(editId?'Editar paciente / tratamento':'Novo paciente / tratamento',`
     <div class="form-grid">
       <div class="field full"><label>Nome do paciente</label><input id="fName" class="input" value="${esc(p.name||'')}" placeholder="Nome completo"></div>
       <div class="field"><label>Origem</label><select id="fOrigin" class="select"><option ${((p.origin||origin)==='Prestação')?'selected':''}>Prestação</option><option ${((p.origin||origin)==='Particular')?'selected':''}>Particular</option></select></div>
-      <div class="field"><label>Clínica / centro de resultado</label><select id="fClinic" class="select">${clinicOptions(initialClinic)}</select></div>
-      <div class="field"><label>Procedimento</label><select id="fProc" class="select">${procOptions(initialProc)}</select></div>
+      <div class="field"><label>Clínica / centro de resultado</label><select id="fClinic" class="select" onchange="recalcTreatmentTotals()">${clinicOptions(initialClinic)}</select></div>
+      <div class="field full"><label>Composição do tratamento</label>
+        <p class="field-hint">Monte o caso somando procedimentos (ex.: plantio + enxerto + coroa). Os custos e o honorário são recalculados.</p>
+        <div id="fTreatLines" class="treat-list">${seedLines.map(treatmentLineRow).join('')}</div>
+        <div class="treat-add">
+          <select id="fAddProc" class="select">${procOptionsGrouped('')}</select>
+          <button type="button" class="btn small" onclick="addTreatmentLine()">＋ Adicionar procedimento</button>
+        </div>
+      </div>
       <div class="field"><label>Data</label><input id="fDate" type="date" class="input" value="${p.date||todayISO()}"></div>
-      <div class="field"><label>Valor / honorário</label><input id="fValue" type="number" step="0.01" class="input" value="${p.value??suggested??''}"><small id="fHonorHint" class="field-hint">Altere clínica ou procedimento para sugerir o valor cadastrado.</small></div>
+      <div class="field"><label>Valor / honorário</label><input id="fValue" type="number" step="0.01" class="input" value="${p.value??suggested??''}"><small id="fHonorHint" class="field-hint">Soma dos procedimentos na clínica selecionada.</small></div>
       <div class="field"><label>Recebido</label><input id="fReceived" type="number" step="0.01" class="input" value="${p.received??0}"></div>
       <div class="field"><label>Vencimento</label><input id="fDue" type="date" class="input" value="${p.due||addDays(10)}"></div>
       <div class="field"><label>Status financeiro</label><select id="fStatus" class="select">${statusOptions(p.status)}</select></div>
-      <div class="field full"><label>Consumo de materiais (calculado automaticamente)</label>
-        <p class="field-hint">A IA preenche com a ficha do procedimento. Edite quantidades livremente.</p>
+      <div class="field full"><label>Consumo de materiais (calculado da composição)</label>
+        <p class="field-hint">Soma das fichas dos procedimentos. Edite quantidades livremente.</p>
         <div id="fConsumeList" class="consume-list">${(seedConsume.length?seedConsume:[{}]).map(consumeRow).join('')}</div>
-        <div class="row-actions" style="margin-top:8px"><button type="button" class="btn small" onclick="document.getElementById('fConsumeList').insertAdjacentHTML('beforeend', consumeRow())">＋ Item</button><button type="button" class="btn small" onclick="fillConsumeFromProcedure(getv('fProc'))">Recalcular do procedimento</button></div>
+        <div class="row-actions" style="margin-top:8px"><button type="button" class="btn small" onclick="document.getElementById('fConsumeList').insertAdjacentHTML('beforeend', consumeRow())">＋ Item</button><button type="button" class="btn small" onclick="recalcTreatmentTotals()">Recalcular da composição</button></div>
         <div class="consume-total" id="fConsumeTotal"></div>
       </div>
       <div class="field"><label>Custo materiais</label><input id="fCost" type="number" step="0.01" class="input" value="${seedCost}"></div>
       <div class="field"><label>Laboratório</label><input id="fLab" type="number" step="0.01" class="input" value="${seedLab}"></div>
-      <div class="field"><label>Componentes</label><input id="fComponents" type="number" step="0.01" class="input" value="${p.components??0}"></div>
+      <div class="field"><label>Componentes</label><input id="fComponents" type="number" step="0.01" class="input" value="${seedComp}"></div>
       <div class="field"><label>Custo clínico / sala</label><input id="fClinical" type="number" step="0.01" class="input" value="${p.clinical??0}"></div>
       <div class="field full"><label>Progresso clínico/protético</label><select id="fProgress" class="select">${['Orçamento','Em tratamento','Aguardo pós Cirúrgico','Moldagem','Enviado para Laboratório','Aguardando Prova','Aguardando Cimentação','Alta'].map(s=>`<option ${s===(p.progress||'Em tratamento')?'selected':''}>${s}</option>`).join('')}</select></div>
     </div>`,()=>{
       if(!getv('fName')) return toast('Informe o nome do paciente.');
+      const lines=collectTreatmentLines();
+      if(!lines.length) return toast('Adicione ao menos um procedimento à composição.');
       refreshConsumeTotals();
       const consumed=collectConsumeItems();
-      const obj={id:editId||uid(),name:getv('fName'),origin:getv('fOrigin'),clinicId:getv('fClinic'),procedureId:getv('fProc'),date:getv('fDate'),value:num('fValue'),received:num('fReceived'),due:getv('fDue'),status:getv('fStatus'),cost:num('fCost'),lab:num('fLab'),components:num('fComponents'),clinical:num('fClinical'),progress:getv('fProgress'),consumedItems:consumed};
+      const obj={
+        id:editId||uid(),
+        name:getv('fName'),
+        origin:getv('fOrigin'),
+        clinicId:getv('fClinic'),
+        procedureId:lines[0].procedureId,
+        lines,
+        date:getv('fDate'),
+        value:num('fValue'),
+        received:num('fReceived'),
+        due:getv('fDue'),
+        status:getv('fStatus'),
+        cost:num('fCost'),
+        lab:num('fLab'),
+        components:num('fComponents'),
+        clinical:num('fClinical'),
+        progress:getv('fProgress'),
+        consumedItems:consumed
+      };
       if(editId){
         const prev=state.patients.find(x=>x.id===editId);
         if(prev?.consumedItems?.length) applyStockConsumption(prev.consumedItems,true);
         state.patients=state.patients.map(x=>x.id===editId?obj:x);
       }else state.patients.unshift(obj);
       applyStockConsumption(consumed,false);
-      save();closeModal();renderAll();toast('Paciente salvo com consumo calculado.');
+      save();closeModal();renderAll();toast('Tratamento salvo.');
     });
-  wireHonorariumAutosuggest('fClinic','fProc');
-  document.getElementById('fProc')?.addEventListener('change',()=>{fillConsumeFromProcedure(getv('fProc'));syncPatientHonorarium();});
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
   document.getElementById('fConsumeList')?.addEventListener('change',e=>{if(e.target.classList.contains('ci-mat')) refreshConsumeTotals();});
   refreshConsumeTotals();
-  if(!editId) syncPatientHonorarium();
+  if(!editId) recalcTreatmentTotals();
 }
 function editPatient(id){openPatientModal('',id)}
 function openClinicModal(editId=''){
@@ -1172,14 +1421,17 @@ function collectClinicPrices(){
   })).filter(x=>x.clinicId);
 }
 function openProcedureModal(editId=''){
-  const p=state.procedures.find(x=>x.id===editId)||{items:[],extra:0,price:0,clinicPrices:[]};
+  const p=state.procedures.find(x=>x.id===editId)||{items:[],extra:0,price:0,clinicPrices:[],specialty:'clinica',kind:'clinico'};
   const map=Object.fromEntries((p.clinicPrices||[]).map(x=>[x.clinicId,x]));
   const clinicRows=state.clinics.map(c=>clinicPriceRow(map[c.id]?{...map[c.id],clinicId:c.id}:{clinicId:c.id,practicedValue:p.price||0,receiveMode:'fixed',receiveAmount:p.price||0,receivePercent:100},p.price||0)).join('')
     ||'<div class="empty">Cadastre clínicas para definir valores por unidade.</div>';
   const rows=(p.items&&p.items.length?p.items:[{}]).map(procItemRow).join('');
+  const specOpts=DENTAL_PROCEDURE_SPECIALTIES.map(s=>`<option value="${esc(s.id)}" ${s.id===(p.specialty||'clinica')?'selected':''}>${esc(s.name)}</option>`).join('');
   openModal(editId?'Editar procedimento':'Novo procedimento',`<div class="form-grid">
     <div class="field full"><label>Procedimento</label><input id="pName" class="input" value="${esc(p.name||'')}"></div>
-    <div class="field"><label>Preço base de referência</label><input id="pPrice" type="number" step="0.01" class="input" value="${p.price??''}"></div>
+    <div class="field"><label>Especialidade</label><select id="pSpecialty" class="select">${specOpts}</select></div>
+    <div class="field"><label>Tipo</label><select id="pKind" class="select"><option value="clinico" ${(p.kind||'clinico')!=='cirurgico'?'selected':''}>Clínico</option><option value="cirurgico" ${p.kind==='cirurgico'?'selected':''}>Cirúrgico</option></select></div>
+    <div class="field"><label>Preço base de referência</label><input id="pPrice" type="number" step="0.01" class="input" value="${p.price??''}"><small class="field-hint">Pode deixar 0 e precificar depois.</small></div>
     <div class="field"><label>Laboratório / extra</label><input id="pExtra" type="number" step="0.01" class="input" value="${p.extra??0}"></div>
     <div class="field full"><label>Valor praticado e recebimento por clínica</label>
       <p class="field-hint">Em cada clínica, informe o valor praticado e se você recebe valor fechado (integral) ou porcentagem desse valor.</p>
@@ -1188,7 +1440,7 @@ function openProcedureModal(editId=''){
     <div class="field full"><label>Materiais utilizados (qtd. × custo unitário)</label><p class="field-hint">Use “Sugerir materiais” para preencher automaticamente conforme o nome do procedimento.</p><div id="procItems">${rows}</div><div class="row-actions"><button type="button" class="btn small" onclick="document.getElementById('procItems').insertAdjacentHTML('beforeend', procItemRow())">＋ Material</button><button type="button" class="btn small" onclick="applySuggestedMaterialsToProcedureForm()">✦ Sugerir materiais</button></div></div>
   </div>`,()=>{
     if(!getv('pName'))return toast('Informe o nome do procedimento.');
-    const obj={id:editId||uid(),name:getv('pName'),price:num('pPrice'),extra:num('pExtra'),items:collectProcItems(),clinicPrices:collectClinicPrices()};
+    const obj={id:editId||uid(),name:getv('pName'),specialty:getv('pSpecialty')||'clinica',kind:getv('pKind')||'clinico',price:num('pPrice'),extra:num('pExtra'),items:collectProcItems(),clinicPrices:collectClinicPrices()};
     if(editId) state.procedures=state.procedures.map(x=>x.id===editId?obj:x); else state.procedures.push(obj);
     save();closeModal();renderAll();if(editId) showCostSheet(editId);toast('Procedimento salvo.');
   });
@@ -1247,16 +1499,48 @@ function openPayrollModal(editId=''){
   })
 }
 function openReceivableModal(type=''){
-  const initialClinic=type==='prestacao'?'allon':'particular';
-  openModal('Novo recebível',`<div class="form-grid"><div class="field full"><label>Paciente</label><input id="rName" class="input"></div><div class="field"><label>Clínica</label><select id="rClinic" class="select">${clinicOptions(initialClinic)}</select></div><div class="field"><label>Procedimento</label><select id="rProc" class="select">${procOptions()}</select></div><div class="field"><label>Valor</label><input id="rValue" type="number" class="input"><small id="rHonorHint" class="field-hint">Sugestão pelo cadastro do procedimento × clínica.</small></div><div class="field"><label>Recebido</label><input id="rReceived" type="number" class="input" value="0"></div><div class="field"><label>Vencimento</label><input id="rDue" type="date" class="input" value="${addDays(7)}"></div><div class="field"><label>Status</label><select id="rStatus" class="select">${statusOptions()}</select></div></div>`,()=>{
+  const initialClinic=type==='prestacao'?(serviceClinicFilter||'allon'):'particular';
+  const seedProc=state.procedures.find(p=>p.id==='p1')?.id||state.procedures[0]?.id||'';
+  openModal(type==='prestacao'?'Lançar honorário (prestação)':'Novo recebível',`<div class="form-grid">
+    <div class="field full"><label>Paciente</label><input id="rName" class="input"></div>
+    <div class="field full"><label>Clínica</label><select id="rClinic" class="select" onchange="recalcReceivableTotals()">${clinicOptions(initialClinic)}</select></div>
+    <div class="field full"><label>Composição do tratamento</label>
+      <p class="field-hint">Ex.: plantio + enxerto. Adicione quantos procedimentos precisar.</p>
+      <div id="fTreatLines" class="treat-list">${seedProc?treatmentLineRow({procedureId:seedProc}):''}</div>
+      <div class="treat-add">
+        <select id="fAddProc" class="select">${procOptionsGrouped('')}</select>
+        <button type="button" class="btn small" onclick="addTreatmentLine();recalcReceivableTotals()">＋ Adicionar</button>
+      </div>
+    </div>
+    <div class="field"><label>Valor / honorário</label><input id="rValue" type="number" class="input"><small id="rHonorHint" class="field-hint">Soma dos procedimentos × clínica.</small></div>
+    <div class="field"><label>Recebido</label><input id="rReceived" type="number" class="input" value="0"></div>
+    <div class="field"><label>Vencimento</label><input id="rDue" type="date" class="input" value="${addDays(7)}"></div>
+    <div class="field"><label>Status</label><select id="rStatus" class="select">${statusOptions()}</select></div>
+    <div class="field full"><label>Progresso</label><select id="rProgress" class="select"><option>Orçamento</option><option selected>Em tratamento</option><option>Aguardo pós Cirúrgico</option><option>Alta</option></select></div>
+  </div>`,()=>{
     if(!getv('rName'))return toast('Informe o paciente.');
-    const cl=getv('rClinic'); const procId=getv('rProc'); const calc=procedureMaterialsCost(procId);
-    state.patients.unshift({id:uid(),name:getv('rName'),origin:cl==='particular'?'Particular':'Prestação',clinicId:cl,procedureId:procId,date:todayISO(),value:num('rValue'),received:num('rReceived'),due:getv('rDue'),status:getv('rStatus'),cost:calc.materials,lab:calc.lab,components:0,clinical:0,progress:'Em tratamento',consumedItems:calc.items});
-    applyStockConsumption(calc.items,false);
-    save();closeModal();renderAll();toast('Recebível lançado com custo do procedimento.');
+    const lines=collectTreatmentLines();
+    if(!lines.length) return toast('Adicione ao menos um procedimento.');
+    const cl=getv('rClinic');
+    const bom=combinedProcedureMaterials(lines);
+    state.patients.unshift({
+      id:uid(),name:getv('rName'),origin:cl==='particular'?'Particular':'Prestação',clinicId:cl,
+      procedureId:lines[0].procedureId,lines,date:todayISO(),value:num('rValue'),received:num('rReceived'),due:getv('rDue'),status:getv('rStatus'),
+      cost:bom.materials,lab:bom.lab,components:bom.components,clinical:0,progress:getv('rProgress')||'Em tratamento',consumedItems:bom.items
+    });
+    applyStockConsumption(bom.items,false);
+    save();closeModal();renderAll();toast('Lançamento salvo com composição.');
   });
-  wireHonorariumAutosuggest('rClinic','rProc');
-  syncPatientHonorarium();
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  recalcReceivableTotals();
+}
+function recalcReceivableTotals(){
+  const clinicId=getv('rClinic')||'';
+  const lines=collectTreatmentLines();
+  const valueEl=document.getElementById('rValue');
+  const hint=document.getElementById('rHonorHint');
+  if(valueEl && clinicId) valueEl.value=String(Math.round(honorariumForLines(lines,clinicId)*100)/100);
+  if(hint) hint.textContent=lines.length?`${lines.length} procedimento(s) · honorário sugerido pela clínica.`:'Adicione procedimentos.';
 }
 function openStockModal(prefillId=''){
   const selected=prefillId||(state.materials[0]?.id||'');
@@ -1702,7 +1986,7 @@ document.getElementById('globalSearch').addEventListener('input',e=>{
   const q=e.target.value.toLowerCase().trim();if(!q)return;
   const work=state.prostheses.find(w=>String(w.code).toLowerCase().includes(q)||String(w.type).toLowerCase().includes(q)||patientById(w.patientId).name.toLowerCase().includes(q));
   if(work){go('trabalhos');const s=document.getElementById('prosthSearch');if(s)s.value=q;renderTrabalhos();return;}
-  const p=state.patients.find(x=>x.name.toLowerCase().includes(q)||procedure(x.procedureId).name.toLowerCase().includes(q));
+  const p=state.patients.find(x=>x.name.toLowerCase().includes(q)||patientProcedureSearchText(x).toLowerCase().includes(q));
   if(p){go('pacientes');document.getElementById('patientSearch').value=q;renderPatients();}
 });
 
@@ -1733,6 +2017,8 @@ async function boot(){
   }catch(e){ /* fallback localStorage */ }
   ensureSettings();
   const catalogAdded=ensureCatalog()||0;
+  const procAdded=ensureProcedureCatalog()||0;
+  const linesMigrated=migratePatientLines()||0;
   ensureProstheses();
   ensureClinicPrices();
   let seeded=false;
@@ -1742,7 +2028,7 @@ async function boot(){
       seeded=!!ChevalierPlan.seedDefaults();
     }
   }catch(e){ console.warn('ChevalierPlan boot', e); }
-  if(seeded||catalogAdded) save();
+  if(seeded||catalogAdded||procAdded||linesMigrated) save();
   renderAll();
   setBancoTab(bancoTab);
 }
