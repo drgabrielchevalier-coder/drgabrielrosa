@@ -35,10 +35,10 @@
   }
   .sidebar::-webkit-scrollbar{width:6px}
   .sidebar::-webkit-scrollbar-thumb{background:#3a3c37;border-radius:999px}
-  .brand{padding:4px 6px 16px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:10px;flex-shrink:0}
+  .brand{padding:10px 8px 18px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:10px;flex-shrink:0}
   .brand-link{
     display:flex;align-items:center;gap:12px;width:100%;border:0;background:transparent;
-    padding:6px 4px;border-radius:12px;text-align:left;color:inherit;cursor:pointer
+    padding:8px 6px;border-radius:12px;text-align:left;color:inherit;cursor:pointer
   }
   .brand-link:hover{background:rgba(255,255,255,.04)}
   .brand-mark-img{
