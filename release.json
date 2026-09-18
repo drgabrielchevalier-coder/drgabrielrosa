@@ -1,10 +1,10 @@
 {
-  "version": "2.6.0",
-  "name": "Fluxo protético e cirúrgico",
+  "version": "2.6.1",
+  "name": "Novo paciente no fluxo",
   "releasedAt": "2026-09-18",
   "changes": [
-    "Fluxo de produção com 3 visões: protético, cirúrgico e todos.",
-    "Fluxo cirúrgico: planejar, solicitar material, fila/agendado, pós-op, cicatrização, moldagem.",
-    "Laboratório só é criado automaticamente quando o tratamento tem procedimento protético — implante puro vai ao fluxo cirúrgico."
+    "No modal Novo trabalho: opção “＋ Cadastrar novo paciente” com nome, origem e clínica.",
+    "Fluxo protético / cirúrgico / todos (v2.6.0).",
+    "Laboratório só automático para procedimentos protéticos."
   ]
 }
