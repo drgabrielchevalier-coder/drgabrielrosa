@@ -74,6 +74,12 @@ LOGIN
   // ou, menos seguro: define('AUTH_PASS', 'sua-senha');
 - Nunca envie config.local.php para o GitHub.
 
+OPENAI (v2.5+)
+- Em Configurações → OpenAI, cole a chave sk-… e teste a conexão
+  (grava em api/config.local.php no servidor).
+- Ou copie api/config.local.php.example → api/config.local.php e defina OPENAI_API_KEY.
+- Custos de procedimento, cobrança e tomografia usam só a API OpenAI (sem resposta pronta).
+
 SEGURANÇA (v2.1+)
 - Sessão HttpOnly + Secure (HTTPS) + SameSite=Lax
 - Token CSRF em POST/DELETE das APIs (state, price-sync, uploads, IA, setup)

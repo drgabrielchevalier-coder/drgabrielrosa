@@ -264,6 +264,11 @@
         });
         const data = await res.json();
         if (typeof global.applyCsrfFromResponse === 'function') global.applyCsrfFromResponse(data);
+        if (data.needsOpenAI) {
+          if (typeof global.toast === 'function') global.toast(data.error || 'Configure a OpenAI em Configurações.');
+          if (typeof global.go === 'function') global.go('config');
+          throw new Error(data.error || 'OpenAI não configurada');
+        }
         if (!data.ok || !data.analysis) throw new Error(data.error || 'Falha na IA');
         p.analysis = data.analysis;
         p.patient = global.getv('aiPatient') || p.patient;

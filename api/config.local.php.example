@@ -1,0 +1,19 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Copie para config.local.php no servidor (não versionar).
+ * Ou cole a chave em Configurações → OpenAI no próprio app.
+ */
+
+// define('OPENAI_API_KEY', 'sk-proj-...');
+// define('OPENAI_CHAT_MODEL', 'gpt-4o-mini');
+// define('OPENAI_VISION_MODEL', 'gpt-4o-mini');
+
+// MySQL / login (se precisar sobrescrever):
+// define('DB_HOST', 'localhost');
+// define('DB_NAME', '...');
+// define('DB_USER', '...');
+// define('DB_PASS', '...');
+// define('AUTH_USER', 'gabriel');
+// define('AUTH_PASS', '...');

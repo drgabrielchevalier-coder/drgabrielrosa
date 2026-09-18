@@ -2,12 +2,10 @@
 declare(strict_types=1);
 
 /**
- * IA de avaliação de tomografia / planejamento odontológico.
- * Usa OpenAI Vision se OPENAI_API_KEY estiver em config.local.php;
- * caso contrário, gera análise clínica estruturada local (checklist CBCT).
+ * IA de avaliação de tomografia / planejamento odontológico via OpenAI.
  */
 require_once __DIR__ . '/auth-lib.php';
-require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/openai-lib.php';
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store');
 
@@ -276,13 +274,51 @@ function chevalier_tomo_openai(string $apiKey, ?string $imagePath, ?string $imag
     ];
 }
 
-$apiKey = defined('OPENAI_API_KEY') ? (string) OPENAI_API_KEY : '';
-$analysis = null;
-if ($apiKey !== '') {
-    $analysis = chevalier_tomo_openai($apiKey, $imagePath, $imageMime, $patient, $region, $notes, $goal, is_array($meta) ? $meta : null);
+if (!chevalier_openai_configured()) {
+    http_response_code(400);
+    echo json_encode([
+        'ok' => false,
+        'needsOpenAI' => true,
+        'error' => 'Configure sua chave OpenAI em Configurações para usar a IA de tomografia.',
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
 }
+
+$apiKey = chevalier_openai_key();
+$analysis = chevalier_tomo_openai($apiKey, $imagePath, $imageMime, $patient, $region, $notes, $goal, is_array($meta) ? $meta : null);
 if ($analysis === null) {
-    $analysis = chevalier_tomo_local_analysis(is_array($meta) ? $meta : null, $imagePath, $patient, $region, $notes, $goal);
+    // Sem fatia raster: ainda chama OpenAI em texto (não usa checklist local pronto)
+    $fname = (string) (($meta['name'] ?? $meta['title'] ?? 'arquivo') ?: 'arquivo');
+    $prompt = "Planejamento odontológico. Paciente: {$patient}. Região: {$region}. Objetivo: {$goal}. "
+        . "Notas: {$notes}. Arquivo: {$fname}. Sem imagem raster legível. "
+        . "Retorne JSON: summary, boneQuality, findings[], anatomicRisks[], implantSuggestions[], checklist[]. "
+        . "Deixe claro que é preliminar.";
+    $chat = chevalier_openai_chat([
+        ['role' => 'system', 'content' => 'Radiologia odontológica. Português. Somente JSON.'],
+        ['role' => 'user', 'content' => $prompt],
+    ], ['json' => true, 'max_tokens' => 1000, 'temperature' => 0.3]);
+    if (!$chat['ok'] || !is_array($chat['data']['parsed'] ?? null)) {
+        http_response_code(502);
+        echo json_encode(['ok' => false, 'error' => $chat['error'] ?? 'Falha OpenAI na análise'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $parsed = $chat['data']['parsed'];
+    $analysis = [
+        'mode' => 'openai',
+        'provider' => 'OpenAI',
+        'model' => $chat['data']['model'] ?? null,
+        'summary' => (string) ($parsed['summary'] ?? ''),
+        'patient' => $patient,
+        'region' => $region,
+        'goal' => $goal,
+        'findings' => array_values((array) ($parsed['findings'] ?? [])),
+        'boneQuality' => (string) ($parsed['boneQuality'] ?? ''),
+        'anatomicRisks' => array_values((array) ($parsed['anatomicRisks'] ?? [])),
+        'implantSuggestions' => array_values((array) ($parsed['implantSuggestions'] ?? [])),
+        'checklist' => array_values((array) ($parsed['checklist'] ?? [])),
+        'disclaimer' => 'Análise OpenAI. Confirme no exame original.',
+        'generatedAt' => gmdate('c'),
+    ];
 }
 
 echo json_encode([
