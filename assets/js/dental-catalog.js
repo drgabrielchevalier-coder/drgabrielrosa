@@ -3,7 +3,7 @@
  * Formato: [id, name, brand, type, pack, price, unitCost]
  * type = "Especialidade — Categoria"
  */
-window.CHEVALIER_CATALOG_VERSION = 2;
+window.CHEVALIER_CATALOG_VERSION = 3;
 window.DENTAL_SPECIALTIES = [
   {
     id: 'cirurgia',
@@ -202,7 +202,7 @@ window.DENTAL_CATALOG = [
   ['m147', 'Kit EPIs cirúrgico', 'Descarpack', 'Cirurgia — Descartáveis', '1 kit', 28, 28],
 
   /* —— Prótese dentária —— */
-  ['m26', 'Cimento resinoso dual', 'RelyX', 'Prótese — Cimento / adesivo', '1 kit', 189, 189],
+  ['m26', 'Cimento resinoso dual', 'RelyX', 'Prótese — Cimento / adesivo', '8.5 g', 189, 22.235],
   ['m30', 'Fio retrator #00', 'Ultrapak', 'Prótese — Isolamento gengival', '1 unidose', 9, 9],
   ['m31', 'Silicone de adição (kit)', 'Express', 'Prótese — Moldagem', '1 kit', 210, 210],
   ['m32', 'Alginato', 'Jeltrate', 'Prótese — Moldagem', '1 pote', 38, 38],
@@ -227,14 +227,14 @@ window.DENTAL_CATALOG = [
   ['m164', 'Resina acrílica autopolimerizável', 'Clássico', 'Prótese — Laboratório', '1 kit', 65, 65],
   ['m165', 'Dente estoque anterior', 'Vipi', 'Prótese — Laboratório', '1 jogo', 48, 48],
   ['m166', 'Dente estoque posterior', 'Vipi', 'Prótese — Laboratório', '1 jogo', 42, 42],
-  ['m167', 'Cimento de ionômero para cimentação', 'GC Fuji', 'Prótese — Cimento / adesivo', '1 kit', 145, 145],
-  ['m168', 'Cimento de fosfato de zinco', 'SS White', 'Prótese — Cimento / adesivo', '1 kit', 48, 48],
-  ['m169', 'Cimento provisório sem eugenol', 'TempBond', 'Prótese — Cimento / adesivo', '1 kit', 78, 78],
-  ['m170', 'Cimento provisório com eugenol', 'TempBond', 'Prótese — Cimento / adesivo', '1 kit', 72, 72],
-  ['m171', 'Cimento resinoso autoadesivo', 'RelyX U200', 'Prótese — Cimento / adesivo', '1 kit', 265, 265],
-  ['m172', 'Primer metálico', 'Metal Primer', 'Prótese — Cimento / adesivo', '1 frasco', 95, 95],
-  ['m173', 'Silano', 'Angelus', 'Prótese — Cimento / adesivo', '1 frasco', 68, 68],
-  ['m174', 'Ácido fluorídrico 10%', 'FGM', 'Prótese — Cimento / adesivo', '1 seringa', 42, 42],
+  ['m167', 'Cimento de ionômero para cimentação', 'GC Fuji', 'Prótese — Cimento / adesivo', '15 g', 145, 9.667],
+  ['m168', 'Cimento de fosfato de zinco', 'SS White', 'Prótese — Cimento / adesivo', '32 g', 48, 1.5],
+  ['m169', 'Cimento provisório sem eugenol', 'TempBond', 'Prótese — Cimento / adesivo', '25 g', 78, 3.12],
+  ['m170', 'Cimento provisório com eugenol', 'TempBond', 'Prótese — Cimento / adesivo', '25 g', 72, 2.88],
+  ['m171', 'Cimento resinoso autoadesivo', 'RelyX U200', 'Prótese — Cimento / adesivo', '8.5 g', 265, 31.176],
+  ['m172', 'Primer metálico', 'Metal Primer', 'Prótese — Cimento / adesivo', '5 ml', 95, 19],
+  ['m173', 'Silano', 'Angelus', 'Prótese — Cimento / adesivo', '5 ml', 68, 13.6],
+  ['m174', 'Ácido fluorídrico 10%', 'FGM', 'Prótese — Cimento / adesivo', '2.5 ml', 42, 16.8],
   ['m175', 'Resina bisacrílica A2', 'Structur', 'Prótese — Provisório', '1 cartucho', 220, 220],
   ['m176', 'Coroa provisória policarbonato', '3M', 'Prótese — Provisório', '1 un', 12, 12],
   ['m177', 'Dente artificial provisório', 'Vipi', 'Prótese — Provisório', '1 un', 8, 8],
@@ -313,10 +313,10 @@ window.DENTAL_CATALOG = [
   ['m24', 'Broca sequencial implante', 'Neodent', 'Implante — Broca / kit', '1 un', 88, 88],
   ['m25', 'Chave torque', 'Neodent', 'Implante — Instrumental', '1 un', 320, 320],
   ['m27', 'Resina composta A2', '3M', 'Prótese — Acabamento', '1 seringa', 62, 62],
-  ['m28', 'Ácido fosfórico 37%', 'FGM', 'Prótese — Cimento / adesivo', '1 seringa', 18, 18],
-  ['m29', 'Adesivo universal', '3M', 'Prótese — Cimento / adesivo', '1 frasco', 145, 145],
+  ['m28', 'Ácido fosfórico 37%', 'FGM', 'Prótese — Cimento / adesivo', '2.5 ml', 18, 7.2],
+  ['m29', 'Adesivo universal', '3M', 'Prótese — Cimento / adesivo', '5 ml', 145, 29],
   ['m37', 'Broca diamantada', 'KG', 'Prótese — Acabamento', '1 un', 12, 12],
-  ['m38', 'Ionômero de vidro', 'GC', 'Prótese — Cimento / adesivo', '1 kit', 78, 78],
+  ['m38', 'Ionômero de vidro', 'GC', 'Prótese — Cimento / adesivo', '15 g', 78, 5.2],
   ['m241', 'Luva de procedimento', 'Descarpack', 'Comum — Descartável', '100 un', 28, 0.28],
   ['m242', 'Touca descartável', 'Descarpack', 'Comum — Descartável', '100 un', 18, 0.18],
   ['m243', 'Propé descartável', 'Descarpack', 'Comum — Descartável', '100 un', 22, 0.22],

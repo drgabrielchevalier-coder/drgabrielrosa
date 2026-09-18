@@ -246,10 +246,9 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
       <!-- PROCEDIMENTOS -->
       <section class="page" id="page-procedimentos">
         <div class="page-head">
-          <div><h2>Procedimentos</h2><p>Catálogo clínico e cirúrgico — componha tratamentos, sincronize materiais/custos fracionados e analise com OpenAI.</p></div>
+          <div><h2>Procedimentos</h2><p>Catálogo clínico e cirúrgico — custo fracionado (g/ml/un) e uma IA para recalcular a ficha.</p></div>
           <div class="page-actions">
-            <button class="btn" onclick="syncAllVisibleProcedureMaterials()">↻ Sync materiais</button>
-            <button class="btn" onclick="recalcAllUnitCosts()">↻ Sync custos (fracionar)</button>
+            <button class="btn" onclick="atualizarCustosDaTabela(window.__costSheetId)">↻ Atualizar tabela</button>
             <button class="btn primary" onclick="openProcedureModal()">＋ Novo procedimento</button>
           </div>
         </div>
@@ -555,8 +554,8 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
         <div id="bancoProcedimentos" hidden>
           <div class="ai-banner">
             <div>
-              <strong>IA de custos de procedimento</strong>
-              <p>1) Sync materiais usados · 2) Sync custos fracionando a embalagem (ex.: microbrush 100 un) com a tabela · análise OpenAI por ficha.</p>
+              <strong>Custo fracionado</strong>
+              <p>Atualize a tabela (g/ml/un) sem IA. Na ficha do procedimento, “Recalcular com IA” faz materiais + fracionamento + análise numa só chamada.</p>
             </div>
             <button class="btn primary" onclick="go('procedimentos')">Abrir procedimentos</button>
           </div>
