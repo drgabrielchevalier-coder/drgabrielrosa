@@ -31,15 +31,17 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Dr Gabriel Rosa — Reabilitação Oral &amp; Estética</title>
 <meta name="description" content="Dr Gabriel Rosa — cirurgião-dentista. Cirurgia oral, implantodontia, prótese e harmonização orofacial. Agende sua avaliação.">
-<meta name="theme-color" content="#0d0e0c">
+<meta name="theme-color" content="#2f2b28">
 <meta property="og:title" content="Dr Gabriel Rosa — Reabilitação Oral &amp; Estética">
 <meta property="og:description" content="Cirurgia oral, implantodontia e reabilitação. Atendimento clínico com foco em estética e função.">
 <meta property="og:type" content="website">
-<meta property="og:image" content="<?= htmlspecialchars('assets/img/gabriel-rosa-portrait.jpg', ENT_QUOTES, 'UTF-8') ?>">
-<link rel="icon" type="image/svg+xml" href="<?= chevalier_asset_url('assets/img/favicon.svg') ?>">
+<meta property="og:image" content="<?= htmlspecialchars('assets/img/brand/logo-circular.png', ENT_QUOTES, 'UTF-8') ?>">
+<link rel="icon" type="image/png" href="<?= chevalier_asset_url('assets/img/brand/mark-gr-gold.png') ?>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=boska@400,500,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?= chevalier_asset_url('assets/css/landing.css') ?>">
 </head>
 <body class="lp">
@@ -47,7 +49,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 
   <header class="lp-top">
     <a class="lp-brand" href="#topo" aria-label="Dr Gabriel Rosa">
-      <img src="<?= chevalier_asset_url('assets/img/logo-gabriel-rosa-wide.png') ?>" width="220" height="64" alt="Dr Gabriel Rosa — Reabilitação Oral &amp; Estética">
+      <img src="<?= chevalier_asset_url('assets/img/brand/logo-stacked-on-dark.png') ?>" width="200" height="88" alt="Dr Gabriel Rosa — Reabilitação Oral &amp; Estética">
     </a>
     <a class="lp-login" href="login.php" title="Acesso ao sistema">Entrar</a>
   </header>
@@ -172,8 +174,8 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
   </main>
 
   <footer class="lp-foot">
-    <img class="lp-foot-mark" src="<?= chevalier_asset_url('assets/img/mark-gr.png') ?>" width="40" height="40" alt="">
-    <p><strong>Dr Gabriel Rosa</strong><br>Reabilitação Oral &amp; Estética</p>
+    <img class="lp-foot-mark" src="<?= chevalier_asset_url('assets/img/brand/mark-gr-gold.png') ?>" width="48" height="48" alt="">
+    <p><strong>DR GABRIEL ROSA</strong><br>Reabilitação Oral &amp; Estética</p>
     <nav class="lp-foot-nav" aria-label="Rodapé">
       <?php if ($LANDING_INSTAGRAM !== ''): ?>
         <a href="<?= htmlspecialchars($LANDING_INSTAGRAM, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">Instagram</a>

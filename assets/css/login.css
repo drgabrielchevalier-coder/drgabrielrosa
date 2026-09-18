@@ -1,17 +1,19 @@
 :root{
-  --ink:#141512;
-  --paper:#f3efe6;
-  --gold:#c4b086;
-  --gold-deep:#8e7d5b;
-  --mist:rgba(243,239,230,.78);
+  --ink:#2f2b28;
+  --paper:#eae3d8;
+  --gold:#9d846a;
+  --gold-deep:#8f6e3e;
+  --gold-light:#f7c67c;
+  --brown:#4a2b23;
+  --mist:rgba(234,227,216,.78);
 }
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;}
 .login-body{
   min-height:100vh;
   color:var(--paper);
-  font-family:"Outfit",ui-sans-serif,system-ui,sans-serif;
-  background:#0d0e0c;
+  font-family:"Montserrat",ui-sans-serif,system-ui,sans-serif;
+  background:#2f2b28;
   overflow-x:hidden;
 }
 
@@ -31,7 +33,7 @@ html,body{margin:0;min-height:100%;}
 }
 .orb-a{
   width:52vmax;height:52vmax;left:-8%;top:-12%;
-  background:radial-gradient(circle at 35% 40%,#c4b086 0%,#6f6144 42%,transparent 70%);
+  background:radial-gradient(circle at 35% 40%,#f7c67c 0%,#8f6e3e 42%,transparent 70%);
   animation:orb-a 22s ease-in-out infinite alternate;
   opacity:.9;
 }
@@ -125,7 +127,7 @@ html,body{margin:0;min-height:100%;}
   max-width:32ch;
   font-size:1rem;
   line-height:1.55;
-  color:rgba(243,239,230,.7);
+  color:rgba(234,227,216,.72);
   font-weight:300;
 }
 
@@ -153,7 +155,7 @@ html,body{margin:0;min-height:100%;}
 }
 .login-mark-img{
   width:48px;height:48px;object-fit:contain;border-radius:14px;
-  background:#0d0e0c;padding:6px;
+  background:#2f2b28;padding:6px;
   box-shadow:0 10px 24px rgba(0,0,0,.28);
   border:1px solid rgba(196,176,134,.28);
 }
