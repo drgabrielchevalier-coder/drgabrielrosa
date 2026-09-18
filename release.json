@@ -1,11 +1,10 @@
 {
-  "version": "2.4.0",
-  "name": "Modelo de cobrança por clínica",
+  "version": "2.5.0",
+  "name": "IA de custos OpenAI + sync fracionado",
   "releasedAt": "2026-09-18",
   "changes": [
-    "Cada clínica tem modelo de cobrança configurável: %, valor fechado, taxa de cartão e reembolso de materiais.",
-    "Simulação didática ao vivo (ex.: Gerlúcia 50% − 10% cartão + componentes).",
-    "IA interpreta a regra em texto e monta o algoritmo (com fallback local).",
-    "Orçamento, prestação e custos usam o modelo da clínica selecionada."
+    "API OpenAI compartilhada: custos de procedimento, cobrança e tomografia usam sua chave (sem resposta pronta).",
+    "Sync materiais e Sync custos na ficha: consumo clínico + fracionamento de embalagem (ex.: microbrush 100 un).",
+    "Configurações: cole a chave sk-…, teste a conexão e escolha modelos chat/visão."
   ]
 }

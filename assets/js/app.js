@@ -140,6 +140,62 @@ function renderSettings(){
     el.classList.toggle('on',on);
     el.setAttribute('aria-checked', on?'true':'false');
   });
+  refreshOpenAiSettings();
+}
+async function refreshOpenAiSettings(){
+  const hint=document.getElementById('openaiStatusHint');
+  if(!hint) return;
+  try{
+    const res=await fetch('api/openai-config.php',{cache:'no-store',credentials:'same-origin'});
+    const data=await res.json().catch(()=>({}));
+    applyCsrfFromResponse(data);
+    if(res.status===401){location.href='login.php';return;}
+    if(data.configured){
+      hint.innerHTML=`Chave ativa: <strong>${esc(data.maskedKey||'sk-…')}</strong> · chat ${esc(data.chatModel||'')} · visão ${esc(data.visionModel||'')}`;
+    }else{
+      hint.textContent='Nenhuma chave OpenAI configurada. Cole sua sk-… abaixo para ativar todas as IAs.';
+    }
+    if(data.chatModel && document.getElementById('openaiChatModel') && !document.getElementById('openaiChatModel').value){
+      document.getElementById('openaiChatModel').value=data.chatModel;
+    }
+    if(data.visionModel && document.getElementById('openaiVisionModel') && !document.getElementById('openaiVisionModel').value){
+      document.getElementById('openaiVisionModel').value=data.visionModel;
+    }
+  }catch(_){
+    hint.textContent='Não foi possível ler o status da OpenAI.';
+  }
+}
+async function saveOpenAiSettings(){
+  const apiKey=getv('openaiKeyInput').trim();
+  const chatModel=getv('openaiChatModel').trim();
+  const visionModel=getv('openaiVisionModel').trim();
+  if(!apiKey && !chatModel && !visionModel) return toast('Informe a chave ou os modelos.');
+  const res=await fetch('api/openai-config.php',{
+    method:'POST',
+    headers:csrfHeaders({'Content-Type':'application/json'}),
+    credentials:'same-origin',
+    body:JSON.stringify({action:'save',apiKey,chatModel,visionModel,csrf:csrfToken()})
+  });
+  const data=await res.json().catch(()=>({}));
+  applyCsrfFromResponse(data);
+  if(!data.ok) return toast(data.error||'Falha ao salvar chave.');
+  document.getElementById('openaiKeyInput').value='';
+  toast(data.note||'Chave salva.');
+  // Force reload so PHP picks up new defines
+  setTimeout(()=>location.reload(),600);
+}
+async function testOpenAiSettings(){
+  toast('Testando OpenAI…');
+  const res=await fetch('api/openai-config.php',{
+    method:'POST',
+    headers:csrfHeaders({'Content-Type':'application/json'}),
+    credentials:'same-origin',
+    body:JSON.stringify({action:'test',csrf:csrfToken()})
+  });
+  const data=await res.json().catch(()=>({}));
+  applyCsrfFromResponse(data);
+  if(!data.ok) return toast(data.error||'Teste falhou.');
+  toast(`OpenAI OK · modelo ${data.model||''}`);
 }
 function updateNotifBadge(){
   const n=collectNotifications().length;
@@ -604,30 +660,204 @@ function procedureMaterialsCost(procId){
   const materials=(p.items||[]).reduce((s,i)=>s+material(i.materialId).unitCost*Number(i.qty||0),0);
   return {materials:Math.round(materials*100)/100, lab:Number(p.extra||0), items:(p.items||[]).map(i=>({materialId:i.materialId,qty:Number(i.qty||0)}))};
 }
-const PROC_AI_RULES=[
-  {match:/implante\s*\+\s*coroa|implante.*coroa/i, ids:['m1','m4','m5','m6','m7','m8','m16','m20']},
-  {match:/implante.*enxerto|enxerto|levantamento|seio/i, ids:['m1','m3','m4','m5','m6','m15','m16','m85','m91']},
-  {match:/implante/i, ids:['m1','m4','m5','m6','m16','m20','m11']},
-  {match:/exodont|cirurg|extra[cç]/i, ids:['m4','m5','m16','m18','m19','m20','m102','m108','m127']},
-  {match:/coroa|protético|ciment|faceta|pr[oó]tese/i, ids:['m7','m8','m26','m30','m31','m169']},
-  {match:/protocolo/i, ids:['m1','m2','m4','m5','m6','m16','m56']},
-  {match:/endo|tratament[o].*canal|obtura/i, ids:['m36','m189','m190','m205','m207','m214','m216','m217','m226']},
-  {match:/restaura/i, ids:['m27','m28','m29','m37']},
-];
-function suggestMaterialsForProcedureName(name){
-  const rule=PROC_AI_RULES.find(r=>r.match.test(String(name||'')));
-  const ids=rule?rule.ids:[];
-  return ids.filter(id=>state.materials.some(m=>m.id===id)).map(id=>({materialId:id,qty:1}));
+function materialCatalogPayload(limit=180){
+  return state.materials.slice(0,limit).map(m=>({
+    id:m.id,name:m.name,brand:m.brand,type:m.type,pack:m.pack,price:Number(m.price||0),unitCost:Number(m.unitCost||0)
+  }));
 }
-function applySuggestedMaterialsToProcedureForm(){
+async function callProcedureCostAi(payload){
+  const res=await fetch('api/procedure-cost-ai.php',{
+    method:'POST',
+    headers:csrfHeaders({'Content-Type':'application/json'}),
+    credentials:'same-origin',
+    body:JSON.stringify({...payload,csrf:csrfToken()})
+  });
+  const data=await res.json().catch(()=>({}));
+  applyCsrfFromResponse(data);
+  if(res.status===401){location.href='login.php';return null;}
+  if(data.needsOpenAI){
+    toast(data.error||'Configure a chave OpenAI em Configurações.');
+    go('config');
+    refreshOpenAiSettings();
+    return null;
+  }
+  if(!data.ok){
+    toast(data.error||'Falha na IA de custos.');
+    return null;
+  }
+  return data;
+}
+/** 1) Sincroniza materiais usados na ficha via OpenAI (qty clínicas). */
+async function syncProcedureMaterials(procId, opts={}){
+  const p=procedure(procId);
+  if(!p||p.name==='—') return toast('Procedimento inválido.');
+  toast('IA sincronizando materiais…');
+  const data=await callProcedureCostAi({
+    mode:'suggest_materials',
+    name:p.name,
+    specialty:p.specialty||'',
+    kind:p.kind||'clinico',
+    items:p.items||[],
+    materials:materialCatalogPayload(),
+    price:Number(p.price||0),
+    extra:Number(p.extra||0)
+  });
+  if(!data) return;
+  if(!data.items?.length) return toast('A IA não retornou materiais do catálogo.');
+  const target=state.procedures.find(x=>x.id===procId);
+  if(!target) return;
+  target.items=data.items.map(i=>({materialId:i.materialId,qty:Number(i.qty||1)}));
+  if(data.extra!=null && Number(target.extra||0)===0) target.extra=Number(data.extra)||0;
+  if(data.suggestedPrice!=null && Number(target.price||0)===0) target.price=Number(data.suggestedPrice)||0;
+  ensureClinicPrices();
+  save();renderAll();showCostSheet(procId);
+  if(opts.openModal) openProcedureModal(procId);
+  toast(`${data.items.length} materiais sincronizados pela OpenAI.`);
+}
+/** 2) Sincroniza custos: fraciona embalagens (IA) + recalcula unitCost da tabela. */
+async function syncProcedureCosts(procId){
+  toast('Sincronizando custos e fracionamento…');
+  // Fracionamento de embalagens no catálogo (amostra dos materiais da ficha + gerais)
+  const p=procedure(procId);
+  const usedIds=new Set((p.items||[]).map(i=>i.materialId));
+  const used=state.materials.filter(m=>usedIds.has(m.id));
+  const rest=state.materials.filter(m=>!usedIds.has(m.id));
+  const mats=[...used,...rest].slice(0,80);
+  const data=await callProcedureCostAi({
+    mode:'fraction_packs',
+    name:p.name,
+    specialty:p.specialty||'',
+    kind:p.kind||'clinico',
+    items:p.items||[],
+    materials:mats.map(m=>({id:m.id,name:m.name,brand:m.brand,type:m.type,pack:m.pack,price:Number(m.price||0),unitCost:Number(m.unitCost||0)})),
+    price:Number(p.price||0),
+    extra:Number(p.extra||0)
+  });
+  if(!data) return;
+  let packs=0;
+  (data.materials||[]).forEach(row=>{
+    const m=state.materials.find(x=>x.id===row.id);
+    if(!m) return;
+    if(row.pack){ m.pack=row.pack; packs++; }
+    const units=Number(row.packUnits||0)||parsePackUnits(m.pack);
+    if(units>0 && Number(m.price||0)>0){
+      m.unitCost=Math.round((Number(m.price)/units)*1000)/1000;
+      m.updated=todayISO();
+    }
+  });
+  // Sempre recalcula fracionados a partir da tabela (preço ÷ embalagem)
+  let n=0;
+  state.materials.forEach(m=>{
+    const next=unitCostFromPack(m.price,m.pack);
+    if(next>0 && Math.abs(next-Number(m.unitCost||0))>0.0005){m.unitCost=next;m.updated=todayISO();n++;}
+  });
+  save();renderAll();
+  if(procId) showCostSheet(procId);
+  const notes=(data.packNotes||[]).slice(0,3).join(' · ');
+  toast(`Custos sincronizados · ${packs} embalagens IA · ${n} unitários · ${notes||'tabela atualizada'}`);
+}
+/** Análise completa de custo do procedimento (OpenAI). */
+async function analyzeProcedureCostsAi(procId){
+  const p=procedure(procId);
+  if(!p||p.name==='—') return toast('Selecione um procedimento.');
+  toast('OpenAI analisando custos…');
+  const data=await callProcedureCostAi({
+    mode:'analyze',
+    name:p.name,
+    specialty:p.specialty||'',
+    kind:p.kind||'clinico',
+    items:p.items||[],
+    materials:materialCatalogPayload(),
+    price:Number(p.price||0),
+    extra:Number(p.extra||0)
+  });
+  if(!data) return;
+  const findings=(data.findings||[]).map(x=>`<li>${esc(x)}</li>`).join('');
+  const packs=(data.packNotes||[]).map(x=>`<li>${esc(x)}</li>`).join('');
+  const risks=(data.risks||[]).map(x=>`<li>${esc(x)}</li>`).join('');
+  const itemsPreview=(data.items||[]).slice(0,12).map(i=>{
+    const m=material(i.materialId);
+    return `<tr><td>${esc(m.name)}</td><td>${i.qty}</td><td>${brl.format(m.unitCost*i.qty)}</td><td class="cell-sub">${esc(i.rationale||'')}</td></tr>`;
+  }).join('');
+  openModal(`IA · custos · ${p.name}`,`
+    <p class="field-hint">Modelo: ${esc(data.model||'OpenAI')} · análise ao vivo (sem resposta pronta).</p>
+    <p style="font-size:13px;line-height:1.5">${esc(data.analysis||'—')}</p>
+    <div class="summary-bar" style="margin:12px 0">
+      <div><small>Custo estimado</small><strong>${brl.format(data.estimatedCost||0)}</strong></div>
+      <div><small>Preço sugerido</small><strong>${brl.format(data.suggestedPrice||0)}</strong></div>
+      <div><small>Margem</small><strong>${data.marginPct!=null?data.marginPct+'%':'—'}</strong></div>
+      <div><small>Lab/extra</small><strong>${brl.format(data.extra||0)}</strong></div>
+    </div>
+    ${findings?`<h4 class="sheet-subtitle">Achados</h4><ul>${findings}</ul>`:''}
+    ${packs?`<h4 class="sheet-subtitle">Fracionamento</h4><ul>${packs}</ul>`:''}
+    ${risks?`<h4 class="sheet-subtitle">Atenções</h4><ul>${risks}</ul>`:''}
+    ${itemsPreview?`<h4 class="sheet-subtitle">Ficha sugerida</h4><div class="table-wrap"><table><thead><tr><th>Material</th><th>Qtd</th><th>Custo</th><th>Nota</th></tr></thead><tbody>${itemsPreview}</tbody></table></div>`:''}
+    <div class="row-actions" style="margin-top:12px">
+      <button type="button" class="btn primary" id="aiApplyMats">Aplicar materiais na ficha</button>
+      <button type="button" class="btn" id="aiApplyPrice">Aplicar preço sugerido</button>
+    </div>
+  `,()=>closeModal());
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  const saveBtn=document.getElementById('modalSave');
+  if(saveBtn) saveBtn.textContent='Fechar';
+  document.getElementById('aiApplyMats')?.addEventListener('click',()=>{
+    if(!data.items?.length) return toast('Sem itens para aplicar.');
+    const target=state.procedures.find(x=>x.id===procId);
+    if(!target) return;
+    target.items=data.items.map(i=>({materialId:i.materialId,qty:Number(i.qty||1)}));
+    if(data.extra!=null) target.extra=Number(data.extra)||0;
+    ensureClinicPrices();save();renderAll();showCostSheet(procId);toast('Ficha atualizada pela IA.');
+  });
+  document.getElementById('aiApplyPrice')?.addEventListener('click',()=>{
+    if(data.suggestedPrice==null) return toast('Sem preço sugerido.');
+    const target=state.procedures.find(x=>x.id===procId);
+    if(!target) return;
+    target.price=Number(data.suggestedPrice)||0;
+    ensureClinicPrices();save();renderAll();showCostSheet(procId);toast('Preço base atualizado.');
+  });
+}
+async function syncAllVisibleProcedureMaterials(){
+  const q=(document.getElementById('procSearch')?.value||'').toLowerCase();
+  const sf=document.getElementById('procSpecialtyFilter')?.value||'';
+  const kf=document.getElementById('procKindFilter')?.value||'';
+  const rows=state.procedures.filter(p=>{
+    if(q && !`${p.name} ${specialtyName(p.specialty)}`.toLowerCase().includes(q)) return false;
+    if(sf && p.specialty!==sf) return false;
+    if(kf && (p.kind||'clinico')!==kf) return false;
+    return true;
+  }).slice(0,8);
+  if(!rows.length) return toast('Nenhum procedimento no filtro.');
+  if(!confirm(`Sincronizar materiais com OpenAI nos ${rows.length} primeiros procedimentos do filtro?`)) return;
+  for(const p of rows){
+    await syncProcedureMaterials(p.id);
+  }
+  toast('Lote de materiais concluído.');
+}
+async function applySuggestedMaterialsToProcedureForm(){
   const name=getv('pName');
-  const items=suggestMaterialsForProcedureName(name);
-  if(!items.length) return toast('Não encontrei sugestão para este nome. Edite a ficha manualmente.');
+  if(!name) return toast('Informe o nome do procedimento.');
+  toast('Consultando OpenAI…');
+  const data=await callProcedureCostAi({
+    mode:'suggest_materials',
+    name,
+    specialty:getv('pSpecialty')||'',
+    kind:getv('pKind')||'clinico',
+    items:collectProcItems(),
+    materials:materialCatalogPayload(),
+    price:num('pPrice'),
+    extra:num('pExtra')
+  });
+  if(!data) return;
+  if(!data.items?.length) return toast('A IA não encontrou materiais no seu catálogo.');
   const box=document.getElementById('procItems');
   if(!box) return;
-  box.innerHTML=items.map(procItemRow).join('');
-  toast(`${items.length} materiais sugeridos — você pode editar.`);
+  box.innerHTML=data.items.map(i=>procItemRow({materialId:i.materialId,qty:i.qty})).join('');
+  if(data.extra!=null && document.getElementById('pExtra') && !num('pExtra')) document.getElementById('pExtra').value=data.extra;
+  if(data.suggestedPrice!=null && document.getElementById('pPrice') && !num('pPrice')) document.getElementById('pPrice').value=data.suggestedPrice;
+  toast(`${data.items.length} materiais via OpenAI.`);
 }
+const PROC_AI_RULES=[]; // legado removido — sugestões passam pela OpenAI
+function suggestMaterialsForProcedureName(){return []}
 function consumeRow(item={}){
   return `<div class="consume-row"><select class="select ci-mat">${materialSelect(item.materialId||'')}</select><input class="input ci-qty" type="number" min="0" step="0.01" value="${item.qty??1}" oninput="refreshConsumeTotals()"><input class="input ci-total" disabled value=""><button type="button" class="btn small icon-x" onclick="this.parentElement.remove();refreshConsumeTotals()">×</button></div>`;
 }
@@ -941,7 +1171,7 @@ function renderProcedures(){
   document.getElementById('proceduresTable').innerHTML=rows.map(p=>{
     const cost=procedureCost(p), m=pct(p.price-cost,p.price);
     const kind=p.kind==='cirurgico'?'Cirúrgico':'Clínico';
-    return `<tr>${td('Procedimento',`<strong>${esc(p.name)}</strong><span class="cell-sub">${esc(specialtyName(p.specialty))} · ${kind}</span>`)}${td('Preço',brl.format(p.price))}${td('Custo',brl.format(cost))}${td('Margem',badge(m+'%'))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="showCostSheet('${p.id}')">Ficha</button><button class="btn small" onclick="openProcedureModal('${p.id}')">Editar</button><button class="btn small danger" onclick="deleteProcedure('${p.id}')">Excluir</button></div></td></tr>`;
+    return `<tr>${td('Procedimento',`<strong>${esc(p.name)}</strong><span class="cell-sub">${esc(specialtyName(p.specialty))} · ${kind}</span>`)}${td('Preço',brl.format(p.price))}${td('Custo',brl.format(cost))}${td('Margem',badge(m+'%'))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="showCostSheet('${p.id}')">Ficha</button><button class="btn small" onclick="analyzeProcedureCostsAi('${p.id}')">IA custos</button><button class="btn small" onclick="openProcedureModal('${p.id}')">Editar</button><button class="btn small danger" onclick="deleteProcedure('${p.id}')">Excluir</button></div></td></tr>`;
   }).join('')||'<tr><td colspan="5"><div class="empty">Nenhum procedimento neste filtro.</div></td></tr>';
 }
 function showCostSheet(id){
@@ -953,10 +1183,21 @@ function showCostSheet(id){
     const mode=r.receiveMode==='percent'?`Porcentagem · ${r.receivePercent}%`:'Valor fechado';
     return `<div class="cost-row"><div>${esc(clinic(r.clinicId).name)}</div><div>${brl.format(r.practicedValue)}</div><div>${esc(mode)}</div><div><strong>${brl.format(honorariumFromPrice(r))}</strong></div></div>`;
   }).join('')||'<div class="empty">Nenhuma clínica configurada. Edite o procedimento para definir valores.</div>';
+  const fracNotes=(p.items||[]).slice(0,6).map(i=>{
+    const m=material(i.materialId);
+    const units=parsePackUnits(m.pack);
+    return `<div class="cost-row"><div>${esc(m.name)}<span class="cell-sub">${esc(m.pack||'—')} → ${units} un · unit. ${brl.format(m.unitCost)}</span></div><div>${i.qty}</div><div>${brl.format(m.unitCost)}</div><div><strong>${brl.format(m.unitCost*i.qty)}</strong></div></div>`;
+  }).join('');
   document.getElementById('costSheet').innerHTML=`
+    <div class="row-actions" style="margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn small primary" onclick="syncProcedureMaterials('${id}')">↻ Sync materiais</button>
+      <button class="btn small primary" onclick="syncProcedureCosts('${id}')">↻ Sync custos</button>
+      <button class="btn small" onclick="analyzeProcedureCostsAi('${id}')">✦ IA analisar custos</button>
+      <button class="btn small" onclick="openProcedureModal('${id}')">Editar</button>
+    </div>
     <div class="cost-sheet">
-      <div class="cost-row header"><div>Item</div><div>Qtd.</div><div>Unitário</div><div>Total</div></div>
-      ${p.items?.length?p.items.map(i=>{const m=material(i.materialId); return `<div class="cost-row"><div>${esc(m.name)}</div><div>${i.qty}</div><div>${brl.format(m.unitCost)}</div><div><strong>${brl.format(m.unitCost*i.qty)}</strong></div></div>`}).join(''):'<div class="empty">Nenhum material nesta ficha. Edite o procedimento para incluir.</div>'}
+      <div class="cost-row header"><div>Item / embalagem fracionada</div><div>Qtd.</div><div>Unitário</div><div>Total</div></div>
+      ${p.items?.length?fracNotes:'<div class="empty">Nenhum material nesta ficha. Use Sync materiais (OpenAI) ou edite o procedimento.</div>'}
       <div class="cost-row"><div>Laboratório / custos adicionais</div><div>1</div><div>${brl.format(p.extra)}</div><div><strong>${brl.format(p.extra)}</strong></div></div>
     </div>
     <div class="summary-bar"><div><small>Preço base</small><strong>${brl.format(p.price)}</strong></div><div><small>Custo previsto</small><strong>${brl.format(cost)}</strong></div><div><small>Lucro projetado</small><strong>${brl.format(p.price-cost)}</strong></div><div><small>Margem</small><strong>${pct(p.price-cost,p.price)}%</strong></div></div>
@@ -964,8 +1205,7 @@ function showCostSheet(id){
     <div class="cost-sheet">
       <div class="cost-row header"><div>Clínica</div><div>Praticado</div><div>Recebimento</div><div>Você recebe</div></div>
       ${clinicRows}
-    </div>
-    <div class="row-actions" style="margin-top:12px"><button class="btn small" onclick="openProcedureModal('${id}')">Editar procedimento</button></div>`;
+    </div>`;
 }
 function renderService(){
   const tabs=document.getElementById('serviceClinicTabs');
@@ -1644,7 +1884,7 @@ async function interpretClinicBillingAi(){
   const text=getv('bNotes');
   if(!text.trim()) return toast('Descreva a regra antes de interpretar.');
   const btn=[...document.querySelectorAll('.modal .btn')].find(b=>b.textContent.includes('Interpretar'));
-  if(btn){btn.disabled=true;btn.textContent='Interpretando…';}
+  if(btn){btn.disabled=true;btn.textContent='Consultando OpenAI…';}
   try{
     const res=await fetch('api/billing-rule-ai.php',{
       method:'POST',
@@ -1655,19 +1895,19 @@ async function interpretClinicBillingAi(){
     const data=await res.json().catch(()=>({}));
     applyCsrfFromResponse(data);
     if(res.status===401){location.href='login.php';return;}
-    if(!data.ok || !data.billing){
-      // fallback local
-      const local=ChevalierBilling.parseRuleLocal(text);
-      applyBillingToForm(local);
-      toast('Interpretado localmente (sem OpenAI).');
-    }else{
-      applyBillingToForm({...data.billing, notes:text});
-      toast(data.mode==='openai'?'IA interpretou a regra.':'Regra interpretada (modo local).');
+    if(data.needsOpenAI){
+      toast(data.error||'Configure a OpenAI em Configurações.');
+      closeModal();go('config');refreshOpenAiSettings();
+      return;
     }
+    if(!data.ok || !data.billing){
+      toast(data.error||'Falha na OpenAI.');
+      return;
+    }
+    applyBillingToForm({...data.billing, notes:text});
+    toast(`OpenAI interpretou a regra${data.model?' · '+data.model:''}.`);
   }catch(e){
-    const local=ChevalierBilling.parseRuleLocal(text);
-    applyBillingToForm(local);
-    toast('Interpretado no aparelho (offline).');
+    toast('Falha de rede ao chamar a OpenAI.');
   }finally{
     if(btn){btn.disabled=false;btn.textContent='✦ Interpretar com IA';}
   }
@@ -1736,7 +1976,7 @@ function openProcedureModal(editId=''){
       <p class="field-hint">Em cada clínica, informe o valor praticado e se você recebe valor fechado (integral) ou porcentagem desse valor.</p>
       <div id="clinicPrices" class="clinic-price-list">${clinicRows}</div>
     </div>
-    <div class="field full"><label>Materiais utilizados (qtd. × custo unitário)</label><p class="field-hint">Use “Sugerir materiais” para preencher automaticamente conforme o nome do procedimento.</p><div id="procItems">${rows}</div><div class="row-actions"><button type="button" class="btn small" onclick="document.getElementById('procItems').insertAdjacentHTML('beforeend', procItemRow())">＋ Material</button><button type="button" class="btn small" onclick="applySuggestedMaterialsToProcedureForm()">✦ Sugerir materiais</button></div></div>
+    <div class="field full"><label>Materiais utilizados (qtd. × custo unitário fracionado)</label><p class="field-hint">“Sugerir com OpenAI” monta a ficha com consumo clínico (ex.: 3 microbrush de uma caixa com 100). Depois use Sync custos na ficha.</p><div id="procItems">${rows}</div><div class="row-actions"><button type="button" class="btn small" onclick="document.getElementById('procItems').insertAdjacentHTML('beforeend', procItemRow())">＋ Material</button><button type="button" class="btn small primary" onclick="applySuggestedMaterialsToProcedureForm()">✦ Sugerir com OpenAI</button></div></div>
   </div>`,()=>{
     if(!getv('pName'))return toast('Informe o nome do procedimento.');
     const obj={id:editId||uid(),name:getv('pName'),specialty:getv('pSpecialty')||'clinica',kind:getv('pKind')||'clinico',price:num('pPrice'),extra:num('pExtra'),items:collectProcItems(),clinicPrices:collectClinicPrices()};

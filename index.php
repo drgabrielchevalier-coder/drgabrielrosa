@@ -246,8 +246,12 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
       <!-- PROCEDIMENTOS -->
       <section class="page" id="page-procedimentos">
         <div class="page-head">
-          <div><h2>Procedimentos</h2><p>Catálogo clínico e cirúrgico — componha tratamentos somando procedimentos. Preços por clínica (valor fechado ou %).</p></div>
-          <div class="page-actions"><button class="btn primary" onclick="openProcedureModal()">＋ Novo procedimento</button></div>
+          <div><h2>Procedimentos</h2><p>Catálogo clínico e cirúrgico — componha tratamentos, sincronize materiais/custos fracionados e analise com OpenAI.</p></div>
+          <div class="page-actions">
+            <button class="btn" onclick="syncAllVisibleProcedureMaterials()">↻ Sync materiais</button>
+            <button class="btn" onclick="recalcAllUnitCosts()">↻ Sync custos (fracionar)</button>
+            <button class="btn primary" onclick="openProcedureModal()">＋ Novo procedimento</button>
+          </div>
         </div>
         <div class="toolbar">
           <input class="input" id="procSearch" placeholder="Buscar procedimento..." oninput="renderProcedures()">
@@ -549,6 +553,13 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           </table></div></div>
         </div>
         <div id="bancoProcedimentos" hidden>
+          <div class="ai-banner">
+            <div>
+              <strong>IA de custos de procedimento</strong>
+              <p>1) Sync materiais usados · 2) Sync custos fracionando a embalagem (ex.: microbrush 100 un) com a tabela · análise OpenAI por ficha.</p>
+            </div>
+            <button class="btn primary" onclick="go('procedimentos')">Abrir procedimentos</button>
+          </div>
           <div class="toolbar">
             <input class="input" id="procDbSearch" placeholder="Buscar procedimento..." oninput="renderBanco()">
           </div>
@@ -646,6 +657,24 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
             </div>
           </div>
           <div class="card">
+            <div class="card-head"><h3>OpenAI (API real)</h3></div>
+            <div class="card-body">
+              <p class="field-hint" id="openaiStatusHint">Carregando status da chave…</p>
+              <div class="form-grid" style="margin-top:10px">
+                <div class="field full"><label>Chave da API (sk-…)</label><input id="openaiKeyInput" class="input" type="password" autocomplete="off" placeholder="Cole sua chave OpenAI"></div>
+                <div class="field"><label>Modelo chat</label><input id="openaiChatModel" class="input" placeholder="gpt-4o-mini"></div>
+                <div class="field"><label>Modelo visão</label><input id="openaiVisionModel" class="input" placeholder="gpt-4o-mini"></div>
+              </div>
+              <div class="row-actions" style="margin-top:10px">
+                <button type="button" class="btn primary" onclick="saveOpenAiSettings()">Salvar chave</button>
+                <button type="button" class="btn" onclick="testOpenAiSettings()">Testar conexão</button>
+              </div>
+              <div class="settings-row" style="margin-top:14px"><div class="desc"><strong>IA de custos</strong><span>Analisa ficha, sincroniza materiais e fraciona embalagens (microbrush 100 un, etc.).</span></div><span class="badge b-green">OpenAI</span></div>
+              <div class="settings-row"><div class="desc"><strong>IA de cobrança</strong><span>Interpreta regra da clínica em texto.</span></div><span class="badge b-green">OpenAI</span></div>
+              <div class="settings-row"><div class="desc"><strong>IA de tomografia</strong><span>Vision + chat no planejamento.</span></div><span class="badge b-green">OpenAI</span></div>
+            </div>
+          </div>
+          <div class="card">
             <div class="card-head"><h3>Integrações</h3></div>
             <div class="card-body">
               <div class="settings-row"><div class="desc"><strong>Notion</strong><span>Fonte atual para migração de pacientes, custos, honorários e estoque.</span></div><span class="badge b-green">Referência conectada</span></div>
@@ -653,8 +682,6 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
               <div class="settings-row"><div class="desc"><strong>Consumo automático</strong><span>Ao lançar procedimento, materiais da ficha preenchem o custo (editável).</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>Leitor de boletos</strong><span>Escaneia boleto (câmera/arquivo/linha digitável), lança em Custos e alerta duplicatas.</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>Código de barras</strong><span>Lê EAN/código do material para localizar e movimentar estoque.</span></div><span class="badge b-green">Ativo</span></div>
-              <div class="settings-row"><div class="desc"><strong>IA de tomografia</strong><span>Avalia arquivos de planejamento ICON/CBCT na aba Planejamento.</span></div><span class="badge b-green">Ativo</span></div>
-              <div class="settings-row"><div class="desc"><strong>IA de cobrança</strong><span>Interpreta a regra da clínica em texto e monta o algoritmo (%, cartão, reembolso).</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>IA gerencial</strong><span>Consultas como “qual clínica me deu maior lucro nos últimos 90 dias?”.</span></div><span class="badge b-blue">Fase 5</span></div>
               <div class="settings-row"><div class="desc"><strong>Backup local</strong><span>Baixe os dados do protótipo em JSON.</span></div><button class="btn small" onclick="exportData()">Exportar JSON</button></div>
             </div>

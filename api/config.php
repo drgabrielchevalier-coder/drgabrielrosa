@@ -27,4 +27,8 @@ if (!defined('AUTH_PASS')) {
     define('AUTH_PASS', 'chevalier');
 }
 /* Opcional: define('AUTH_PASS_HASH', password_hash('sua-senha', PASSWORD_DEFAULT)); */
-/* Opcional IA Vision: define('OPENAI_API_KEY', 'sk-...'); define('OPENAI_VISION_MODEL', 'gpt-4o-mini'); */
+/* Opcional OpenAI — prefira Configurações no app ou api/config.local.php:
+   define('OPENAI_API_KEY', 'sk-...');
+   define('OPENAI_CHAT_MODEL', 'gpt-4o-mini');
+   define('OPENAI_VISION_MODEL', 'gpt-4o-mini');
+*/
