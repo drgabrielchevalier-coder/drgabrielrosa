@@ -307,6 +307,25 @@
   .treat-line .tl-tooth{height:36px;font-size:12px}
   .treat-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .treat-add .select{flex:1;min-width:200px}
+  .bill-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .bill-chip{
+    font-size:10px;padding:4px 8px;border-radius:999px;border:1px solid var(--line);
+    background:#f7f5ef;color:var(--muted)
+  }
+  .bill-formula{margin-top:10px;font-size:11px;color:var(--text);line-height:1.45;display:grid;gap:3px}
+  .bill-example{margin:8px 0 0;font-size:10px;color:var(--muted);line-height:1.4}
+  .bill-layout{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(240px,.8fr);gap:16px;align-items:start}
+  .bill-config{display:grid;gap:10px}
+  .bill-section-title{margin:8px 0 4px;font-size:12px;font-weight:650;color:var(--text)}
+  .bill-preview{
+    position:sticky;top:8px;border:1px solid var(--line);border-radius:14px;padding:14px;
+    background:linear-gradient(180deg,#fcfbf8,#f3efe6)
+  }
+  .bill-preview-head{font-size:12px;font-weight:650;margin-bottom:8px}
+  .bill-preview-list{margin:0;padding-left:18px;font-size:11px;line-height:1.45;color:var(--text)}
+  .bill-preview-math{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .bill-preview-math small{display:block;font-size:9px;color:var(--muted)}
+  .bill-preview-math strong{font-size:12px}
   .sync-row{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;background:#fcfbf8}
   .sync-row-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
   .sync-offers{display:grid;gap:6px;margin-top:8px;font-size:11px;color:var(--muted)}
@@ -408,6 +427,8 @@
     .modal.modal-wide{width:100%}
     .treat-line{grid-template-columns:1fr 36px}
     .treat-line .tl-tooth{grid-column:1/-1}
+    .bill-layout{grid-template-columns:1fr}
+    .bill-preview{position:static}
     .ai-banner{flex-direction:column;align-items:stretch}
     .ai-banner .btn{width:100%;justify-content:center}
     .consume-row{grid-template-columns:1fr 64px 80px 36px}
