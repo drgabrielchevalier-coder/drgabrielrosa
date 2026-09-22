@@ -1,9 +1,9 @@
 {
-  "version": "2.7.2",
-  "name": "Baixa de recebimento com data e parcial",
+  "version": "2.7.3",
+  "name": "Corrige status quitado na baixa",
   "releasedAt": "2026-09-22",
   "changes": [
-    "Modal Baixar recebimento: data da baixa, recebimento total ou parcial.",
-    "Preview ao vivo do saldo em aberto e identificação automática de quitado."
+    "Status de pagamento passa a seguir o saldo real (não marca quitado com valor em aberto).",
+    "Modal de baixa: padrão parcial, previsão clara “se salvar agora / ficará quitado”, opção Quitar saldo."
   ]
 }
