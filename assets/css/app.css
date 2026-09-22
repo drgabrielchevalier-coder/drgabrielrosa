@@ -534,6 +534,7 @@
   }
   @media(max-width:560px){
     .kpi-grid,.report-grid,.layout-2,.layout-3,.clinic-stats{grid-template-columns:1fr}
+    .receive-preview-grid{grid-template-columns:1fr}
     .search{display:flex}
     .cost-row{grid-template-columns:1fr 1fr;gap:6px}
     .cost-row > :nth-child(3){display:none}

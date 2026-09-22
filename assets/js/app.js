@@ -396,8 +396,33 @@ function clinicPriceLabel(row){
 }
 function patientCost(p){return Number(p.cost||0)+Number(p.lab||0)+Number(p.components||0)+Number(p.clinical||0);}
 function patientProfit(p){return Number(p.value||0)-patientCost(p);}
-function balance(p){return Math.max(0,Number(p.value||0)-Number(p.received||0));}
+function moneyRound(n){return Math.round((Number(n)||0)*100)/100}
+function balance(p){return Math.max(0, moneyRound(Number(p.value||0)-Number(p.received||0)));}
 function isOverdue(p){return balance(p)>0 && p.due && p.due<todayISO();}
+function paymentStatusOf(p){
+  const bal=balance(p);
+  const rec=moneyRound(p.received||0);
+  if(bal<=0) return 'Faturado / Recebido';
+  if(rec>0) return 'Recebido parcial';
+  if(isOverdue(p)) return 'À receber';
+  const st=String(p.status||'');
+  if(/parcial/i.test(st)) return 'Recebido parcial';
+  if(/faturado/i.test(st)) return 'À receber'; // status antigo inconsistente com saldo
+  return st||'À receber';
+}
+function syncPatientPaymentStatus(p){
+  if(!p) return p;
+  const bal=balance(p);
+  if(bal<=0){
+    p.received=moneyRound(p.value||0);
+    p.status='Faturado / Recebido';
+  }else if(moneyRound(p.received||0)>0){
+    p.status='Recebido parcial';
+  }else if(/faturado/i.test(String(p.status||''))){
+    p.status='À receber';
+  }
+  return p;
+}
 function pct(a,b){return b?Math.round((a/b)*100):0}
 function badge(status){
   const s=(status||'').toLowerCase();
@@ -1314,15 +1339,15 @@ function daysUntilDue(p){
   return Math.round((a-b)/86400000);
 }
 function isServicePaid(p){
-  return balance(p)<=0 || String(p.status||'')==='Faturado / Recebido';
+  return balance(p)<=0;
 }
 function matchServiceStatus(p, filter){
   if(!filter) return true;
   const bal=balance(p);
-  const st=String(p.status||'');
-  if(filter==='paid') return isServicePaid(p);
+  const st=paymentStatusOf(p);
+  if(filter==='paid') return bal<=0;
   if(filter==='open') return bal>0;
-  if(filter==='partial') return /parcial/i.test(st) || (Number(p.received||0)>0 && bal>0);
+  if(filter==='partial') return st==='Recebido parcial';
   if(filter==='overdue') return isOverdue(p);
   if(filter==='due_soon'){
     const n=daysUntilDue(p);
@@ -1349,6 +1374,13 @@ function renderService(){
     statusTabs.innerHTML=SERVICE_STATUS_FILTERS.map(f=>`<button type="button" class="subtab ${serviceStatusFilter===f.id?'active':''}" onclick="setServiceStatusFilter('${f.id}')">${esc(f.label)}</button>`).join('');
   }
   const base=serviceBaseRows();
+  let healed=false;
+  base.forEach(p=>{
+    const before=String(p.status||'');
+    syncPatientPaymentStatus(p);
+    if(String(p.status||'')!==before) healed=true;
+  });
+  if(healed) save();
   const periodRows=base.filter(p=>inServicePeriod(p, servicePeriodDays));
   const tableRows=base.filter(p=>matchServiceStatus(p, serviceStatusFilter));
   const total=periodRows.reduce((s,p)=>s+Number(p.value||0),0);
@@ -1362,7 +1394,7 @@ function renderService(){
   document.getElementById('svcOpen').textContent=brl.format(open);
   document.getElementById('svcOverdue').textContent=brl.format(od);
   const emptyMsg=serviceStatusFilter?'Nenhum lançamento com este status.':'Nenhum lançamento nesta clínica.';
-  document.getElementById('serviceTable').innerHTML=tableRows.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${p.progress==='Orçamento'?'Orçamento':esc(p.progress||'')}</span>`)}${td('Clínica',esc(clinic(p.clinicId).name))}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} procedimento(s)</span>`)}${td('Honorário',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(isOverdue(p)?'À receber':p.status))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="markReceived('${p.id}')">Receber</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('')||`<tr><td colspan="8"><div class="empty">${emptyMsg}</div></td></tr>`;
+  document.getElementById('serviceTable').innerHTML=tableRows.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${p.progress==='Orçamento'?'Orçamento':esc(p.progress||'')}</span>`)}${td('Clínica',esc(clinic(p.clinicId).name))}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} procedimento(s)</span>`)}${td('Honorário',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(paymentStatusOf(p)))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="markReceived('${p.id}')">Receber</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('')||`<tr><td colspan="8"><div class="empty">${emptyMsg}</div></td></tr>`;
 }
 function setServiceClinicFilter(id){
   serviceClinicFilter=id||'';
@@ -1809,7 +1841,7 @@ function setReceivableFilter(v,btn){
 }
 function renderReceivables(){
   const arr=state.patients.filter(p=>!receivableFilter||p.status===receivableFilter);
-  document.getElementById('receivablesTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong>`)}${td('Origem',esc(clinic(p.clinicId).name))}${td('Valor',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Saldo',`<strong>${brl.format(balance(p))}</strong>`)}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(isOverdue(p)&&p.status!=='Faturado / Recebido'?'À receber':p.status))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="markReceived('${p.id}')">Baixar</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('');
+  document.getElementById('receivablesTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong>`)}${td('Origem',esc(clinic(p.clinicId).name))}${td('Valor',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Saldo',`<strong>${brl.format(balance(p))}</strong>`)}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(paymentStatusOf(p)))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="markReceived('${p.id}')">Baixar</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('');
 }
 function renderCosts(){
   const total=state.costs.reduce((s,c)=>s+Number(c.value||0),0), paid=state.costs.filter(c=>c.status==='PAGO').reduce((s,c)=>s+Number(c.value||0),0);
@@ -2996,15 +3028,27 @@ function openQuickModal(){
   const s=document.getElementById('modalSave');
   if(s) s.style.display='none';
 }
+function parseMoneyInput(raw){
+  if(typeof raw==='number') return Number.isFinite(raw)?raw:0;
+  let s=String(raw??'').trim();
+  if(!s) return 0;
+  s=s.replace(/R\$\s?/gi,'').replace(/\s/g,'');
+  if(/\d,\d{1,2}$/.test(s)) s=s.replace(/\./g,'').replace(',','.');
+  else s=s.replace(/,/g,'');
+  const n=Number(s);
+  return Number.isFinite(n)?n:0;
+}
 function markReceived(id){
   const p=state.patients.find(x=>x.id===id);if(!p)return;
+  syncPatientPaymentStatus(p);
   const saldo=balance(p);
   if(saldo<=0){
     toast('Este lançamento já está quitado.');
+    renderAll();
     return;
   }
-  const valor=Number(p.value||0);
-  const jaRecebido=Number(p.received||0);
+  const valor=moneyRound(p.value||0);
+  const jaRecebido=moneyRound(p.received||0);
   openModal('Baixar recebimento', `
     <div class="form-grid">
       <div class="field full"><label>Paciente</label><input class="input" value="${esc(p.name)}" disabled></div>
@@ -3015,24 +3059,25 @@ function markReceived(id){
       <div class="field full">
         <label>Tipo de baixa</label>
         <div class="receive-mode-tabs" role="tablist" aria-label="Tipo de baixa">
-          <button type="button" class="subtab active" id="receiveModeTotal" onclick="setReceiveMode('total')">Recebimento total</button>
-          <button type="button" class="subtab" id="receiveModePartial" onclick="setReceiveMode('partial')">Baixa parcial</button>
+          <button type="button" class="subtab" id="receiveModeTotal" onclick="setReceiveMode('total')">Quitar saldo</button>
+          <button type="button" class="subtab active" id="receiveModePartial" onclick="setReceiveMode('partial')">Baixa parcial</button>
         </div>
+        <span class="field-hint">Saldo atual em aberto: ${brl.format(saldo)}. “Quitar saldo” zera o restante; parcial mantém em aberto.</span>
       </div>
       <div class="field full"><label>Valor recebido agora</label>
-        <input id="receiveAmount" type="number" class="input" min="0.01" step="0.01" max="${saldo}" value="${saldo.toFixed(2)}" oninput="refreshReceivePreview()">
+        <input id="receiveAmount" type="number" class="input" min="0.01" step="0.01" max="${saldo}" value="" placeholder="0,00" oninput="refreshReceivePreview()">
       </div>
       <div class="field full">
         <div class="receive-preview" id="receivePreview"></div>
       </div>
     </div>
   `, ()=>commitReceivePayment(p.id));
-  window.__receiveModal={patientId:p.id, saldo, mode:'total'};
+  window.__receiveModal={patientId:p.id, saldo, mode:'partial'};
   refreshReceivePreview();
 }
 function setReceiveMode(mode){
   const ctx=window.__receiveModal; if(!ctx) return;
-  ctx.mode=mode==='partial'?'partial':'total';
+  ctx.mode=mode==='total'?'total':'partial';
   const amountEl=document.getElementById('receiveAmount');
   const btnTotal=document.getElementById('receiveModeTotal');
   const btnPartial=document.getElementById('receiveModePartial');
@@ -3040,12 +3085,12 @@ function setReceiveMode(mode){
   btnPartial?.classList.toggle('active', ctx.mode==='partial');
   if(amountEl){
     if(ctx.mode==='total'){
-      amountEl.value=Number(ctx.saldo||0).toFixed(2);
+      amountEl.value=moneyRound(ctx.saldo||0).toFixed(2);
       amountEl.readOnly=true;
     }else{
       amountEl.readOnly=false;
+      if(!amountEl.value) amountEl.value='';
       amountEl.focus();
-      amountEl.select?.();
     }
   }
   refreshReceivePreview();
@@ -3055,57 +3100,61 @@ function refreshReceivePreview(){
   const p=state.patients.find(x=>x.id===ctx.patientId); if(!p) return;
   const saldo=balance(p);
   ctx.saldo=saldo;
-  let amt=Number(document.getElementById('receiveAmount')?.value||0);
-  if(!Number.isFinite(amt) || amt<0) amt=0;
+  let amt=parseMoneyInput(document.getElementById('receiveAmount')?.value);
+  if(amt<0) amt=0;
   if(ctx.mode==='total') amt=saldo;
-  amt=Math.min(saldo, Math.round(amt*100)/100);
-  const newReceived=Math.min(Number(p.value||0), Number(p.received||0)+amt);
-  const newBal=Math.max(0, Math.round((Number(p.value||0)-newReceived)*100)/100);
-  const quitado=newBal<=0.009;
+  amt=Math.min(saldo, moneyRound(amt));
+  const newReceived=moneyRound(Math.min(Number(p.value||0), Number(p.received||0)+amt));
+  const newBal=moneyRound(Math.max(0, Number(p.value||0)-newReceived));
+  const ficaraQuitado=newBal<=0;
   const box=document.getElementById('receivePreview');
   if(box){
-    box.innerHTML=`
-      <div class="receive-preview-grid">
-        <div><small>Após a baixa</small><strong>${brl.format(newReceived)} recebido</strong></div>
-        <div><small>Saldo em aberto</small><strong class="${quitado?'ok':'warn'}">${brl.format(newBal)}</strong></div>
-        <div><small>Situação</small><strong class="${quitado?'ok':'warn'}">${quitado?'Quitado':'Em aberto (parcial)'}</strong></div>
-      </div>
-    `;
+    if(amt<=0){
+      box.innerHTML=`<p class="field-hint" style="margin:0">Informe o valor desta baixa para ver o saldo previsto.</p>`;
+    }else{
+      box.innerHTML=`
+        <div class="receive-preview-grid">
+          <div><small>Se salvar agora</small><strong>${brl.format(newReceived)} no total</strong></div>
+          <div><small>Saldo que restará</small><strong class="${ficaraQuitado?'ok':'warn'}">${brl.format(newBal)}</strong></div>
+          <div><small>Situação prevista</small><strong class="${ficaraQuitado?'ok':'warn'}">${ficaraQuitado?'Ficará quitado':'Continuará em aberto'}</strong></div>
+        </div>
+      `;
+    }
   }
   const amountEl=document.getElementById('receiveAmount');
-  if(amountEl && ctx.mode==='total' && Number(amountEl.value)!==amt){
-    amountEl.value=amt.toFixed(2);
+  if(amountEl && ctx.mode==='total'){
+    amountEl.value=moneyRound(amt).toFixed(2);
   }
 }
 function commitReceivePayment(patientId){
   const p=state.patients.find(x=>x.id===patientId); if(!p) return;
+  syncPatientPaymentStatus(p);
   const saldo=balance(p);
-  if(saldo<=0){ toast('Já estava quitado.'); closeModal(); return; }
-  const ctx=window.__receiveModal||{mode:'total'};
-  let amt=num('receiveAmount');
+  if(saldo<=0){ toast('Já estava quitado.'); closeModal(); renderAll(); return; }
+  const ctx=window.__receiveModal||{mode:'partial'};
+  let amt=parseMoneyInput(document.getElementById('receiveAmount')?.value);
   if(ctx.mode==='total') amt=saldo;
-  amt=Math.min(saldo, Math.max(0, Math.round(amt*100)/100));
+  amt=Math.min(saldo, Math.max(0, moneyRound(amt)));
   if(amt<=0){ toast('Informe um valor maior que zero.'); return; }
   const date=getv('receiveDate')||todayISO();
-  const before=Number(p.received||0);
-  p.received=Math.min(Number(p.value||0), before+amt);
+  const before=moneyRound(p.received||0);
+  p.received=moneyRound(Math.min(Number(p.value||0), before+amt));
+  syncPatientPaymentStatus(p);
   const open=balance(p);
-  p.status=open<=0.009?'Faturado / Recebido':'Recebido parcial';
-  if(open<=0.009) p.received=Number(p.value||0);
   p.lastPaymentDate=date;
   if(!Array.isArray(p.payments)) p.payments=[];
   p.payments.push({
     id:uid(),
     date,
     amount:amt,
-    mode:open<=0.009?'total':'parcial',
+    mode:open<=0?'total':'parcial',
     balanceAfter:open
   });
   save();
   closeModal();
   window.__receiveModal=null;
   renderAll();
-  toast(open<=0.009
+  toast(open<=0
     ? `Quitado em ${fmtDate(date)} — saldo zerado.`
     : `Baixa parcial de ${brl.format(amt)} · saldo ${brl.format(open)}.`);
 }
