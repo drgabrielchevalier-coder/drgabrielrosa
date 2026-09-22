@@ -1,9 +1,9 @@
 {
-  "version": "2.7.1",
-  "name": "Filtros na Prestação de serviço",
+  "version": "2.7.2",
+  "name": "Baixa de recebimento com data e parcial",
   "releasedAt": "2026-09-22",
   "changes": [
-    "Totais da Prestação filtráveis por período: 7d, 15d, 30d, 60d, 90d.",
-    "Lançamentos com filtros: Todos, Pagos, A receber, Parcial, Vencidos, A vencer."
+    "Modal Baixar recebimento: data da baixa, recebimento total ou parcial.",
+    "Preview ao vivo do saldo em aberto e identificação automática de quitado."
   ]
 }

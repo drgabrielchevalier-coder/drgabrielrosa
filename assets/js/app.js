@@ -2998,10 +2998,119 @@ function openQuickModal(){
 }
 function markReceived(id){
   const p=state.patients.find(x=>x.id===id);if(!p)return;
-  openModal('Baixar recebimento',`<div class="form-grid"><div class="field full"><label>Paciente</label><input class="input" value="${esc(p.name)}" disabled></div><div class="field"><label>Saldo atual</label><input class="input" value="${brl.format(balance(p))}" disabled></div><div class="field"><label>Valor recebido agora</label><input id="receiveAmount" type="number" class="input" value="${balance(p)}"></div></div>`,()=>{
-    p.received=Math.min(p.value,Number(p.received||0)+num('receiveAmount'));p.status=p.received>=p.value?'Faturado / Recebido':'Recebido parcial';save();closeModal();renderAll();toast('Recebimento atualizado.');
-  })
+  const saldo=balance(p);
+  if(saldo<=0){
+    toast('Este lançamento já está quitado.');
+    return;
+  }
+  const valor=Number(p.value||0);
+  const jaRecebido=Number(p.received||0);
+  openModal('Baixar recebimento', `
+    <div class="form-grid">
+      <div class="field full"><label>Paciente</label><input class="input" value="${esc(p.name)}" disabled></div>
+      <div class="field"><label>Honorário</label><input class="input" value="${brl.format(valor)}" disabled></div>
+      <div class="field"><label>Já recebido</label><input class="input" value="${brl.format(jaRecebido)}" disabled></div>
+      <div class="field"><label>Saldo atual</label><input class="input" id="receiveSaldoAtual" value="${brl.format(saldo)}" disabled></div>
+      <div class="field"><label>Data da baixa</label><input id="receiveDate" type="date" class="input" value="${todayISO()}"></div>
+      <div class="field full">
+        <label>Tipo de baixa</label>
+        <div class="receive-mode-tabs" role="tablist" aria-label="Tipo de baixa">
+          <button type="button" class="subtab active" id="receiveModeTotal" onclick="setReceiveMode('total')">Recebimento total</button>
+          <button type="button" class="subtab" id="receiveModePartial" onclick="setReceiveMode('partial')">Baixa parcial</button>
+        </div>
+      </div>
+      <div class="field full"><label>Valor recebido agora</label>
+        <input id="receiveAmount" type="number" class="input" min="0.01" step="0.01" max="${saldo}" value="${saldo.toFixed(2)}" oninput="refreshReceivePreview()">
+      </div>
+      <div class="field full">
+        <div class="receive-preview" id="receivePreview"></div>
+      </div>
+    </div>
+  `, ()=>commitReceivePayment(p.id));
+  window.__receiveModal={patientId:p.id, saldo, mode:'total'};
+  refreshReceivePreview();
 }
+function setReceiveMode(mode){
+  const ctx=window.__receiveModal; if(!ctx) return;
+  ctx.mode=mode==='partial'?'partial':'total';
+  const amountEl=document.getElementById('receiveAmount');
+  const btnTotal=document.getElementById('receiveModeTotal');
+  const btnPartial=document.getElementById('receiveModePartial');
+  btnTotal?.classList.toggle('active', ctx.mode==='total');
+  btnPartial?.classList.toggle('active', ctx.mode==='partial');
+  if(amountEl){
+    if(ctx.mode==='total'){
+      amountEl.value=Number(ctx.saldo||0).toFixed(2);
+      amountEl.readOnly=true;
+    }else{
+      amountEl.readOnly=false;
+      amountEl.focus();
+      amountEl.select?.();
+    }
+  }
+  refreshReceivePreview();
+}
+function refreshReceivePreview(){
+  const ctx=window.__receiveModal; if(!ctx) return;
+  const p=state.patients.find(x=>x.id===ctx.patientId); if(!p) return;
+  const saldo=balance(p);
+  ctx.saldo=saldo;
+  let amt=Number(document.getElementById('receiveAmount')?.value||0);
+  if(!Number.isFinite(amt) || amt<0) amt=0;
+  if(ctx.mode==='total') amt=saldo;
+  amt=Math.min(saldo, Math.round(amt*100)/100);
+  const newReceived=Math.min(Number(p.value||0), Number(p.received||0)+amt);
+  const newBal=Math.max(0, Math.round((Number(p.value||0)-newReceived)*100)/100);
+  const quitado=newBal<=0.009;
+  const box=document.getElementById('receivePreview');
+  if(box){
+    box.innerHTML=`
+      <div class="receive-preview-grid">
+        <div><small>Após a baixa</small><strong>${brl.format(newReceived)} recebido</strong></div>
+        <div><small>Saldo em aberto</small><strong class="${quitado?'ok':'warn'}">${brl.format(newBal)}</strong></div>
+        <div><small>Situação</small><strong class="${quitado?'ok':'warn'}">${quitado?'Quitado':'Em aberto (parcial)'}</strong></div>
+      </div>
+    `;
+  }
+  const amountEl=document.getElementById('receiveAmount');
+  if(amountEl && ctx.mode==='total' && Number(amountEl.value)!==amt){
+    amountEl.value=amt.toFixed(2);
+  }
+}
+function commitReceivePayment(patientId){
+  const p=state.patients.find(x=>x.id===patientId); if(!p) return;
+  const saldo=balance(p);
+  if(saldo<=0){ toast('Já estava quitado.'); closeModal(); return; }
+  const ctx=window.__receiveModal||{mode:'total'};
+  let amt=num('receiveAmount');
+  if(ctx.mode==='total') amt=saldo;
+  amt=Math.min(saldo, Math.max(0, Math.round(amt*100)/100));
+  if(amt<=0){ toast('Informe um valor maior que zero.'); return; }
+  const date=getv('receiveDate')||todayISO();
+  const before=Number(p.received||0);
+  p.received=Math.min(Number(p.value||0), before+amt);
+  const open=balance(p);
+  p.status=open<=0.009?'Faturado / Recebido':'Recebido parcial';
+  if(open<=0.009) p.received=Number(p.value||0);
+  p.lastPaymentDate=date;
+  if(!Array.isArray(p.payments)) p.payments=[];
+  p.payments.push({
+    id:uid(),
+    date,
+    amount:amt,
+    mode:open<=0.009?'total':'parcial',
+    balanceAfter:open
+  });
+  save();
+  closeModal();
+  window.__receiveModal=null;
+  renderAll();
+  toast(open<=0.009
+    ? `Quitado em ${fmtDate(date)} — saldo zerado.`
+    : `Baixa parcial de ${brl.format(amt)} · saldo ${brl.format(open)}.`);
+}
+window.setReceiveMode=setReceiveMode;
+window.refreshReceivePreview=refreshReceivePreview;
 function toggleCost(id){const c=state.costs.find(x=>x.id===id);if(!c)return;c.status=c.status==='PAGO'?'À PAGAR':'PAGO';save();renderAll();toast('Status do custo atualizado.')}
 function exportData(){
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='chevalier-gestao-backup.json';a.click();URL.revokeObjectURL(a.href);
