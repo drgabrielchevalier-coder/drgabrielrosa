@@ -1,9 +1,10 @@
 {
-  "version": "2.7.2",
-  "name": "Baixa de recebimento com data e parcial",
+  "version": "2.8.1",
+  "name": "Impressão de orçamento",
   "releasedAt": "2026-09-22",
   "changes": [
-    "Modal Baixar recebimento: data da baixa, recebimento total ou parcial.",
-    "Preview ao vivo do saldo em aberto e identificação automática de quitado."
+    "Imprimir orçamento para o paciente (valores praticados, sem custos internos).",
+    "Botão Imprimir no formulário e em cada orçamento salvo.",
+    "Documento com marca, CRO, validade, assinaturas e contatos."
   ]
 }

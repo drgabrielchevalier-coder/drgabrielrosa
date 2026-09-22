@@ -396,8 +396,33 @@ function clinicPriceLabel(row){
 }
 function patientCost(p){return Number(p.cost||0)+Number(p.lab||0)+Number(p.components||0)+Number(p.clinical||0);}
 function patientProfit(p){return Number(p.value||0)-patientCost(p);}
-function balance(p){return Math.max(0,Number(p.value||0)-Number(p.received||0));}
-function isOverdue(p){return balance(p)>0 && p.due && p.due<todayISO();}
+function moneyRound(n){return Math.round((Number(n)||0)*100)/100}
+function balance(p){return Math.max(0, moneyRound(Number(p.value||0)-Number(p.received||0)));}
+function isOverdue(p){return p.progress!=='Orçamento' && balance(p)>0 && p.due && p.due<todayISO();}
+function paymentStatusOf(p){
+  const bal=balance(p);
+  const rec=moneyRound(p.received||0);
+  if(bal<=0) return 'Faturado / Recebido';
+  if(rec>0) return 'Recebido parcial';
+  if(isOverdue(p)) return 'À receber';
+  const st=String(p.status||'');
+  if(/parcial/i.test(st)) return 'Recebido parcial';
+  if(/faturado/i.test(st)) return 'À receber'; // status antigo inconsistente com saldo
+  return st||'À receber';
+}
+function syncPatientPaymentStatus(p){
+  if(!p) return p;
+  const bal=balance(p);
+  if(bal<=0){
+    p.received=moneyRound(p.value||0);
+    p.status='Faturado / Recebido';
+  }else if(moneyRound(p.received||0)>0){
+    p.status='Recebido parcial';
+  }else if(/faturado/i.test(String(p.status||''))){
+    p.status='À receber';
+  }
+  return p;
+}
 function pct(a,b){return b?Math.round((a/b)*100):0}
 function badge(status){
   const s=(status||'').toLowerCase();
@@ -1314,15 +1339,15 @@ function daysUntilDue(p){
   return Math.round((a-b)/86400000);
 }
 function isServicePaid(p){
-  return balance(p)<=0 || String(p.status||'')==='Faturado / Recebido';
+  return balance(p)<=0;
 }
 function matchServiceStatus(p, filter){
   if(!filter) return true;
   const bal=balance(p);
-  const st=String(p.status||'');
-  if(filter==='paid') return isServicePaid(p);
+  const st=paymentStatusOf(p);
+  if(filter==='paid') return bal<=0;
   if(filter==='open') return bal>0;
-  if(filter==='partial') return /parcial/i.test(st) || (Number(p.received||0)>0 && bal>0);
+  if(filter==='partial') return st==='Recebido parcial';
   if(filter==='overdue') return isOverdue(p);
   if(filter==='due_soon'){
     const n=daysUntilDue(p);
@@ -1330,8 +1355,414 @@ function matchServiceStatus(p, filter){
   }
   return true;
 }
+
+/* ===== Orçamento de pacientes ===== */
+function orcamentoLineRow(line={}){
+  const id=line.procedureId||'';
+  const p=procedure(id);
+  const kind=p.kind==='cirurgico'?'Cirúrgico':'Clínico';
+  const qty=Math.max(1, Number(line.qty||1)||1);
+  return `<div class="treat-line" data-proc="${esc(id)}">
+    <div class="treat-line-main">
+      <strong>${esc(p.name)}</strong>
+      <span class="cell-sub">${esc(specialtyName(p.specialty))} · ${kind}</span>
+    </div>
+    <input class="input tl-qty" type="number" min="1" step="1" value="${qty}" title="Qtd" oninput="recalcOrcamento()">
+    <input class="input tl-tooth" placeholder="Dente / região" value="${esc(line.tooth||'')}" oninput="recalcOrcamento()">
+    <button type="button" class="btn small icon-x" onclick="this.closest('.treat-line').remove();recalcOrcamento()" title="Remover">×</button>
+  </div>`;
+}
+function collectOrcamentoLines(){
+  return [...document.querySelectorAll('#oTreatLines .treat-line')].map(row=>({
+    procedureId:row.dataset.proc,
+    qty:Math.max(1, Number(row.querySelector('.tl-qty')?.value||1)||1),
+    tooth:row.querySelector('.tl-tooth')?.value||''
+  })).filter(x=>x.procedureId);
+}
+function addOrcamentoLine(){
+  const sel=document.getElementById('oAddProc');
+  const id=sel?.value||'';
+  if(!id) return toast('Escolha um procedimento para adicionar.');
+  const qty=Math.max(1, Number(document.getElementById('oAddQty')?.value||1)||1);
+  const box=document.getElementById('oTreatLines');
+  if(!box) return;
+  box.insertAdjacentHTML('beforeend', orcamentoLineRow({procedureId:id, qty}));
+  if(document.getElementById('oAddQty')) document.getElementById('oAddQty').value='1';
+  recalcOrcamento();
+}
+function onOrcamentoOriginChange(){
+  const origin=document.getElementById('oOrigin')?.value||'Prestação';
+  const clinicEl=document.getElementById('oClinic');
+  if(clinicEl && origin==='Particular'){
+    const part=state.clinics.find(c=>c.id==='particular'||c.type==='Próprio');
+    if(part) clinicEl.value=part.id;
+  }
+  recalcOrcamento();
+}
+function setText(id, text){
+  const el=document.getElementById(id);
+  if(el) el.textContent=text;
+}
+function recalcOrcamento(){
+  const clinicId=document.getElementById('oClinic')?.value||'';
+  const lines=collectOrcamentoLines();
+  const settled=settleLines(lines, clinicId);
+  const bom=combinedProcedureMaterials(lines);
+  setText('oPracticed', brl.format(settled.practiced||0));
+  setText('oReceivable', brl.format(settled.receivable||0));
+  setText('oMatCost', brl.format(settled.costs?.materials||0));
+  setText('oCompCost', brl.format(settled.costs?.components||0));
+  setText('oLabCost', brl.format(settled.costs?.lab||0));
+  setText('oCostTotal', brl.format(settled.costs?.total||0));
+  setText('oProfit', brl.format(settled.profit||0));
+  setText('oCardFee', brl.format(settled.cardFee||0));
+  const chipsEl=document.getElementById('oBillingChips');
+  if(chipsEl){
+    if(!clinicId){
+      chipsEl.textContent='Selecione a clínica para aplicar o modelo de cobrança.';
+    }else{
+      const chips=window.ChevalierBilling?ChevalierBilling.chipLabels(billingForClinic(clinicId)):[];
+      const cname=clinic(clinicId).name||clinicId;
+      chipsEl.textContent=chips.length
+        ? `${cname}: ${chips.join(' · ')}`
+        : `${cname} — modelo padrão por procedimento.`;
+    }
+  }
+  const brEl=document.getElementById('oBreakdown');
+  if(brEl){
+    if(!lines.length){
+      brEl.innerHTML=`<p class="orc-empty">Adicione procedimentos para ver o detalhamento.</p>`;
+    }else{
+      brEl.innerHTML=`<table><thead><tr><th>Procedimento</th><th>Qtd</th><th>Praticado</th><th>Base honorário</th></tr></thead><tbody>${
+        (settled.breakdown||[]).map((b,i)=>{
+          const l=lines[i]||{};
+          const q=Number(l.qty||1)||1;
+          return `<tr><td><strong>${esc(procedure(b.procedureId).name)}</strong>${l.tooth?`<span class="cell-sub">${esc(l.tooth)}</span>`:''}</td><td>${q}</td><td>${brl.format(b.practiced||0)}</td><td>${brl.format(b.baseShare||0)}</td></tr>`;
+        }).join('')
+      }</tbody></table>`;
+    }
+  }
+  const bomEl=document.getElementById('oBom');
+  if(bomEl){
+    if(!bom.items.length && !bom.lab){
+      bomEl.innerHTML='';
+    }else{
+      const rows=bom.items.map(it=>{
+        const m=material(it.materialId);
+        const tot=Number(m.unitCost||0)*Number(it.qty||0);
+        return `<tr><td>${esc(m.name)}</td><td>${it.qty}</td><td>${brl.format(tot)}</td></tr>`;
+      }).join('');
+      const labRow=bom.lab?`<tr><td>Laboratório / extra protético</td><td>—</td><td>${brl.format(bom.lab)}</td></tr>`:'';
+      bomEl.innerHTML=`<table><thead><tr><th>Materiais / lab (BOM)</th><th>Qtd</th><th>Custo</th></tr></thead><tbody>${rows}${labRow}</tbody></table>`;
+    }
+  }
+  return settled;
+}
+function clearOrcamento(){
+  const edit=document.getElementById('oEditId');
+  if(edit) edit.value='';
+  const name=document.getElementById('oName');
+  if(name) name.value='';
+  const notes=document.getElementById('oNotes');
+  if(notes) notes.value='';
+  const lines=document.getElementById('oTreatLines');
+  if(lines) lines.innerHTML='';
+  const qty=document.getElementById('oAddQty');
+  if(qty) qty.value='1';
+  recalcOrcamento();
+}
+function loadOrcamento(id){
+  const p=state.patients.find(x=>x.id===id);
+  if(!p) return toast('Orçamento não encontrado.');
+  go('orcamento');
+  const edit=document.getElementById('oEditId');
+  if(edit) edit.value=p.id;
+  const name=document.getElementById('oName');
+  if(name) name.value=p.name||'';
+  const clinicEl=document.getElementById('oClinic');
+  if(clinicEl && p.clinicId) clinicEl.value=p.clinicId;
+  const origin=document.getElementById('oOrigin');
+  if(origin) origin.value=p.origin==='Particular'?'Particular':'Prestação';
+  const notes=document.getElementById('oNotes');
+  if(notes) notes.value=p.notes||p.observation||'';
+  const box=document.getElementById('oTreatLines');
+  if(box) box.innerHTML=patientLines(p).map(orcamentoLineRow).join('');
+  recalcOrcamento();
+  toast('Orçamento carregado para edição.');
+}
+function saveOrcamentoAsPatient(){
+  const name=(document.getElementById('oName')?.value||'').trim();
+  if(!name) return toast('Informe o nome do paciente.');
+  const clinicId=document.getElementById('oClinic')?.value||'';
+  if(!clinicId) return toast('Selecione a clínica.');
+  const lines=collectOrcamentoLines();
+  if(!lines.length) return toast('Adicione ao menos um procedimento.');
+  const settled=recalcOrcamento();
+  const bom=combinedProcedureMaterials(lines);
+  const origin=document.getElementById('oOrigin')?.value||'Prestação';
+  const notes=(document.getElementById('oNotes')?.value||'').trim();
+  const editId=document.getElementById('oEditId')?.value||'';
+  const prev=editId?state.patients.find(x=>x.id===editId):null;
+  const obj={
+    id:editId||uid(),
+    name,
+    origin,
+    clinicId,
+    procedureId:lines[0].procedureId,
+    lines,
+    date:prev?.date||todayISO(),
+    value:moneyRound(settled.receivable||0),
+    received:prev?.received||0,
+    due:prev?.due||addDays(15),
+    status:prev?.status && prev.status!=='Orçamento'?prev.status:'À receber',
+    cost:moneyRound(settled.costs?.materials||0),
+    lab:moneyRound(settled.costs?.lab||0),
+    components:moneyRound(settled.costs?.components||0),
+    clinical:prev?.clinical||0,
+    progress:'Orçamento',
+    notes,
+    observation:notes,
+    practicedValue:moneyRound(settled.practiced||0),
+    billingSnap:billingForClinic(clinicId),
+    consumedItems:bom.items
+  };
+  if(editId) state.patients=state.patients.map(x=>x.id===editId?{...x,...obj}:x);
+  else state.patients.unshift(obj);
+  save();
+  clearOrcamento();
+  renderAll();
+  toast(editId?'Orçamento atualizado.':'Orçamento salvo.');
+}
+function promoteOrcamento(id){
+  const p=state.patients.find(x=>x.id===id);
+  if(!p) return;
+  p.progress='Em tratamento';
+  if(!p.status || p.status==='Orçamento') p.status='À receber';
+  syncPatientPaymentStatus(p);
+  save();
+  renderAll();
+  toast('Orçamento convertido em tratamento.');
+  if(p.origin==='Particular') go('particular');
+  else go('prestacao');
+}
+function deleteOrcamento(id){
+  if(!confirm('Excluir este orçamento?')) return;
+  state.patients=state.patients.filter(x=>x.id!==id);
+  if(document.getElementById('oEditId')?.value===id) clearOrcamento();
+  save();
+  renderAll();
+  toast('Orçamento excluído.');
+}
+/** Dados do orçamento atual (formulário) ou de um registro salvo. */
+function orcamentoPrintPayload(id=''){
+  if(id){
+    const p=state.patients.find(x=>x.id===id);
+    if(!p) return null;
+    const lines=patientLines(p);
+    const settled=settleLines(lines, p.clinicId);
+    return {
+      name:p.name||'',
+      clinicId:p.clinicId||'',
+      origin:p.origin||'Prestação',
+      notes:(p.notes||p.observation||'').trim(),
+      date:p.date||todayISO(),
+      lines,
+      settled
+    };
+  }
+  const name=(document.getElementById('oName')?.value||'').trim();
+  const clinicId=document.getElementById('oClinic')?.value||'';
+  const lines=collectOrcamentoLines();
+  if(!name){ toast('Informe o nome do paciente.'); return null; }
+  if(!clinicId){ toast('Selecione a clínica.'); return null; }
+  if(!lines.length){ toast('Adicione ao menos um procedimento.'); return null; }
+  return {
+    name,
+    clinicId,
+    origin:document.getElementById('oOrigin')?.value||'Prestação',
+    notes:(document.getElementById('oNotes')?.value||'').trim(),
+    date:todayISO(),
+    lines,
+    settled:settleLines(lines, clinicId)
+  };
+}
+function buildOrcamentoPrintHtml(payload){
+  const c=clinic(payload.clinicId);
+  const settled=payload.settled||{};
+  const lines=payload.lines||[];
+  const breakdown=settled.breakdown||[];
+  const total=moneyRound(settled.practiced||0);
+  const issued=fmtDate(payload.date||todayISO());
+  const validUntil=fmtDate(addDays(30));
+  const rows=lines.map((l,i)=>{
+    const b=breakdown[i]||{};
+    const q=Number(l.qty||1)||1;
+    const unit=q>0?moneyRound((b.practiced||0)/q):0;
+    const tooth=l.tooth?`<div class="op-sub">Dente / região: ${esc(l.tooth)}</div>`:'';
+    return `<tr>
+      <td><strong>${esc(procedure(l.procedureId).name)}</strong>${tooth}</td>
+      <td class="num">${q}</td>
+      <td class="num">${brl.format(unit)}</td>
+      <td class="num">${brl.format(b.practiced||0)}</td>
+    </tr>`;
+  }).join('');
+  const notesBlock=payload.notes
+    ? `<section class="op-notes"><h2>Observações</h2><p>${esc(payload.notes).replace(/\n/g,'<br>')}</p></section>`
+    : '';
+  return `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Orçamento — ${esc(payload.name)}</title>
+<style>
+  @page{size:A4;margin:16mm 14mm}
+  *{box-sizing:border-box}
+  body{
+    margin:0;font-family:Georgia,"Times New Roman",serif;color:#1a1a18;
+    background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact
+  }
+  .sheet{max-width:720px;margin:0 auto}
+  .head{
+    display:flex;justify-content:space-between;gap:24px;align-items:flex-start;
+    border-bottom:2px solid #171816;padding-bottom:16px;margin-bottom:22px
+  }
+  .brand strong{display:block;font-size:22px;letter-spacing:.02em}
+  .brand small{display:block;margin-top:4px;font-size:12px;color:#5c5c56;font-family:system-ui,sans-serif}
+  .meta{text-align:right;font-family:system-ui,sans-serif;font-size:12px;color:#444;line-height:1.55}
+  .meta .doc-title{font-size:15px;font-weight:700;color:#171816;margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase}
+  h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 8px;color:#5c5c56;font-family:system-ui,sans-serif}
+  .info{display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;margin-bottom:22px;font-family:system-ui,sans-serif;font-size:13px}
+  .info div{padding:10px 12px;background:#f7f5ef;border:1px solid #e5e1d6;border-radius:8px}
+  .info span{display:block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#7a7a72;margin-bottom:3px}
+  .info strong{font-size:14px;font-weight:650}
+  table{width:100%;border-collapse:collapse;font-family:system-ui,sans-serif;font-size:13px;margin-bottom:8px}
+  th{text-align:left;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#7a7a72;padding:8px 6px;border-bottom:1px solid #cfcabe}
+  td{padding:10px 6px;border-bottom:1px solid #ebe7dc;vertical-align:top}
+  td.num,th.num{text-align:right;white-space:nowrap}
+  .op-sub{font-size:11px;color:#6b6b64;margin-top:3px}
+  .total{
+    display:flex;justify-content:flex-end;margin:16px 0 24px;font-family:system-ui,sans-serif
+  }
+  .total-box{
+    min-width:240px;padding:14px 16px;background:#171816;color:#f3efe6;border-radius:10px
+  }
+  .total-box span{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.7;margin-bottom:4px}
+  .total-box strong{font-size:22px;font-weight:700}
+  .op-notes{margin:0 0 24px;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5}
+  .op-notes p{margin:0;white-space:pre-wrap}
+  .validity{font-family:system-ui,sans-serif;font-size:12px;color:#5c5c56;margin-bottom:28px}
+  .signs{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:36px;font-family:system-ui,sans-serif;font-size:12px;color:#5c5c56}
+  .signs div{border-top:1px solid #171816;padding-top:8px;text-align:center}
+  .foot{margin-top:36px;padding-top:12px;border-top:1px solid #e5e1d6;font-family:system-ui,sans-serif;font-size:11px;color:#7a7a72;line-height:1.5}
+  .no-print{margin:16px auto;max-width:720px;text-align:right;font-family:system-ui,sans-serif}
+  .no-print button{appearance:none;border:1px solid #171816;background:#171816;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;cursor:pointer}
+  @media print{
+    .no-print{display:none!important}
+    body{background:#fff}
+  }
+</style>
+</head>
+<body>
+  <div class="no-print"><button type="button" onclick="window.print()">Imprimir / salvar PDF</button></div>
+  <div class="sheet">
+    <header class="head">
+      <div class="brand">
+        <strong>Dr Gabriel Rosa</strong>
+        <small>Reabilitação oral &amp; estética</small>
+        <small>CRO-RJ 52957</small>
+      </div>
+      <div class="meta">
+        <div class="doc-title">Orçamento</div>
+        <div>Emitido em ${issued}</div>
+        <div>Validade até ${validUntil}</div>
+      </div>
+    </header>
+    <div class="info">
+      <div><span>Paciente</span><strong>${esc(payload.name)}</strong></div>
+      <div><span>Local / clínica</span><strong>${esc(c.name||'—')}</strong></div>
+    </div>
+    <h2>Procedimentos propostos</h2>
+    <table>
+      <thead><tr><th>Procedimento</th><th class="num">Qtd</th><th class="num">Unitário</th><th class="num">Total</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="total"><div class="total-box"><span>Valor total do orçamento</span><strong>${brl.format(total)}</strong></div></div>
+    ${notesBlock}
+    <p class="validity">Valores sujeitos a alteração após ${validUntil}. Este documento é uma estimativa do tratamento proposto e não substitui o plano clínico definitivo.</p>
+    <div class="signs">
+      <div>Paciente / responsável</div>
+      <div>Dr Gabriel Rosa — CRO-RJ 52957</div>
+    </div>
+    <footer class="foot">
+      WhatsApp (21) 96732-9133 · Instagram @dr_gabrielrosa<br>
+      Documento gerado pelo sistema Dr Gabriel Rosa — Gestão.
+    </footer>
+  </div>
+  <script>window.addEventListener('load',()=>setTimeout(()=>window.print(),250));</script>
+</body>
+</html>`;
+}
+function printOrcamento(id=''){
+  const payload=orcamentoPrintPayload(id||'');
+  if(!payload) return;
+  const html=buildOrcamentoPrintHtml(payload);
+  const w=window.open('','_blank','noopener,noreferrer,width=900,height=1100');
+  if(!w){
+    toast('Permita pop-ups para imprimir o orçamento.');
+    return;
+  }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+function renderOrcamento(){
+  const clinicEl=document.getElementById('oClinic');
+  const addProc=document.getElementById('oAddProc');
+  const keepClinic=clinicEl?.value||'';
+  if(clinicEl){
+    clinicEl.innerHTML=clinicOptions(keepClinic || state.clinics[0]?.id || '');
+  }
+  if(addProc){
+    addProc.innerHTML=procOptionsGrouped(addProc.value||'');
+  }
+  const q=(document.getElementById('oSearch')?.value||'').toLowerCase().trim();
+  const rows=state.patients.filter(p=>{
+    if(p.progress!=='Orçamento') return false;
+    if(!q) return true;
+    return `${p.name} ${clinic(p.clinicId).name} ${patientProcedureLabel(p)}`.toLowerCase().includes(q);
+  });
+  const tbody=document.getElementById('orcamentoTable');
+  if(tbody){
+    tbody.innerHTML=rows.map(p=>{
+      const settled=settleLines(patientLines(p), p.clinicId);
+      const value=Number(p.value!=null?p.value:settled.receivable||0);
+      const cost=patientCost(p);
+      const practiced=Number(p.practicedValue!=null?p.practicedValue:settled.practiced||0);
+      return `<tr>
+        ${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${esc(p.origin)}</span>`)}
+        ${td('Clínica',esc(clinic(p.clinicId).name))}
+        ${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} item(ns)</span>`)}
+        ${td('Praticado',brl.format(practiced))}
+        ${td('Você recebe',`<strong>${brl.format(value)}</strong>`)}
+        ${td('Custos',brl.format(cost))}
+        ${td('Margem',brl.format(value-cost))}
+        ${td('Data',fmtDate(p.date))}
+        <td class="actions-cell"><div class="row-actions">
+          <button class="btn small" onclick="loadOrcamento('${p.id}')">Abrir</button>
+          <button class="btn small" onclick="printOrcamento('${p.id}')">Imprimir</button>
+          <button class="btn small primary" onclick="promoteOrcamento('${p.id}')">Converter</button>
+          <button class="btn small danger" onclick="deleteOrcamento('${p.id}')">Excluir</button>
+        </div></td>
+      </tr>`;
+    }).join('')||'<tr><td colspan="9"><div class="empty">Nenhum orçamento salvo. Monte acima e clique em Salvar orçamento.</div></td></tr>';
+  }
+  // Só recalcula o painel se a página existir (evita zerar ao renderAll fora dela)
+  if(document.getElementById('oTreatLines')) recalcOrcamento();
+}
+
 function serviceBaseRows(){
-  return state.patients.filter(p=>p.origin==='Prestação' && (!serviceClinicFilter || p.clinicId===serviceClinicFilter));
+  return state.patients.filter(p=>p.origin==='Prestação' && p.progress!=='Orçamento' && (!serviceClinicFilter || p.clinicId===serviceClinicFilter));
 }
 function renderService(){
   const tabs=document.getElementById('serviceClinicTabs');
@@ -1349,6 +1780,13 @@ function renderService(){
     statusTabs.innerHTML=SERVICE_STATUS_FILTERS.map(f=>`<button type="button" class="subtab ${serviceStatusFilter===f.id?'active':''}" onclick="setServiceStatusFilter('${f.id}')">${esc(f.label)}</button>`).join('');
   }
   const base=serviceBaseRows();
+  let healed=false;
+  base.forEach(p=>{
+    const before=String(p.status||'');
+    syncPatientPaymentStatus(p);
+    if(String(p.status||'')!==before) healed=true;
+  });
+  if(healed) save();
   const periodRows=base.filter(p=>inServicePeriod(p, servicePeriodDays));
   const tableRows=base.filter(p=>matchServiceStatus(p, serviceStatusFilter));
   const total=periodRows.reduce((s,p)=>s+Number(p.value||0),0);
@@ -1362,7 +1800,7 @@ function renderService(){
   document.getElementById('svcOpen').textContent=brl.format(open);
   document.getElementById('svcOverdue').textContent=brl.format(od);
   const emptyMsg=serviceStatusFilter?'Nenhum lançamento com este status.':'Nenhum lançamento nesta clínica.';
-  document.getElementById('serviceTable').innerHTML=tableRows.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${p.progress==='Orçamento'?'Orçamento':esc(p.progress||'')}</span>`)}${td('Clínica',esc(clinic(p.clinicId).name))}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} procedimento(s)</span>`)}${td('Honorário',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(isOverdue(p)?'À receber':p.status))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="markReceived('${p.id}')">Receber</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('')||`<tr><td colspan="8"><div class="empty">${emptyMsg}</div></td></tr>`;
+  document.getElementById('serviceTable').innerHTML=tableRows.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${p.progress==='Orçamento'?'Orçamento':esc(p.progress||'')}</span>`)}${td('Clínica',esc(clinic(p.clinicId).name))}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} procedimento(s)</span>`)}${td('Honorário',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(paymentStatusOf(p)))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="markReceived('${p.id}')">Receber</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('')||`<tr><td colspan="8"><div class="empty">${emptyMsg}</div></td></tr>`;
 }
 function setServiceClinicFilter(id){
   serviceClinicFilter=id||'';
@@ -1380,7 +1818,7 @@ function setServiceStatusFilter(id){
 window.setServicePeriodDays=setServicePeriodDays;
 window.setServiceStatusFilter=setServiceStatusFilter;
 function renderPrivate(){
-  const arr=state.patients.filter(p=>p.clinicId==='particular'||p.origin==='Particular');
+  const arr=state.patients.filter(p=>(p.clinicId==='particular'||p.origin==='Particular') && p.progress!=='Orçamento');
   document.getElementById('privateTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong>`)}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} item(ns)</span>`)}${td('Contratado',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Lab',brl.format(p.lab||0))}${td('Componentes',brl.format(p.components||0))}${td('Clínica',brl.format(p.clinical||0))}${td('Lucro',`<strong>${brl.format(patientProfit(p))}</strong>`)}${td('Progresso',badge(p.progress))}<td class="actions-cell">${acts(`editPatient('${p.id}')`,`deletePatient('${p.id}')`)}</td></tr>`).join('')||'<tr><td colspan="10"><div class="empty">Sem casos particulares.</div></td></tr>';
 }
 const PROSTH_STAGES=['Entrada','Laboratório','Prova','Pronto / entrega','Instalado'];
@@ -1809,7 +2247,7 @@ function setReceivableFilter(v,btn){
 }
 function renderReceivables(){
   const arr=state.patients.filter(p=>!receivableFilter||p.status===receivableFilter);
-  document.getElementById('receivablesTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong>`)}${td('Origem',esc(clinic(p.clinicId).name))}${td('Valor',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Saldo',`<strong>${brl.format(balance(p))}</strong>`)}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(isOverdue(p)&&p.status!=='Faturado / Recebido'?'À receber':p.status))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="markReceived('${p.id}')">Baixar</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('');
+  document.getElementById('receivablesTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong>`)}${td('Origem',esc(clinic(p.clinicId).name))}${td('Valor',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Saldo',`<strong>${brl.format(balance(p))}</strong>`)}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(paymentStatusOf(p)))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="markReceived('${p.id}')">Baixar</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('');
 }
 function renderCosts(){
   const total=state.costs.reduce((s,c)=>s+Number(c.value||0),0), paid=state.costs.filter(c=>c.status==='PAGO').reduce((s,c)=>s+Number(c.value||0),0);
@@ -1859,7 +2297,7 @@ function renderAll(){
   try{
     if(window.ChevalierPlan){ChevalierPlan.ensureCollections();ChevalierPlan.seedDefaults();ChevalierPlan.bindUi();}
   }catch(e){ console.warn('ChevalierPlan init', e); }
-  renderDashboard();renderPatients();renderClinics();renderProcedures();renderService();renderPrivate();renderTrabalhos();renderLab();renderEntregas();renderTimeline();renderReceivables();renderCosts();renderPayroll();renderReports();renderMaterials();renderStock();renderBanco();renderSettings();
+  renderDashboard();renderPatients();renderClinics();renderProcedures();renderOrcamento();renderService();renderPrivate();renderTrabalhos();renderLab();renderEntregas();renderTimeline();renderReceivables();renderCosts();renderPayroll();renderReports();renderMaterials();renderStock();renderBanco();renderSettings();
   try{
     if(window.ChevalierPlan){ChevalierPlan.renderCalendario();ChevalierPlan.renderPlanejamento();}
   }catch(e){ console.warn('ChevalierPlan render', e); }
@@ -1875,7 +2313,7 @@ function syncMobileNav(page){
 const NAV_GROUP_PAGES={
   inicio:['dashboard','calendario','planejamento'],
   cadastros:['pacientes','clinicas','procedimentos'],
-  atendimento:['prestacao','particular'],
+  atendimento:['orcamento','prestacao','particular'],
   producao:['protese','trabalhos','entregas','timeline','consulta'],
   financeiro:['recebiveis','custos','folha','relatorios'],
   estoque:['materiais','estoque','banco'],
@@ -2996,15 +3434,27 @@ function openQuickModal(){
   const s=document.getElementById('modalSave');
   if(s) s.style.display='none';
 }
+function parseMoneyInput(raw){
+  if(typeof raw==='number') return Number.isFinite(raw)?raw:0;
+  let s=String(raw??'').trim();
+  if(!s) return 0;
+  s=s.replace(/R\$\s?/gi,'').replace(/\s/g,'');
+  if(/\d,\d{1,2}$/.test(s)) s=s.replace(/\./g,'').replace(',','.');
+  else s=s.replace(/,/g,'');
+  const n=Number(s);
+  return Number.isFinite(n)?n:0;
+}
 function markReceived(id){
   const p=state.patients.find(x=>x.id===id);if(!p)return;
+  syncPatientPaymentStatus(p);
   const saldo=balance(p);
   if(saldo<=0){
     toast('Este lançamento já está quitado.');
+    renderAll();
     return;
   }
-  const valor=Number(p.value||0);
-  const jaRecebido=Number(p.received||0);
+  const valor=moneyRound(p.value||0);
+  const jaRecebido=moneyRound(p.received||0);
   openModal('Baixar recebimento', `
     <div class="form-grid">
       <div class="field full"><label>Paciente</label><input class="input" value="${esc(p.name)}" disabled></div>
@@ -3015,24 +3465,25 @@ function markReceived(id){
       <div class="field full">
         <label>Tipo de baixa</label>
         <div class="receive-mode-tabs" role="tablist" aria-label="Tipo de baixa">
-          <button type="button" class="subtab active" id="receiveModeTotal" onclick="setReceiveMode('total')">Recebimento total</button>
-          <button type="button" class="subtab" id="receiveModePartial" onclick="setReceiveMode('partial')">Baixa parcial</button>
+          <button type="button" class="subtab" id="receiveModeTotal" onclick="setReceiveMode('total')">Quitar saldo</button>
+          <button type="button" class="subtab active" id="receiveModePartial" onclick="setReceiveMode('partial')">Baixa parcial</button>
         </div>
+        <span class="field-hint">Saldo atual em aberto: ${brl.format(saldo)}. “Quitar saldo” zera o restante; parcial mantém em aberto.</span>
       </div>
       <div class="field full"><label>Valor recebido agora</label>
-        <input id="receiveAmount" type="number" class="input" min="0.01" step="0.01" max="${saldo}" value="${saldo.toFixed(2)}" oninput="refreshReceivePreview()">
+        <input id="receiveAmount" type="number" class="input" min="0.01" step="0.01" max="${saldo}" value="" placeholder="0,00" oninput="refreshReceivePreview()">
       </div>
       <div class="field full">
         <div class="receive-preview" id="receivePreview"></div>
       </div>
     </div>
   `, ()=>commitReceivePayment(p.id));
-  window.__receiveModal={patientId:p.id, saldo, mode:'total'};
+  window.__receiveModal={patientId:p.id, saldo, mode:'partial'};
   refreshReceivePreview();
 }
 function setReceiveMode(mode){
   const ctx=window.__receiveModal; if(!ctx) return;
-  ctx.mode=mode==='partial'?'partial':'total';
+  ctx.mode=mode==='total'?'total':'partial';
   const amountEl=document.getElementById('receiveAmount');
   const btnTotal=document.getElementById('receiveModeTotal');
   const btnPartial=document.getElementById('receiveModePartial');
@@ -3040,12 +3491,12 @@ function setReceiveMode(mode){
   btnPartial?.classList.toggle('active', ctx.mode==='partial');
   if(amountEl){
     if(ctx.mode==='total'){
-      amountEl.value=Number(ctx.saldo||0).toFixed(2);
+      amountEl.value=moneyRound(ctx.saldo||0).toFixed(2);
       amountEl.readOnly=true;
     }else{
       amountEl.readOnly=false;
+      if(!amountEl.value) amountEl.value='';
       amountEl.focus();
-      amountEl.select?.();
     }
   }
   refreshReceivePreview();
@@ -3055,57 +3506,61 @@ function refreshReceivePreview(){
   const p=state.patients.find(x=>x.id===ctx.patientId); if(!p) return;
   const saldo=balance(p);
   ctx.saldo=saldo;
-  let amt=Number(document.getElementById('receiveAmount')?.value||0);
-  if(!Number.isFinite(amt) || amt<0) amt=0;
+  let amt=parseMoneyInput(document.getElementById('receiveAmount')?.value);
+  if(amt<0) amt=0;
   if(ctx.mode==='total') amt=saldo;
-  amt=Math.min(saldo, Math.round(amt*100)/100);
-  const newReceived=Math.min(Number(p.value||0), Number(p.received||0)+amt);
-  const newBal=Math.max(0, Math.round((Number(p.value||0)-newReceived)*100)/100);
-  const quitado=newBal<=0.009;
+  amt=Math.min(saldo, moneyRound(amt));
+  const newReceived=moneyRound(Math.min(Number(p.value||0), Number(p.received||0)+amt));
+  const newBal=moneyRound(Math.max(0, Number(p.value||0)-newReceived));
+  const ficaraQuitado=newBal<=0;
   const box=document.getElementById('receivePreview');
   if(box){
-    box.innerHTML=`
-      <div class="receive-preview-grid">
-        <div><small>Após a baixa</small><strong>${brl.format(newReceived)} recebido</strong></div>
-        <div><small>Saldo em aberto</small><strong class="${quitado?'ok':'warn'}">${brl.format(newBal)}</strong></div>
-        <div><small>Situação</small><strong class="${quitado?'ok':'warn'}">${quitado?'Quitado':'Em aberto (parcial)'}</strong></div>
-      </div>
-    `;
+    if(amt<=0){
+      box.innerHTML=`<p class="field-hint" style="margin:0">Informe o valor desta baixa para ver o saldo previsto.</p>`;
+    }else{
+      box.innerHTML=`
+        <div class="receive-preview-grid">
+          <div><small>Se salvar agora</small><strong>${brl.format(newReceived)} no total</strong></div>
+          <div><small>Saldo que restará</small><strong class="${ficaraQuitado?'ok':'warn'}">${brl.format(newBal)}</strong></div>
+          <div><small>Situação prevista</small><strong class="${ficaraQuitado?'ok':'warn'}">${ficaraQuitado?'Ficará quitado':'Continuará em aberto'}</strong></div>
+        </div>
+      `;
+    }
   }
   const amountEl=document.getElementById('receiveAmount');
-  if(amountEl && ctx.mode==='total' && Number(amountEl.value)!==amt){
-    amountEl.value=amt.toFixed(2);
+  if(amountEl && ctx.mode==='total'){
+    amountEl.value=moneyRound(amt).toFixed(2);
   }
 }
 function commitReceivePayment(patientId){
   const p=state.patients.find(x=>x.id===patientId); if(!p) return;
+  syncPatientPaymentStatus(p);
   const saldo=balance(p);
-  if(saldo<=0){ toast('Já estava quitado.'); closeModal(); return; }
-  const ctx=window.__receiveModal||{mode:'total'};
-  let amt=num('receiveAmount');
+  if(saldo<=0){ toast('Já estava quitado.'); closeModal(); renderAll(); return; }
+  const ctx=window.__receiveModal||{mode:'partial'};
+  let amt=parseMoneyInput(document.getElementById('receiveAmount')?.value);
   if(ctx.mode==='total') amt=saldo;
-  amt=Math.min(saldo, Math.max(0, Math.round(amt*100)/100));
+  amt=Math.min(saldo, Math.max(0, moneyRound(amt)));
   if(amt<=0){ toast('Informe um valor maior que zero.'); return; }
   const date=getv('receiveDate')||todayISO();
-  const before=Number(p.received||0);
-  p.received=Math.min(Number(p.value||0), before+amt);
+  const before=moneyRound(p.received||0);
+  p.received=moneyRound(Math.min(Number(p.value||0), before+amt));
+  syncPatientPaymentStatus(p);
   const open=balance(p);
-  p.status=open<=0.009?'Faturado / Recebido':'Recebido parcial';
-  if(open<=0.009) p.received=Number(p.value||0);
   p.lastPaymentDate=date;
   if(!Array.isArray(p.payments)) p.payments=[];
   p.payments.push({
     id:uid(),
     date,
     amount:amt,
-    mode:open<=0.009?'total':'parcial',
+    mode:open<=0?'total':'parcial',
     balanceAfter:open
   });
   save();
   closeModal();
   window.__receiveModal=null;
   renderAll();
-  toast(open<=0.009
+  toast(open<=0
     ? `Quitado em ${fmtDate(date)} — saldo zerado.`
     : `Baixa parcial de ${brl.format(amt)} · saldo ${brl.format(open)}.`);
 }
