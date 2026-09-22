@@ -1,9 +1,10 @@
 {
-  "version": "2.7.3",
-  "name": "Corrige status quitado na baixa",
+  "version": "2.8.0",
+  "name": "Orçamento de pacientes",
   "releasedAt": "2026-09-22",
   "changes": [
-    "Status de pagamento passa a seguir o saldo real (não marca quitado com valor em aberto).",
-    "Modal de baixa: padrão parcial, previsão clara “se salvar agora / ficará quitado”, opção Quitar saldo."
+    "Nova aba Orçamento na sidebar: monta o tratamento por clínica com cálculo automático.",
+    "Honorário, materiais, componentes, lab, taxa de cartão e margem usam o modelo de cobrança da clínica.",
+    "Salvar orçamento, reabrir, converter em tratamento (prestação / particular)."
   ]
 }
