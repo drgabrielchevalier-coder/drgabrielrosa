@@ -421,6 +421,17 @@ const PROC_CATALOG_VERSION=Number(window.CHEVALIER_PROCEDURE_CATALOG_VERSION||1)
 const DENTAL_PROCEDURE_CATALOG=Array.isArray(window.DENTAL_PROCEDURE_CATALOG)?window.DENTAL_PROCEDURE_CATALOG:[];
 const DENTAL_PROCEDURE_SPECIALTIES=Array.isArray(window.DENTAL_PROCEDURE_SPECIALTIES)?window.DENTAL_PROCEDURE_SPECIALTIES:[];
 let serviceClinicFilter='';
+let servicePeriodDays=30;
+let serviceStatusFilter='';
+const SERVICE_PERIODS=[7,15,30,60,90];
+const SERVICE_STATUS_FILTERS=[
+  {id:'',label:'Todos'},
+  {id:'paid',label:'Pagos'},
+  {id:'open',label:'A receber'},
+  {id:'partial',label:'Parcial'},
+  {id:'overdue',label:'Vencidos'},
+  {id:'due_soon',label:'A vencer'}
+];
 function specialtyName(id){
   return (DENTAL_PROCEDURE_SPECIALTIES.find(s=>s.id===id)||DENTAL_SPECIALTIES.find(s=>s.id===id)||{name:id||'—'}).name;
 }
@@ -1282,6 +1293,46 @@ function showCostSheet(id){
       ${clinicRows}
     </div>`;
 }
+function serviceRefDate(p){
+  return String(p?.date||p?.due||'').slice(0,10);
+}
+function inServicePeriod(p, days){
+  const d=Number(days);
+  if(!d) return true;
+  const ref=serviceRefDate(p);
+  if(!ref) return false;
+  const cutoff=new Date();
+  cutoff.setHours(0,0,0,0);
+  cutoff.setDate(cutoff.getDate()-d);
+  return ref>=cutoff.toISOString().slice(0,10);
+}
+function daysUntilDue(p){
+  const due=String(p?.due||'').slice(0,10);
+  if(!due) return null;
+  const a=new Date(due+'T12:00:00');
+  const b=new Date(todayISO()+'T12:00:00');
+  return Math.round((a-b)/86400000);
+}
+function isServicePaid(p){
+  return balance(p)<=0 || String(p.status||'')==='Faturado / Recebido';
+}
+function matchServiceStatus(p, filter){
+  if(!filter) return true;
+  const bal=balance(p);
+  const st=String(p.status||'');
+  if(filter==='paid') return isServicePaid(p);
+  if(filter==='open') return bal>0;
+  if(filter==='partial') return /parcial/i.test(st) || (Number(p.received||0)>0 && bal>0);
+  if(filter==='overdue') return isOverdue(p);
+  if(filter==='due_soon'){
+    const n=daysUntilDue(p);
+    return bal>0 && !isOverdue(p) && n!=null && n>=0 && n<=14;
+  }
+  return true;
+}
+function serviceBaseRows(){
+  return state.patients.filter(p=>p.origin==='Prestação' && (!serviceClinicFilter || p.clinicId===serviceClinicFilter));
+}
 function renderService(){
   const tabs=document.getElementById('serviceClinicTabs');
   if(tabs){
@@ -1289,15 +1340,45 @@ function renderService(){
     const list=[{id:'',name:'Todas'},...partnerClinics.map(c=>({id:c.id,name:c.name}))];
     tabs.innerHTML=list.map(c=>`<button type="button" class="subtab ${serviceClinicFilter===c.id?'active':''}" data-clinic="${esc(c.id)}" onclick="setServiceClinicFilter('${c.id}')">${esc(c.name)}</button>`).join('');
   }
-  const arr=state.patients.filter(p=>p.origin==='Prestação' && (!serviceClinicFilter || p.clinicId===serviceClinicFilter));
-  const total=arr.reduce((s,p)=>s+Number(p.value||0),0), rec=arr.reduce((s,p)=>s+Number(p.received||0),0), open=arr.reduce((s,p)=>s+balance(p),0), od=arr.filter(isOverdue).reduce((s,p)=>s+balance(p),0);
-  document.getElementById('svcTotal').textContent=brl.format(total);document.getElementById('svcReceived').textContent=brl.format(rec);document.getElementById('svcOpen').textContent=brl.format(open);document.getElementById('svcOverdue').textContent=brl.format(od);
-  document.getElementById('serviceTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${p.progress==='Orçamento'?'Orçamento':esc(p.progress||'')}</span>`)}${td('Clínica',esc(clinic(p.clinicId).name))}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} procedimento(s)</span>`)}${td('Honorário',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(isOverdue(p)?'À receber':p.status))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="markReceived('${p.id}')">Receber</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('')||'<tr><td colspan="8"><div class="empty">Nenhum lançamento nesta clínica.</div></td></tr>';
+  const periodTabs=document.getElementById('servicePeriodTabs');
+  if(periodTabs){
+    periodTabs.innerHTML=SERVICE_PERIODS.map(d=>`<button type="button" class="subtab ${servicePeriodDays===d?'active':''}" onclick="setServicePeriodDays(${d})">${d}d</button>`).join('');
+  }
+  const statusTabs=document.getElementById('serviceStatusTabs');
+  if(statusTabs){
+    statusTabs.innerHTML=SERVICE_STATUS_FILTERS.map(f=>`<button type="button" class="subtab ${serviceStatusFilter===f.id?'active':''}" onclick="setServiceStatusFilter('${f.id}')">${esc(f.label)}</button>`).join('');
+  }
+  const base=serviceBaseRows();
+  const periodRows=base.filter(p=>inServicePeriod(p, servicePeriodDays));
+  const tableRows=base.filter(p=>matchServiceStatus(p, serviceStatusFilter));
+  const total=periodRows.reduce((s,p)=>s+Number(p.value||0),0);
+  const rec=periodRows.reduce((s,p)=>s+Number(p.received||0),0);
+  const open=periodRows.reduce((s,p)=>s+balance(p),0);
+  const od=periodRows.filter(isOverdue).reduce((s,p)=>s+balance(p),0);
+  const hint=document.getElementById('svcPeriodHint');
+  if(hint) hint.textContent=`${servicePeriodDays}d`;
+  document.getElementById('svcTotal').textContent=brl.format(total);
+  document.getElementById('svcReceived').textContent=brl.format(rec);
+  document.getElementById('svcOpen').textContent=brl.format(open);
+  document.getElementById('svcOverdue').textContent=brl.format(od);
+  const emptyMsg=serviceStatusFilter?'Nenhum lançamento com este status.':'Nenhum lançamento nesta clínica.';
+  document.getElementById('serviceTable').innerHTML=tableRows.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${p.progress==='Orçamento'?'Orçamento':esc(p.progress||'')}</span>`)}${td('Clínica',esc(clinic(p.clinicId).name))}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} procedimento(s)</span>`)}${td('Honorário',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(isOverdue(p)?'À receber':p.status))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="markReceived('${p.id}')">Receber</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('')||`<tr><td colspan="8"><div class="empty">${emptyMsg}</div></td></tr>`;
 }
 function setServiceClinicFilter(id){
   serviceClinicFilter=id||'';
   renderService();
 }
+function setServicePeriodDays(days){
+  const n=Number(days);
+  servicePeriodDays=SERVICE_PERIODS.includes(n)?n:30;
+  renderService();
+}
+function setServiceStatusFilter(id){
+  serviceStatusFilter=String(id||'');
+  renderService();
+}
+window.setServicePeriodDays=setServicePeriodDays;
+window.setServiceStatusFilter=setServiceStatusFilter;
 function renderPrivate(){
   const arr=state.patients.filter(p=>p.clinicId==='particular'||p.origin==='Particular');
   document.getElementById('privateTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong>`)}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} item(ns)</span>`)}${td('Contratado',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Lab',brl.format(p.lab||0))}${td('Componentes',brl.format(p.components||0))}${td('Clínica',brl.format(p.clinical||0))}${td('Lucro',`<strong>${brl.format(patientProfit(p))}</strong>`)}${td('Progresso',badge(p.progress))}<td class="actions-cell">${acts(`editPatient('${p.id}')`,`deletePatient('${p.id}')`)}</td></tr>`).join('')||'<tr><td colspan="10"><div class="empty">Sem casos particulares.</div></td></tr>';
