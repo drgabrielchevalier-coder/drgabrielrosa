@@ -1390,6 +1390,15 @@ function addOrcamentoLine(){
   if(document.getElementById('oAddQty')) document.getElementById('oAddQty').value='1';
   recalcOrcamento();
 }
+function onOrcamentoOriginChange(){
+  const origin=document.getElementById('oOrigin')?.value||'Prestação';
+  const clinicEl=document.getElementById('oClinic');
+  if(clinicEl && origin==='Particular'){
+    const part=state.clinics.find(c=>c.id==='particular'||c.type==='Próprio');
+    if(part) clinicEl.value=part.id;
+  }
+  recalcOrcamento();
+}
 function setText(id, text){
   const el=document.getElementById(id);
   if(el) el.textContent=text;
@@ -1544,6 +1553,169 @@ function deleteOrcamento(id){
   renderAll();
   toast('Orçamento excluído.');
 }
+/** Dados do orçamento atual (formulário) ou de um registro salvo. */
+function orcamentoPrintPayload(id=''){
+  if(id){
+    const p=state.patients.find(x=>x.id===id);
+    if(!p) return null;
+    const lines=patientLines(p);
+    const settled=settleLines(lines, p.clinicId);
+    return {
+      name:p.name||'',
+      clinicId:p.clinicId||'',
+      origin:p.origin||'Prestação',
+      notes:(p.notes||p.observation||'').trim(),
+      date:p.date||todayISO(),
+      lines,
+      settled
+    };
+  }
+  const name=(document.getElementById('oName')?.value||'').trim();
+  const clinicId=document.getElementById('oClinic')?.value||'';
+  const lines=collectOrcamentoLines();
+  if(!name){ toast('Informe o nome do paciente.'); return null; }
+  if(!clinicId){ toast('Selecione a clínica.'); return null; }
+  if(!lines.length){ toast('Adicione ao menos um procedimento.'); return null; }
+  return {
+    name,
+    clinicId,
+    origin:document.getElementById('oOrigin')?.value||'Prestação',
+    notes:(document.getElementById('oNotes')?.value||'').trim(),
+    date:todayISO(),
+    lines,
+    settled:settleLines(lines, clinicId)
+  };
+}
+function buildOrcamentoPrintHtml(payload){
+  const c=clinic(payload.clinicId);
+  const settled=payload.settled||{};
+  const lines=payload.lines||[];
+  const breakdown=settled.breakdown||[];
+  const total=moneyRound(settled.practiced||0);
+  const issued=fmtDate(payload.date||todayISO());
+  const validUntil=fmtDate(addDays(30));
+  const rows=lines.map((l,i)=>{
+    const b=breakdown[i]||{};
+    const q=Number(l.qty||1)||1;
+    const unit=q>0?moneyRound((b.practiced||0)/q):0;
+    const tooth=l.tooth?`<div class="op-sub">Dente / região: ${esc(l.tooth)}</div>`:'';
+    return `<tr>
+      <td><strong>${esc(procedure(l.procedureId).name)}</strong>${tooth}</td>
+      <td class="num">${q}</td>
+      <td class="num">${brl.format(unit)}</td>
+      <td class="num">${brl.format(b.practiced||0)}</td>
+    </tr>`;
+  }).join('');
+  const notesBlock=payload.notes
+    ? `<section class="op-notes"><h2>Observações</h2><p>${esc(payload.notes).replace(/\n/g,'<br>')}</p></section>`
+    : '';
+  return `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Orçamento — ${esc(payload.name)}</title>
+<style>
+  @page{size:A4;margin:16mm 14mm}
+  *{box-sizing:border-box}
+  body{
+    margin:0;font-family:Georgia,"Times New Roman",serif;color:#1a1a18;
+    background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact
+  }
+  .sheet{max-width:720px;margin:0 auto}
+  .head{
+    display:flex;justify-content:space-between;gap:24px;align-items:flex-start;
+    border-bottom:2px solid #171816;padding-bottom:16px;margin-bottom:22px
+  }
+  .brand strong{display:block;font-size:22px;letter-spacing:.02em}
+  .brand small{display:block;margin-top:4px;font-size:12px;color:#5c5c56;font-family:system-ui,sans-serif}
+  .meta{text-align:right;font-family:system-ui,sans-serif;font-size:12px;color:#444;line-height:1.55}
+  .meta .doc-title{font-size:15px;font-weight:700;color:#171816;margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase}
+  h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 8px;color:#5c5c56;font-family:system-ui,sans-serif}
+  .info{display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;margin-bottom:22px;font-family:system-ui,sans-serif;font-size:13px}
+  .info div{padding:10px 12px;background:#f7f5ef;border:1px solid #e5e1d6;border-radius:8px}
+  .info span{display:block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#7a7a72;margin-bottom:3px}
+  .info strong{font-size:14px;font-weight:650}
+  table{width:100%;border-collapse:collapse;font-family:system-ui,sans-serif;font-size:13px;margin-bottom:8px}
+  th{text-align:left;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#7a7a72;padding:8px 6px;border-bottom:1px solid #cfcabe}
+  td{padding:10px 6px;border-bottom:1px solid #ebe7dc;vertical-align:top}
+  td.num,th.num{text-align:right;white-space:nowrap}
+  .op-sub{font-size:11px;color:#6b6b64;margin-top:3px}
+  .total{
+    display:flex;justify-content:flex-end;margin:16px 0 24px;font-family:system-ui,sans-serif
+  }
+  .total-box{
+    min-width:240px;padding:14px 16px;background:#171816;color:#f3efe6;border-radius:10px
+  }
+  .total-box span{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.7;margin-bottom:4px}
+  .total-box strong{font-size:22px;font-weight:700}
+  .op-notes{margin:0 0 24px;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5}
+  .op-notes p{margin:0;white-space:pre-wrap}
+  .validity{font-family:system-ui,sans-serif;font-size:12px;color:#5c5c56;margin-bottom:28px}
+  .signs{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:36px;font-family:system-ui,sans-serif;font-size:12px;color:#5c5c56}
+  .signs div{border-top:1px solid #171816;padding-top:8px;text-align:center}
+  .foot{margin-top:36px;padding-top:12px;border-top:1px solid #e5e1d6;font-family:system-ui,sans-serif;font-size:11px;color:#7a7a72;line-height:1.5}
+  .no-print{margin:16px auto;max-width:720px;text-align:right;font-family:system-ui,sans-serif}
+  .no-print button{appearance:none;border:1px solid #171816;background:#171816;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;cursor:pointer}
+  @media print{
+    .no-print{display:none!important}
+    body{background:#fff}
+  }
+</style>
+</head>
+<body>
+  <div class="no-print"><button type="button" onclick="window.print()">Imprimir / salvar PDF</button></div>
+  <div class="sheet">
+    <header class="head">
+      <div class="brand">
+        <strong>Dr Gabriel Rosa</strong>
+        <small>Reabilitação oral &amp; estética</small>
+        <small>CRO-RJ 52957</small>
+      </div>
+      <div class="meta">
+        <div class="doc-title">Orçamento</div>
+        <div>Emitido em ${issued}</div>
+        <div>Validade até ${validUntil}</div>
+      </div>
+    </header>
+    <div class="info">
+      <div><span>Paciente</span><strong>${esc(payload.name)}</strong></div>
+      <div><span>Local / clínica</span><strong>${esc(c.name||'—')}</strong></div>
+    </div>
+    <h2>Procedimentos propostos</h2>
+    <table>
+      <thead><tr><th>Procedimento</th><th class="num">Qtd</th><th class="num">Unitário</th><th class="num">Total</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="total"><div class="total-box"><span>Valor total do orçamento</span><strong>${brl.format(total)}</strong></div></div>
+    ${notesBlock}
+    <p class="validity">Valores sujeitos a alteração após ${validUntil}. Este documento é uma estimativa do tratamento proposto e não substitui o plano clínico definitivo.</p>
+    <div class="signs">
+      <div>Paciente / responsável</div>
+      <div>Dr Gabriel Rosa — CRO-RJ 52957</div>
+    </div>
+    <footer class="foot">
+      WhatsApp (21) 96732-9133 · Instagram @dr_gabrielrosa<br>
+      Documento gerado pelo sistema Dr Gabriel Rosa — Gestão.
+    </footer>
+  </div>
+  <script>window.addEventListener('load',()=>setTimeout(()=>window.print(),250));</script>
+</body>
+</html>`;
+}
+function printOrcamento(id=''){
+  const payload=orcamentoPrintPayload(id||'');
+  if(!payload) return;
+  const html=buildOrcamentoPrintHtml(payload);
+  const w=window.open('','_blank','noopener,noreferrer,width=900,height=1100');
+  if(!w){
+    toast('Permita pop-ups para imprimir o orçamento.');
+    return;
+  }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
+
 function renderOrcamento(){
   const clinicEl=document.getElementById('oClinic');
   const addProc=document.getElementById('oAddProc');
@@ -1578,6 +1750,7 @@ function renderOrcamento(){
         ${td('Data',fmtDate(p.date))}
         <td class="actions-cell"><div class="row-actions">
           <button class="btn small" onclick="loadOrcamento('${p.id}')">Abrir</button>
+          <button class="btn small" onclick="printOrcamento('${p.id}')">Imprimir</button>
           <button class="btn small primary" onclick="promoteOrcamento('${p.id}')">Converter</button>
           <button class="btn small danger" onclick="deleteOrcamento('${p.id}')">Excluir</button>
         </div></td>

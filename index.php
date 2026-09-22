@@ -319,6 +319,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <div><h2>Orçamento de pacientes</h2><p>Monte o tratamento por clínica — honorário, materiais, lab e margem calculam sozinhos pelo modelo de cobrança.</p></div>
           <div class="page-actions">
             <button class="btn" type="button" onclick="clearOrcamento()">Limpar</button>
+            <button class="btn" type="button" onclick="printOrcamento()">Imprimir</button>
             <button class="btn primary" type="button" onclick="saveOrcamentoAsPatient()">Salvar orçamento</button>
           </div>
         </div>
