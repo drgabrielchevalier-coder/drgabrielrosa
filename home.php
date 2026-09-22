@@ -6,11 +6,11 @@ require_once __DIR__ . '/api/app-version-lib.php';
  * Contato público da landing.
  * Preencha WhatsApp (DDI+DDD+número, só dígitos) e Instagram quando tiver.
  */
-$LANDING_WHATSAPP = ''; // ex.: 5521999999999
+$LANDING_WHATSAPP = '5521967329133';
 $LANDING_EMAIL = 'drgabrielchevalier@hotmail.com';
 $LANDING_LATTES = 'http://lattes.cnpq.br/9376004341430383';
-$LANDING_INSTAGRAM = ''; // ex.: https://instagram.com/seuusuario
-$LANDING_CRO = ''; // ex.: CRO-RJ 00000 — envie o número para exibir
+$LANDING_INSTAGRAM = 'https://instagram.com/dr_gabrielrosa';
+$LANDING_CRO = 'CRO-RJ 52957';
 
 $waDigits = preg_replace('/\D+/', '', $LANDING_WHATSAPP) ?: '';
 $waMsg = rawurlencode('Olá, Dr. Gabriel Rosa! Vi a landing e gostaria de agendar uma avaliação.');
