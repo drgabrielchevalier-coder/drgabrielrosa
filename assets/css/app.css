@@ -297,6 +297,18 @@
     padding:0 14px;color:var(--muted);font-size:12px
   }
   .subtab.active{background:var(--sidebar);color:#fff;border-color:var(--sidebar)}
+  .svc-filter-row{
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;
+  }
+  .svc-filter-row .subtabs{margin:0}
+  .svc-filter-label{
+    font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:650;min-width:72px;
+  }
+  .svc-status-row{margin-top:4px;margin-bottom:12px}
+  .kpi .kpi-hint{
+    display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;
+    background:#f1eee7;color:#756645;font-size:9px;letter-spacing:.06em;font-weight:650;vertical-align:middle;
+  }
   .clinic-card .row-actions{margin-top:12px}
   .proc-item{display:grid;grid-template-columns:1fr 90px 36px 36px;gap:8px;margin-bottom:8px;align-items:center}
   .proc-item .pi-unit{font-size:10px;color:var(--muted);text-align:center}

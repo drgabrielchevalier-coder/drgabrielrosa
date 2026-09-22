@@ -1,10 +1,9 @@
 {
-  "version": "2.7.0",
-  "name": "Landing premium — imagem e autoridade",
+  "version": "2.7.1",
+  "name": "Filtros na Prestação de serviço",
   "releasedAt": "2026-09-22",
   "changes": [
-    "Landing redesenhada no tom das referências: hero escuro, foto dominante, ouro da marca.",
-    "Nova foto profissional no hero e na seção Sobre.",
-    "Copy de autoridade, strip de especialidades, tratamentos editoriais e CTA de avaliação."
+    "Totais da Prestação filtráveis por período: 7d, 15d, 30d, 60d, 90d.",
+    "Lançamentos com filtros: Todos, Pagos, A receber, Parcial, Vencidos, A vencer."
   ]
 }

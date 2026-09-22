@@ -318,12 +318,20 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <div><h2>Prestação de serviço</h2><p>Honorários por clínica parceira — componha tratamentos (plantio + enxerto + prótese) e cobre por centro.</p></div>
           <div class="page-actions"><button class="btn primary" onclick="openReceivableModal('prestacao')">＋ Lançar honorário</button></div>
         </div>
-        <div class="subtabs" id="serviceClinicTabs" role="tablist"></div>
+        <div class="subtabs" id="serviceClinicTabs" role="tablist" aria-label="Clínica"></div>
+        <div class="svc-filter-row">
+          <span class="svc-filter-label">Período</span>
+          <div class="subtabs svc-period-tabs" id="servicePeriodTabs" role="tablist" aria-label="Período dos totais"></div>
+        </div>
         <div class="grid kpi-grid" style="grid-template-columns:repeat(4,1fr)">
-          <div class="kpi"><div class="label">Honorários lançados</div><div class="value" id="svcTotal">R$ 0</div></div>
+          <div class="kpi"><div class="label">Honorários lançados <span class="kpi-hint" id="svcPeriodHint">30d</span></div><div class="value" id="svcTotal">R$ 0</div></div>
           <div class="kpi"><div class="label">Recebidos</div><div class="value" id="svcReceived">R$ 0</div></div>
           <div class="kpi"><div class="label">Em aberto</div><div class="value" id="svcOpen">R$ 0</div></div>
           <div class="kpi"><div class="label">Vencidos</div><div class="value" id="svcOverdue">R$ 0</div></div>
+        </div>
+        <div class="svc-filter-row svc-status-row">
+          <span class="svc-filter-label">Lançamentos</span>
+          <div class="subtabs svc-status-tabs" id="serviceStatusTabs" role="tablist" aria-label="Status dos lançamentos"></div>
         </div>
         <div class="card"><div class="table-wrap"><table>
           <thead><tr><th>Paciente</th><th>Clínica</th><th>Tratamento</th><th>Honorário</th><th>Recebido</th><th>Vencimento</th><th>Status</th><th></th></tr></thead>
