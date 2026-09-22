@@ -297,6 +297,16 @@
     padding:0 14px;color:var(--muted);font-size:12px
   }
   .subtab.active{background:var(--sidebar);color:#fff;border-color:var(--sidebar)}
+  .receive-mode-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+  .receive-mode-tabs .subtab{cursor:pointer}
+  .receive-preview{
+    margin-top:2px;padding:12px 14px;border-radius:12px;border:1px solid #efebe4;background:var(--panel-2);
+  }
+  .receive-preview-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .receive-preview-grid small{display:block;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+  .receive-preview-grid strong{font-size:13px;font-weight:650}
+  .receive-preview-grid strong.ok{color:var(--green)}
+  .receive-preview-grid strong.warn{color:var(--amber)}
   .svc-filter-row{
     display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;
   }
