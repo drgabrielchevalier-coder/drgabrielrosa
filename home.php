@@ -3,20 +3,21 @@ declare(strict_types=1);
 require_once __DIR__ . '/api/app-version-lib.php';
 
 /**
- * Contato público da landing (Instagram bio).
- * Preencha o WhatsApp com DDI+DDD+número, só dígitos. Ex.: 5521999999999
+ * Contato público da landing.
+ * Preencha WhatsApp (DDI+DDD+número, só dígitos) e Instagram quando tiver.
  */
-$LANDING_WHATSAPP = '';
+$LANDING_WHATSAPP = ''; // ex.: 5521999999999
 $LANDING_EMAIL = 'drgabrielchevalier@hotmail.com';
 $LANDING_LATTES = 'http://lattes.cnpq.br/9376004341430383';
-$LANDING_INSTAGRAM = ''; // ex.: https://instagram.com/seuusuario — envie o @ quando quiser
+$LANDING_INSTAGRAM = ''; // ex.: https://instagram.com/seuusuario
+$LANDING_CRO = ''; // ex.: CRO-RJ 00000 — envie o número para exibir
 
 $waDigits = preg_replace('/\D+/', '', $LANDING_WHATSAPP) ?: '';
-$waMsg = rawurlencode('Olá, Dr. Gabriel Rosa! Vim pelo Instagram e gostaria de agendar uma consulta.');
+$waMsg = rawurlencode('Olá, Dr. Gabriel Rosa! Vi a landing e gostaria de agendar uma avaliação.');
 $ctaHref = $waDigits !== ''
     ? 'https://wa.me/' . $waDigits . '?text=' . $waMsg
-    : 'mailto:' . $LANDING_EMAIL . '?subject=' . rawurlencode('Agendar consulta — Dr Gabriel Rosa');
-$ctaLabel = $waDigits !== '' ? 'Agendar consulta' : 'Agendar por e-mail';
+    : 'mailto:' . $LANDING_EMAIL . '?subject=' . rawurlencode('Agendar avaliação — Dr Gabriel Rosa');
+$ctaLabel = $waDigits !== '' ? 'Agendar avaliação' : 'Agendar por e-mail';
 $ctaExternal = true;
 
 header('Cache-Control: public, max-age=300');
@@ -30,12 +31,12 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Dr Gabriel Rosa — Reabilitação Oral &amp; Estética</title>
-<meta name="description" content="Dr Gabriel Rosa — cirurgião-dentista. Cirurgia oral, implantodontia, prótese e harmonização orofacial. Agende sua avaliação.">
-<meta name="theme-color" content="#2f2b28">
+<meta name="description" content="Dr Gabriel Rosa — cirurgião-dentista. Cirurgia oral, implantodontia, prótese e harmonização orofacial. Avaliação com plano claro.">
+<meta name="theme-color" content="#0e0c0b">
 <meta property="og:title" content="Dr Gabriel Rosa — Reabilitação Oral &amp; Estética">
-<meta property="og:description" content="Cirurgia oral, implantodontia e reabilitação. Atendimento clínico com foco em estética e função.">
+<meta property="og:description" content="Cirurgia, implantes e reabilitação com precisão clínica e olhar estético.">
 <meta property="og:type" content="website">
-<meta property="og:image" content="<?= htmlspecialchars('assets/img/brand/logo-circular.png', ENT_QUOTES, 'UTF-8') ?>">
+<meta property="og:image" content="<?= htmlspecialchars('assets/img/gabriel-rosa-portrait.jpg', ENT_QUOTES, 'UTF-8') ?>">
 <link rel="icon" type="image/png" href="<?= chevalier_asset_url('assets/img/brand/mark-gr-gold.png') ?>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -47,74 +48,129 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 <body class="lp">
   <a class="lp-skip" href="#conteudo">Ir ao conteúdo</a>
 
-  <header class="lp-top">
-    <a class="lp-brand" href="#topo" aria-label="Dr Gabriel Rosa">
-      <img src="<?= chevalier_asset_url('assets/img/brand/logo-stacked-on-dark.png') ?>" width="200" height="88" alt="Dr Gabriel Rosa — Reabilitação Oral &amp; Estética">
+  <header class="lp-top" id="topo">
+    <a class="lp-brand" href="#topo" aria-label="Dr Gabriel Rosa — início">
+      <img src="<?= chevalier_asset_url('assets/img/brand/logo-horizontal-on-dark.png') ?>" width="220" height="48" alt="Dr Gabriel Rosa">
     </a>
-    <a class="lp-login" href="login.php" title="Acesso ao sistema">Entrar</a>
+    <nav class="lp-top-nav" aria-label="Principal">
+      <a href="#tratamentos">Tratamentos</a>
+      <a href="#sobre">Sobre</a>
+      <a href="#formacao">Formação</a>
+      <a href="#contato">Contato</a>
+      <?php if ($LANDING_INSTAGRAM !== ''): ?>
+        <a class="lp-social" href="<?= htmlspecialchars($LANDING_INSTAGRAM, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" aria-label="Instagram">IG</a>
+      <?php endif; ?>
+      <a class="lp-top-cta" href="<?= htmlspecialchars($ctaHref, ENT_QUOTES, 'UTF-8') ?>" <?= $ctaExternal ? 'target="_blank" rel="noopener"' : '' ?>>Avaliação</a>
+      <a class="lp-login" href="login.php" title="Área restrita">Entrar</a>
+    </nav>
+    <button type="button" class="lp-menu-btn" id="lpMenuBtn" aria-expanded="false" aria-controls="lpDrawer" aria-label="Abrir menu">
+      <span></span><span></span>
+    </button>
   </header>
 
+  <div class="lp-drawer" id="lpDrawer" hidden>
+    <a href="#tratamentos">Tratamentos</a>
+    <a href="#sobre">Sobre</a>
+    <a href="#formacao">Formação</a>
+    <a href="#contato">Contato</a>
+    <a class="lp-btn lp-btn-primary" href="<?= htmlspecialchars($ctaHref, ENT_QUOTES, 'UTF-8') ?>" <?= $ctaExternal ? 'target="_blank" rel="noopener"' : '' ?>><?= htmlspecialchars($ctaLabel, ENT_QUOTES, 'UTF-8') ?></a>
+  </div>
+
   <main id="conteudo">
-    <section class="lp-hero" id="topo">
-      <div class="lp-hero-media" aria-hidden="true">
-        <img class="lp-hero-photo" src="<?= chevalier_asset_url('assets/img/gabriel-rosa-portrait.jpg') ?>" alt="" width="800" height="1373" fetchpriority="high">
-        <div class="lp-hero-veil"></div>
-      </div>
+    <section class="lp-hero">
+      <div class="lp-hero-glow" aria-hidden="true"></div>
       <div class="lp-hero-copy">
-        <p class="lp-kicker">Cirurgião-dentista · RJ</p>
+        <p class="lp-kicker">Cirurgião-dentista · Rio de Janeiro</p>
         <h1 class="lp-name">Dr Gabriel Rosa</h1>
-        <p class="lp-tag">Reabilitação oral &amp; estética com precisão cirúrgica e olhar clínico.</p>
+        <p class="lp-tag">Reabilitação oral &amp; estética com precisão cirúrgica — implantes, prótese e cirurgia pensados para função e beleza duradouras.</p>
         <div class="lp-cta-row">
           <a class="lp-btn lp-btn-primary" href="<?= htmlspecialchars($ctaHref, ENT_QUOTES, 'UTF-8') ?>" <?= $ctaExternal ? 'target="_blank" rel="noopener"' : '' ?>>
             <?= htmlspecialchars($ctaLabel, ENT_QUOTES, 'UTF-8') ?>
-            <?php if ($waDigits !== ''): ?>
-              <svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 1.82c4.46 0 8.09 3.63 8.09 8.09 0 4.46-3.63 8.09-8.09 8.09-1.42 0-2.81-.37-4.03-1.07l-.29-.17-3.12.82.83-3.04-.19-.31a8.05 8.05 0 0 1-1.24-4.32c0-4.46 3.63-8.09 8.04-8.09zm4.42 10.5c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.01-.37-1.93-1.19-.71-.64-1.19-1.42-1.33-1.66-.14-.24-.01-.37.11-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.48-.4-.41-.54-.42h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.69 2.58 4.1 3.62.57.25 1.02.4 1.37.51.58.18 1.1.16 1.52.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28z"/></svg>
-            <?php endif; ?>
           </a>
+          <a class="lp-btn lp-btn-ghost" href="#sobre">Conhecer o doutor</a>
         </div>
+        <?php if ($LANDING_CRO !== ''): ?>
+          <p class="lp-cro"><?= htmlspecialchars($LANDING_CRO, ENT_QUOTES, 'UTF-8') ?></p>
+        <?php endif; ?>
+      </div>
+      <div class="lp-hero-media">
+        <div class="lp-hero-ring" aria-hidden="true"></div>
+        <img
+          class="lp-hero-photo"
+          src="<?= chevalier_asset_url('assets/img/gabriel-rosa-portrait.jpg') ?>"
+          alt="Dr Gabriel Rosa em consultório"
+          width="1086"
+          height="1448"
+          fetchpriority="high"
+        >
+        <div class="lp-hero-fade" aria-hidden="true"></div>
       </div>
     </section>
 
-    <section class="lp-section lp-focus" data-reveal>
-      <h2>O que eu trato</h2>
-      <p class="lp-lead">Da cirurgia oral à reabilitação sobre implantes — planejamento cuidadoso para função, estética e longevidade.</p>
-      <ul class="lp-focus-list">
+    <section class="lp-strip" aria-label="Especialidades">
+      <ul>
+        <li>Cirurgia oral</li>
+        <li>Implantodontia</li>
+        <li>Prótese dentária</li>
+        <li>Harmonização orofacial</li>
+      </ul>
+    </section>
+
+    <section class="lp-section lp-treat" id="tratamentos" data-reveal>
+      <div class="lp-section-head">
+        <p class="lp-eyebrow">Tratamentos</p>
+        <h2>O plano certo para o seu caso</h2>
+        <p class="lp-lead">Cada sorriso começa com diagnóstico, imagem e um caminho claro — sem pressa, sem protocolo genérico.</p>
+      </div>
+      <ul class="lp-treat-grid">
         <li>
+          <span class="lp-treat-n">01</span>
           <strong>Cirurgia oral</strong>
-          <span>Extrações, enxertos e procedimentos em hospitais de referência.</span>
+          <p>Extrações, enxertos e procedimentos de média e alta complexidade, com segurança e recuperação acompanhada.</p>
         </li>
         <li>
+          <span class="lp-treat-n">02</span>
           <strong>Implantodontia</strong>
-          <span>Planejamento guiado, levantamentos e reabilitação implantossuportada.</span>
+          <p>Planejamento guiado, levantamentos e reabilitação implantossuportada para devolver mastigação e estética.</p>
         </li>
         <li>
-          <strong>Prótese dentária</strong>
-          <span>Coroas, facetas e protocolos com acabamento estético.</span>
+          <span class="lp-treat-n">03</span>
+          <strong>Prótese &amp; estética</strong>
+          <p>Coroas, facetas e protocolos com acabamento fino — harmonia entre dente, gengiva e face.</p>
         </li>
         <li>
+          <span class="lp-treat-n">04</span>
           <strong>Harmonização orofacial</strong>
-          <span>Equilíbrio facial alinhado à reabilitação oral.</span>
+          <p>Equilíbrio facial alinhado à reabilitação oral, com naturalidade e proporção.</p>
         </li>
       </ul>
     </section>
 
-    <section class="lp-section lp-about" data-reveal>
-      <div class="lp-about-grid">
-        <figure class="lp-about-photo">
-          <img src="<?= chevalier_asset_url('assets/img/gabriel-rosa-portrait.jpg') ?>" width="800" height="1373" alt="Retrato profissional do Dr Gabriel Rosa" loading="lazy">
-        </figure>
-        <div class="lp-about-copy">
-          <p class="lp-eyebrow">Sobre o doutor</p>
-          <h2>Formação clínica e gestão em saúde bucal</h2>
-          <p>Cirurgião-dentista formado pela Universidade Iguaçu (UNIG, 2022), com trajetória em cirurgia oral, implantodontia, prótese e harmonização orofacial. Estágios supervisionados em Cirurgia Bucomaxilofacial em hospitais de referência, com procedimentos de média e alta complexidade.</p>
-          <p>Atua também na gestão pública: coordenação de Saúde Bucal no município de Duque de Caxias (RJ), com planejamento estratégico, protocolos clínicos e ampliação do acesso à odontologia.</p>
-          <a class="lp-text-link" href="<?= htmlspecialchars($LANDING_LATTES, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">Ver Currículo Lattes →</a>
-        </div>
+    <section class="lp-about" id="sobre" data-reveal>
+      <div class="lp-about-media">
+        <img
+          src="<?= chevalier_asset_url('assets/img/gabriel-rosa-portrait-crop.jpg') ?>"
+          width="1086"
+          height="900"
+          alt="Retrato do Dr Gabriel Rosa"
+          loading="lazy"
+        >
+      </div>
+      <div class="lp-about-copy">
+        <p class="lp-eyebrow">Sobre</p>
+        <h2>Técnica, presença e clareza no consultório</h2>
+        <p class="lp-quote">A imagem que o paciente confia é a mesma que o clínico entrega: postura, precisão e um plano que se entende.</p>
+        <p>Cirurgião-dentista formado pela Universidade Iguaçu (UNIG, 2022), com trajetória em cirurgia oral, implantodontia, prótese e harmonização orofacial. Estágios supervisionados em Cirurgia Bucomaxilofacial em hospitais de referência.</p>
+        <p>Também atua na gestão pública — coordenação de Saúde Bucal em Duque de Caxias (RJ) — unindo visão clínica e organização de cuidado.</p>
+        <a class="lp-text-link" href="<?= htmlspecialchars($LANDING_LATTES, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">Currículo Lattes</a>
       </div>
     </section>
 
-    <section class="lp-section lp-path" data-reveal>
-      <h2>Formação</h2>
+    <section class="lp-section lp-path" id="formacao" data-reveal>
+      <div class="lp-section-head">
+        <p class="lp-eyebrow">Percurso</p>
+        <h2>Formação</h2>
+      </div>
       <ol class="lp-timeline">
         <li>
           <span class="lp-year">2024–2026</span>
@@ -161,9 +217,10 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
       </ol>
     </section>
 
-    <section class="lp-section lp-close" data-reveal>
-      <h2>Pronto para o próximo passo?</h2>
-      <p class="lp-lead">Avaliação clínica com plano claro — função, estética e acompanhamento.</p>
+    <section class="lp-close" id="contato" data-reveal>
+      <p class="lp-eyebrow">Próximo passo</p>
+      <h2>Avaliação com plano claro</h2>
+      <p class="lp-lead">Conte o que incomoda no sorriso ou na mastigação — montamos o caminho juntos, com transparência.</p>
       <a class="lp-btn lp-btn-primary" href="<?= htmlspecialchars($ctaHref, ENT_QUOTES, 'UTF-8') ?>" <?= $ctaExternal ? 'target="_blank" rel="noopener"' : '' ?>>
         <?= htmlspecialchars($ctaLabel, ENT_QUOTES, 'UTF-8') ?>
       </a>

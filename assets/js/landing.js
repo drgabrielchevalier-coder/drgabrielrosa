@@ -2,10 +2,25 @@
   const top = document.querySelector('.lp-top');
   const onScroll = () => {
     if (!top) return;
-    top.classList.toggle('is-solid', window.scrollY > 24);
+    top.classList.toggle('is-solid', window.scrollY > 20);
   };
   onScroll();
   window.addEventListener('scroll', onScroll, { passive: true });
+
+  const btn = document.getElementById('lpMenuBtn');
+  const drawer = document.getElementById('lpDrawer');
+  if (btn && drawer) {
+    const close = () => {
+      drawer.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    };
+    btn.addEventListener('click', () => {
+      const open = drawer.hidden;
+      drawer.hidden = !open;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    drawer.querySelectorAll('a').forEach((a) => a.addEventListener('click', close));
+  }
 
   const nodes = document.querySelectorAll('[data-reveal]');
   if (!('IntersectionObserver' in window) || !nodes.length) {

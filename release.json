@@ -1,10 +1,10 @@
 {
-  "version": "2.6.5",
-  "name": "Importação CSV padrão + históricos no banco",
-  "releasedAt": "2026-09-18",
+  "version": "2.7.0",
+  "name": "Landing premium — imagem e autoridade",
+  "releasedAt": "2026-09-22",
   "changes": [
-    "Modelo padrão de importação: CSV ou HTML (tabela), com detecção de honorários/custos e escolha de clínica.",
-    "Botão genérico em Configurações — sem vínculo só à Allon Roter.",
-    "Históricos dos arquivos enviados (Daniele, Gerlúcia, Particular, Custos + Allon) aplicados automaticamente no estado/banco."
+    "Landing redesenhada no tom das referências: hero escuro, foto dominante, ouro da marca.",
+    "Nova foto profissional no hero e na seção Sobre.",
+    "Copy de autoridade, strip de especialidades, tratamentos editoriais e CTA de avaliação."
   ]
 }
