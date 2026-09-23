@@ -325,34 +325,39 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
         </div>
         <div class="orcamento-layout">
           <div class="card orcamento-builder">
-            <div class="form-grid">
-              <div class="field full"><label>Paciente</label><input id="oName" class="input" placeholder="Nome do paciente" oninput="recalcOrcamento()"></div>
-              <div class="field"><label>Clínica</label><select id="oClinic" class="select" onchange="recalcOrcamento()"></select></div>
+            <div class="form-grid orc-form">
+              <div class="field full"><label>Paciente</label><input id="oName" class="input" placeholder="Nome do paciente"></div>
+              <div class="field"><label>Clínica</label><select id="oClinic" class="select" onchange="onOrcamentoClinicChange()"></select></div>
               <div class="field"><label>Origem</label>
                 <select id="oOrigin" class="select" onchange="onOrcamentoOriginChange()">
                   <option>Prestação</option>
                   <option>Particular</option>
                 </select>
               </div>
-              <div class="field full"><label>Composição do tratamento</label>
-                <p class="field-hint">Adicione procedimentos e quantidades. O cálculo usa preço por clínica + modelo de cobrança.</p>
+              <div class="field full">
+                <label>Composição do tratamento</label>
+                <p class="field-hint">Edite o <strong>praticado</strong> de cada procedimento — o honorário e a margem recalculam na hora.</p>
                 <div id="oTreatLines" class="treat-list orc-treat-list"></div>
-                <div class="treat-add">
+                <div class="treat-add orc-add">
                   <select id="oAddProc" class="select"></select>
-                  <input id="oAddQty" class="input" type="number" min="1" step="1" value="1" title="Quantidade" style="width:72px">
-                  <button type="button" class="btn small" onclick="addOrcamentoLine()">＋ Adicionar</button>
+                  <input id="oAddQty" class="input" type="number" min="1" step="1" value="1" title="Quantidade" aria-label="Quantidade">
+                  <button type="button" class="btn small primary" onclick="addOrcamentoLine()">＋ Adicionar</button>
                 </div>
               </div>
-              <div class="field full"><label>Observações</label><textarea id="oNotes" class="textarea" rows="2" placeholder="Opcional — aparece no orçamento salvo"></textarea></div>
+              <div class="field full"><label>Observações</label><textarea id="oNotes" class="textarea" rows="2" placeholder="Opcional — aparece na impressão e no orçamento salvo"></textarea></div>
             </div>
             <input type="hidden" id="oEditId" value="">
           </div>
           <div class="card orcamento-summary" id="orcamentoSummary">
-            <h3>Cálculo automático</h3>
-            <p class="field-hint" id="oBillingChips">Selecione a clínica e os procedimentos.</p>
-            <div class="orc-kpi-grid">
+            <div class="orc-summary-head">
+              <h3>Cálculo automático</h3>
+              <p class="field-hint" id="oBillingChips">Selecione a clínica e os procedimentos.</p>
+            </div>
+            <div class="orc-kpi-hero">
               <div class="orc-kpi"><small>Praticado (clínica)</small><strong id="oPracticed">R$ 0</strong></div>
               <div class="orc-kpi accent"><small>Você recebe</small><strong id="oReceivable">R$ 0</strong></div>
+            </div>
+            <div class="orc-kpi-grid">
               <div class="orc-kpi"><small>Materiais</small><strong id="oMatCost">R$ 0</strong></div>
               <div class="orc-kpi"><small>Componentes</small><strong id="oCompCost">R$ 0</strong></div>
               <div class="orc-kpi"><small>Laboratório</small><strong id="oLabCost">R$ 0</strong></div>
