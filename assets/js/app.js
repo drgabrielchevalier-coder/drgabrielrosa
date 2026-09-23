@@ -1375,26 +1375,24 @@ function orcamentoLineRow(line={}, clinicId=''){
   const practiced=line.practicedValue!=null && line.practicedValue!==''
     ? moneyRound(Number(line.practicedValue)||0)
     : defaultPracticedFor(id, cid);
-  return `<div class="orc-line" data-proc="${esc(id)}">
-    <div class="orc-line-top">
-      <div class="orc-line-title">
-        <strong>${esc(p.name)}</strong>
-        <span class="cell-sub">${esc(specialtyName(p.specialty))} · ${kind}</span>
-      </div>
-      <button type="button" class="btn small icon-x" onclick="this.closest('.orc-line').remove();recalcOrcamento()" title="Remover">×</button>
-    </div>
-    <div class="orc-line-fields">
-      <label class="orc-field"><span>Qtd</span>
-        <input class="input tl-qty" type="number" min="1" step="1" value="${qty}" oninput="recalcOrcamento()">
-      </label>
-      <label class="orc-field"><span>Praticado (R$)</span>
-        <input class="input tl-practiced" type="number" min="0" step="0.01" value="${practiced.toFixed(2)}" oninput="recalcOrcamento()">
-      </label>
-      <label class="orc-field orc-field-tooth"><span>Dente / região</span>
-        <input class="input tl-tooth" placeholder="Opcional" value="${esc(line.tooth||'')}" oninput="recalcOrcamento()">
-      </label>
-    </div>
-  </div>`;
+  return `<tr class="orc-line" data-proc="${esc(id)}">
+    <td data-label="Procedimento">
+      <strong>${esc(p.name)}</strong>
+      <div class="cell-sub">${esc(specialtyName(p.specialty))} · ${kind}</div>
+    </td>
+    <td data-label="Qtd" class="num">
+      <input class="input tl-qty" type="number" min="1" step="1" value="${qty}" oninput="recalcOrcamento()">
+    </td>
+    <td data-label="Praticado" class="num">
+      <input class="input tl-practiced" type="number" min="0" step="0.01" value="${practiced.toFixed(2)}" oninput="recalcOrcamento()">
+    </td>
+    <td data-label="Dente / região">
+      <input class="input tl-tooth" placeholder="Opcional" value="${esc(line.tooth||'')}" oninput="recalcOrcamento()">
+    </td>
+    <td class="actions-cell">
+      <button type="button" class="btn small danger" onclick="this.closest('tr').remove();recalcOrcamento()" title="Remover">Remover</button>
+    </td>
+  </tr>`;
 }
 function collectOrcamentoLines(){
   return [...document.querySelectorAll('#oTreatLines .orc-line')].map(row=>{
@@ -1407,6 +1405,13 @@ function collectOrcamentoLines(){
       practicedValue:Number.isFinite(practicedValue)?practicedValue:undefined
     };
   }).filter(x=>x.procedureId);
+}
+function syncOrcamentoEmptyState(){
+  const empty=document.getElementById('oLinesEmpty');
+  const n=document.querySelectorAll('#oTreatLines .orc-line').length;
+  if(empty) empty.style.display=n?'none':'block';
+  const wrap=document.querySelector('.orc-lines-wrap');
+  if(wrap) wrap.style.display=n?'block':'none';
 }
 function addOrcamentoLine(){
   const sel=document.getElementById('oAddProc');
@@ -1422,6 +1427,7 @@ function addOrcamentoLine(){
     practicedValue:defaultPracticedFor(id, clinicId)
   }, clinicId));
   if(document.getElementById('oAddQty')) document.getElementById('oAddQty').value='1';
+  syncOrcamentoEmptyState();
   recalcOrcamento();
 }
 function onOrcamentoOriginChange(){
@@ -1448,6 +1454,7 @@ function setText(id, text){
   if(el) el.textContent=text;
 }
 function recalcOrcamento(){
+  syncOrcamentoEmptyState();
   const clinicId=document.getElementById('oClinic')?.value||'';
   const lines=collectOrcamentoLines();
   const settled=settleLines(lines, clinicId);
@@ -1461,33 +1468,26 @@ function recalcOrcamento(){
   setText('oProfit', brl.format(settled.profit||0));
   setText('oCardFee', brl.format(settled.cardFee||0));
   const profitEl=document.getElementById('oProfit');
-  if(profitEl) profitEl.classList.toggle('is-neg', Number(settled.profit||0)<0);
+  if(profitEl){
+    profitEl.classList.toggle('is-neg', Number(settled.profit||0)<0);
+    profitEl.classList.toggle('meta', false);
+  }
   const chipsEl=document.getElementById('oBillingChips');
   if(chipsEl){
     if(!clinicId){
-      chipsEl.textContent='Selecione a clínica para aplicar o modelo de cobrança.';
+      chipsEl.textContent='Selecione clínica e procedimentos para calcular.';
+    }else if(!lines.length){
+      chipsEl.textContent=`${clinic(clinicId).name||clinicId} — adicione procedimentos para ver o cálculo.`;
     }else{
       const chips=window.ChevalierBilling?ChevalierBilling.chipLabels(billingForClinic(clinicId)):[];
       const cname=clinic(clinicId).name||clinicId;
       chipsEl.textContent=chips.length
-        ? `${cname}: ${chips.join(' · ')}`
-        : `${cname} — modelo padrão por procedimento.`;
+        ? `Modelo ${cname}: ${chips.join(' · ')}`
+        : `Modelo ${cname}`;
     }
   }
   const brEl=document.getElementById('oBreakdown');
-  if(brEl){
-    if(!lines.length){
-      brEl.innerHTML=`<p class="orc-empty">Adicione procedimentos para ver o detalhamento.</p>`;
-    }else{
-      brEl.innerHTML=`<table><thead><tr><th>Procedimento</th><th>Qtd</th><th>Praticado</th><th>Seu honorário</th></tr></thead><tbody>${
-        (settled.breakdown||[]).map((b,i)=>{
-          const l=lines[i]||{};
-          const q=Number(l.qty||1)||1;
-          return `<tr><td><strong>${esc(procedure(b.procedureId).name)}</strong>${l.tooth?`<span class="cell-sub">${esc(l.tooth)}</span>`:''}</td><td>${q}</td><td>${brl.format(b.practiced||0)}</td><td>${brl.format(b.baseShare||0)}</td></tr>`;
-        }).join('')
-      }</tbody></table>`;
-    }
-  }
+  if(brEl) brEl.innerHTML='';
   const bomEl=document.getElementById('oBom');
   if(bomEl){
     if(!bom.items.length && !bom.lab){
@@ -1496,11 +1496,11 @@ function recalcOrcamento(){
       const rows=bom.items.slice(0,8).map(it=>{
         const m=material(it.materialId);
         const tot=Number(m.unitCost||0)*Number(it.qty||0);
-        return `<tr><td>${esc(m.name)}</td><td>${it.qty}</td><td>${brl.format(tot)}</td></tr>`;
+        return `<tr><td>${esc(m.name)}</td><td class="num">${it.qty}</td><td class="num">${brl.format(tot)}</td></tr>`;
       }).join('');
       const more=bom.items.length>8?`<tr><td colspan="3"><span class="cell-sub">+ ${bom.items.length-8} itens</span></td></tr>`:'';
-      const labRow=bom.lab?`<tr><td>Laboratório / extra protético</td><td>—</td><td>${brl.format(bom.lab)}</td></tr>`:'';
-      bomEl.innerHTML=`<details class="orc-bom-details"><summary>Materiais / lab (BOM)</summary><table><thead><tr><th>Item</th><th>Qtd</th><th>Custo</th></tr></thead><tbody>${rows}${more}${labRow}</tbody></table></details>`;
+      const labRow=bom.lab?`<tr><td>Laboratório / extra protético</td><td class="num">—</td><td class="num">${brl.format(bom.lab)}</td></tr>`:'';
+      bomEl.innerHTML=`<details class="orc-bom-details"><summary>Ver lista de materiais (BOM)</summary><table><thead><tr><th>Item</th><th class="num">Qtd</th><th class="num">Custo</th></tr></thead><tbody>${rows}${more}${labRow}</tbody></table></details>`;
     }
   }
   return settled;
@@ -1516,6 +1516,9 @@ function clearOrcamento(){
   if(lines) lines.innerHTML='';
   const qty=document.getElementById('oAddQty');
   if(qty) qty.value='1';
+  const hint=document.getElementById('oEditHint');
+  if(hint) hint.textContent='';
+  syncOrcamentoEmptyState();
   recalcOrcamento();
 }
 function loadOrcamento(id){
@@ -1524,6 +1527,8 @@ function loadOrcamento(id){
   go('orcamento');
   const edit=document.getElementById('oEditId');
   if(edit) edit.value=p.id;
+  const hint=document.getElementById('oEditHint');
+  if(hint) hint.textContent='Editando orçamento salvo';
   const name=document.getElementById('oName');
   if(name) name.value=p.name||'';
   const clinicEl=document.getElementById('oClinic');
@@ -1534,6 +1539,7 @@ function loadOrcamento(id){
   if(notes) notes.value=p.notes||p.observation||'';
   const box=document.getElementById('oTreatLines');
   if(box) box.innerHTML=patientLines(p).map(l=>orcamentoLineRow(l, p.clinicId)).join('');
+  syncOrcamentoEmptyState();
   recalcOrcamento();
   toast('Orçamento carregado para edição.');
 }
