@@ -275,6 +275,7 @@
   .detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:16px 0}
   .detail-grid span{display:block;font-size:10px;color:var(--muted)}
   .detail-grid strong{font-size:12px}
+  .detail-grid strong.warn{color:var(--amber)}
   .warning-banner{background:var(--red-bg);color:var(--red);border-radius:12px;padding:12px;font-size:12px;margin:10px 0}
   .workflow-stepper{display:grid;gap:8px}
   .workflow-step{display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--panel-2)}
@@ -285,7 +286,10 @@
   .detail-timeline{display:grid;gap:10px}
   .detail-event,.timeline-item{display:flex;gap:10px;align-items:flex-start}
   .event-dot,.timeline-dot{width:9px;height:9px;border-radius:50%;background:#8e7d5b;margin-top:6px;flex:0 0 auto}
+  .event-dot.amber{background:var(--amber)}
   .detail-event p,.timeline-item p{margin:4px 0 0;font-size:11px;color:var(--muted)}
+  .pay-timeline{margin-top:4px}
+  .page-subhint{margin:-4px 0 12px;font-size:12px;color:var(--muted);line-height:1.45}
   .timeline-item{padding:10px 0;border-bottom:1px solid #eeeae3}
   .timeline-item:last-child{border-bottom:0}
   .timeline-item span{display:block;font-size:10px;color:var(--muted);margin-top:2px}

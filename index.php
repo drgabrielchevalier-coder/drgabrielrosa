@@ -404,6 +404,9 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <thead><tr><th>Paciente</th><th>Clínica</th><th>Tratamento</th><th>Honorário</th><th>Recebido</th><th>Vencimento</th><th>Status</th><th></th></tr></thead>
           <tbody id="serviceTable"></tbody>
         </table></div></div>
+        <h3 class="section-title">Extrato de baixas</h3>
+        <p class="page-subhint">Movimentações de recebimento desta clínica — pagamento parcial fica identificado.</p>
+        <div class="card" id="servicePaymentExtrato"><div class="empty">Nenhuma baixa registrada ainda.</div></div>
       </section>
 
       <!-- PARTICULAR -->
@@ -530,6 +533,9 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <thead><tr><th>Paciente</th><th>Origem</th><th>Valor</th><th>Recebido</th><th>Saldo</th><th>Vencimento</th><th>Status</th><th></th></tr></thead>
           <tbody id="receivablesTable"></tbody>
         </table></div></div>
+        <h3 class="section-title">Extrato de baixas</h3>
+        <p class="page-subhint">Histórico de movimentações — quitação ou pagamento parcial.</p>
+        <div class="card" id="receivablesPaymentExtrato"><div class="empty">Nenhuma baixa registrada ainda.</div></div>
       </section>
 
       <!-- CUSTOS -->
