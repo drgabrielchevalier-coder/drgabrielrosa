@@ -429,6 +429,87 @@ function syncPatientPaymentStatus(p){
   }
   return p;
 }
+function patientPayments(p){
+  return Array.isArray(p?.payments)?p.payments.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))):[];
+}
+function paymentModeLabel(mode, balanceAfter){
+  const m=String(mode||'').toLowerCase();
+  if(m==='total' || (balanceAfter!=null && Number(balanceAfter)<=0)) return 'Quitação';
+  if(m==='parcial' || m==='partial') return 'Pagamento parcial';
+  return 'Recebimento';
+}
+function paymentHistoryHtml(p, opts={}){
+  const list=patientPayments(p);
+  if(!list.length){
+    return `<div class="empty">${opts.empty||'Nenhuma baixa registrada ainda.'}</div>`;
+  }
+  return `<div class="detail-timeline pay-timeline">${list.map(pay=>{
+    const label=paymentModeLabel(pay.mode, pay.balanceAfter);
+    const partial=/parcial/i.test(label);
+    return `<div class="detail-event">
+      <span class="event-dot ${partial?'amber':''}"></span>
+      <div>
+        <strong>${esc(label)} · ${brl.format(pay.amount||0)}</strong>
+        <p>${fmtDate(pay.date)}${pay.balanceAfter!=null?` · saldo após baixa ${brl.format(pay.balanceAfter)}`:''}${pay.note?` · ${esc(pay.note)}`:''}</p>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+function recentPaymentMovements(limit=40){
+  const rows=[];
+  (state.patients||[]).forEach(p=>{
+    patientPayments(p).forEach(pay=>{
+      rows.push({
+        patientId:p.id,
+        patientName:p.name,
+        clinicId:p.clinicId,
+        origin:p.origin,
+        date:pay.date||'',
+        amount:Number(pay.amount||0),
+        mode:pay.mode,
+        balanceAfter:pay.balanceAfter,
+        label:paymentModeLabel(pay.mode, pay.balanceAfter)
+      });
+    });
+  });
+  return rows.sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0, limit);
+}
+function openChargeSheet(id){
+  const p=state.patients.find(x=>x.id===id);
+  if(!p) return toast('Cobrança não encontrada.');
+  syncPatientPaymentStatus(p);
+  const st=paymentStatusOf(p);
+  const bal=balance(p);
+  openModal('Ficha da cobrança', `
+    <div class="detail-top">
+      <div>
+        <h3 style="margin:0 0 4px">${esc(p.name)}</h3>
+        <span class="cell-sub">${esc(clinic(p.clinicId).name)} · ${esc(p.origin||'—')}</span>
+        ${badge(st)}
+      </div>
+    </div>
+    <div class="detail-grid">
+      <div><span>Tratamento</span><strong>${esc(patientProcedureLabel(p))}</strong></div>
+      <div><span>Data do lançamento</span><strong>${fmtDate(p.date)}</strong></div>
+      <div><span>Honorário</span><strong>${brl.format(p.value||0)}</strong></div>
+      <div><span>Já recebido</span><strong>${brl.format(p.received||0)}</strong></div>
+      <div><span>Saldo em aberto</span><strong class="${bal>0?'warn':''}">${brl.format(bal)}</strong></div>
+      <div><span>Vencimento</span><strong>${fmtDate(p.due)}</strong></div>
+      <div><span>Última baixa</span><strong>${p.lastPaymentDate?fmtDate(p.lastPaymentDate):'—'}</strong></div>
+      <div><span>Progresso clínico</span><strong>${esc(p.progress||'—')}</strong></div>
+    </div>
+    <h3 class="section-title">Histórico de baixas</h3>
+    ${paymentHistoryHtml(p)}
+    <div class="form-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+      ${bal>0?`<button class="btn primary" type="button" onclick="closeModal();markReceived('${p.id}')">Baixar recebimento</button>`:''}
+      <button class="btn" type="button" onclick="closeModal();editPatient('${p.id}')">Editar lançamento</button>
+      <button class="btn" type="button" onclick="closeModal()">Fechar</button>
+    </div>
+  `, ()=>closeModal());
+  const saveBtn=document.getElementById('modalSave');
+  if(saveBtn) saveBtn.style.display='none';
+}
+window.openChargeSheet=openChargeSheet;
 function pct(a,b){return b?Math.round((a/b)*100):0}
 function badge(status){
   const s=(status||'').toLowerCase();
@@ -1874,7 +1955,8 @@ function renderService(){
   document.getElementById('svcOpen').textContent=brl.format(open);
   document.getElementById('svcOverdue').textContent=brl.format(od);
   const emptyMsg=serviceStatusFilter?'Nenhum lançamento com este status.':'Nenhum lançamento nesta clínica.';
-  document.getElementById('serviceTable').innerHTML=tableRows.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${p.progress==='Orçamento'?'Orçamento':esc(p.progress||'')}</span>`)}${td('Clínica',esc(clinic(p.clinicId).name))}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} procedimento(s)</span>`)}${td('Honorário',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(paymentStatusOf(p)))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="markReceived('${p.id}')">Receber</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('')||`<tr><td colspan="8"><div class="empty">${emptyMsg}</div></td></tr>`;
+  document.getElementById('serviceTable').innerHTML=tableRows.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${p.progress==='Orçamento'?'Orçamento':esc(p.progress||'')}</span>`)}${td('Clínica',esc(clinic(p.clinicId).name))}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} procedimento(s)</span>`)}${td('Honorário',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(paymentStatusOf(p)))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="openChargeSheet('${p.id}')">Abrir</button><button class="btn small" onclick="markReceived('${p.id}')">Receber</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('')||`<tr><td colspan="8"><div class="empty">${emptyMsg}</div></td></tr>`;
+  renderPaymentExtrato('servicePaymentExtrato', {origin:'Prestação', clinicId:serviceClinicFilter});
 }
 function setServiceClinicFilter(id){
   serviceClinicFilter=id||'';
@@ -2321,7 +2403,37 @@ function setReceivableFilter(v,btn){
 }
 function renderReceivables(){
   const arr=state.patients.filter(p=>!receivableFilter||p.status===receivableFilter);
-  document.getElementById('receivablesTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong>`)}${td('Origem',esc(clinic(p.clinicId).name))}${td('Valor',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Saldo',`<strong>${brl.format(balance(p))}</strong>`)}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(paymentStatusOf(p)))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="markReceived('${p.id}')">Baixar</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('');
+  document.getElementById('receivablesTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong>`)}${td('Origem',esc(clinic(p.clinicId).name))}${td('Valor',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Saldo',`<strong>${brl.format(balance(p))}</strong>`)}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(paymentStatusOf(p)))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="openChargeSheet('${p.id}')">Abrir</button><button class="btn small" onclick="markReceived('${p.id}')">Baixar</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('');
+  renderPaymentExtrato('receivablesPaymentExtrato');
+}
+function renderPaymentExtrato(elId, opts={}){
+  const box=document.getElementById(elId);
+  if(!box) return;
+  let rows=recentPaymentMovements(50);
+  if(opts.origin) rows=rows.filter(r=>{
+    const p=state.patients.find(x=>x.id===r.patientId);
+    return p && String(p.origin||'')===opts.origin;
+  });
+  if(opts.clinicId) rows=rows.filter(r=>r.clinicId===opts.clinicId);
+  if(!rows.length){
+    box.innerHTML=`<div class="empty">Nenhuma baixa registrada ainda.</div>`;
+    return;
+  }
+  box.innerHTML=`<div class="table-wrap"><table>
+    <thead><tr><th>Data</th><th>Paciente</th><th>Origem</th><th>Tipo</th><th>Valor</th><th>Saldo após</th><th></th></tr></thead>
+    <tbody>${rows.map(r=>{
+      const partial=/parcial/i.test(r.label);
+      return `<tr>
+        ${td('Data',fmtDate(r.date))}
+        ${td('Paciente',`<strong>${esc(r.patientName)}</strong>`)}
+        ${td('Origem',esc(clinic(r.clinicId).name))}
+        ${td('Tipo',partial?`<span class="badge b-amber">${esc(r.label)}</span>`:`<span class="badge b-green">${esc(r.label)}</span>`)}
+        ${td('Valor',brl.format(r.amount))}
+        ${td('Saldo após',r.balanceAfter!=null?brl.format(r.balanceAfter):'—')}
+        <td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="openChargeSheet('${r.patientId}')">Ficha</button></div></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
 }
 function renderCosts(){
   const total=state.costs.reduce((s,c)=>s+Number(c.value||0),0), paid=state.costs.filter(c=>c.status==='PAGO').reduce((s,c)=>s+Number(c.value||0),0);
@@ -2644,6 +2756,7 @@ function openPatientModal(origin='',editId=''){
       if(!lines.length) return toast('Adicione ao menos um procedimento à composição.');
       refreshConsumeTotals();
       const consumed=collectConsumeItems();
+      const prev=editId?state.patients.find(x=>x.id===editId):null;
       const obj={
         id:editId||uid(),
         name:getv('fName'),
@@ -2661,10 +2774,11 @@ function openPatientModal(origin='',editId=''){
         components:num('fComponents'),
         clinical:num('fClinical'),
         progress:getv('fProgress'),
-        consumedItems:consumed
+        consumedItems:consumed,
+        payments:Array.isArray(prev?.payments)?prev.payments:[],
+        lastPaymentDate:prev?.lastPaymentDate||''
       };
       if(editId){
-        const prev=state.patients.find(x=>x.id===editId);
         if(prev?.consumedItems?.length) applyStockConsumption(prev.consumedItems,true);
         state.patients=state.patients.map(x=>x.id===editId?obj:x);
       }else state.patients.unshift(obj);
@@ -3524,11 +3638,12 @@ function markReceived(id){
   const saldo=balance(p);
   if(saldo<=0){
     toast('Este lançamento já está quitado.');
-    renderAll();
+    openChargeSheet(id);
     return;
   }
   const valor=moneyRound(p.value||0);
   const jaRecebido=moneyRound(p.received||0);
+  const hist=patientPayments(p);
   openModal('Baixar recebimento', `
     <div class="form-grid">
       <div class="field full"><label>Paciente</label><input class="input" value="${esc(p.name)}" disabled></div>
@@ -3550,6 +3665,10 @@ function markReceived(id){
       <div class="field full">
         <div class="receive-preview" id="receivePreview"></div>
       </div>
+      ${hist.length?`<div class="field full">
+        <h3 class="section-title" style="margin-top:4px">Histórico de baixas</h3>
+        ${paymentHistoryHtml(p)}
+      </div>`:''}
     </div>
   `, ()=>commitReceivePayment(p.id));
   window.__receiveModal={patientId:p.id, saldo, mode:'partial'};
@@ -3637,6 +3756,7 @@ function commitReceivePayment(patientId){
   toast(open<=0
     ? `Quitado em ${fmtDate(date)} — saldo zerado.`
     : `Baixa parcial de ${brl.format(amt)} · saldo ${brl.format(open)}.`);
+  openChargeSheet(p.id);
 }
 window.setReceiveMode=setReceiveMode;
 window.refreshReceivePreview=refreshReceivePreview;
