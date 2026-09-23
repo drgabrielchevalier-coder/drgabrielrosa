@@ -247,7 +247,7 @@
   .toggle.on{background:#8e7d5b}.toggle.on:after{left:21px}
   .row-link{border:0;background:transparent;padding:0;text-align:left;color:inherit;display:block}
   .row-link:hover strong{text-decoration:underline}
-  .cell-sub{font-size:10px;color:var(--muted);margin-top:3px}
+  .cell-sub{display:block;font-size:10px;color:var(--muted);margin-top:3px}
   .urgent-row td{background:#fbf4e6}
   .kanban-item{width:100%;border:0;background:transparent;cursor:pointer;text-align:left}
   .flow-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
@@ -373,20 +373,21 @@
   .treat-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .treat-add .select{flex:1;min-width:200px}
   .orcamento-layout{
-    display:grid;grid-template-columns:minmax(0,1.2fr) minmax(300px,.9fr);gap:18px;align-items:start
+    display:grid;grid-template-columns:minmax(0,1.45fr) minmax(280px,.7fr);gap:18px;align-items:start
   }
-  .orcamento-builder .orc-form{gap:14px}
-  .orcamento-summary{position:sticky;top:16px}
-  .orc-summary-head{margin-bottom:4px}
+  .orcamento-builder{padding:18px}
+  .orc-form{display:grid;gap:16px}
+  .orc-meta-row{
+    display:grid;grid-template-columns:minmax(0,1.4fr) minmax(140px,.9fr) minmax(120px,.7fr);gap:12px
+  }
+  .orcamento-summary{position:sticky;top:16px;padding:16px}
+  .orc-summary-head{margin-bottom:2px}
   .orcamento-summary h3{margin:0 0 4px;font-size:15px;font-weight:650}
   .orc-kpi-hero{
-    display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 10px
+    display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0
   }
-  .orc-kpi-hero .orc-kpi{padding:14px 16px}
-  .orc-kpi-hero .orc-kpi strong{font-size:18px}
-  .orc-kpi-grid{
-    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0 0 12px
-  }
+  .orc-kpi-hero .orc-kpi{padding:14px 14px}
+  .orc-kpi-hero .orc-kpi strong{font-size:18px;letter-spacing:-.02em}
   .orc-kpi{
     padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel-2)
   }
@@ -396,22 +397,37 @@
   .orc-kpi strong{font-size:14px;font-weight:700}
   .orc-kpi.accent{border-color:#c4b086;background:linear-gradient(180deg,#fbf8f0,#f4efe3)}
   .orc-kpi.accent strong{color:#5c4a22}
-  .orc-kpi strong.is-neg{color:var(--red,#b42318)}
-  .orc-treat-list{gap:10px}
-  .orc-treat-list .treat-line.orc-line{
-    grid-template-columns:minmax(140px,1.2fr) 72px 110px minmax(100px,1fr) 36px;
-    align-items:end;gap:10px;padding:12px 14px
+  .orc-kpi strong.is-neg,.orc-kpi-strip strong.is-neg{color:var(--red,#b42318)}
+  .orc-kpi-strip{
+    display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 10px;
+    padding:12px 0;margin-bottom:4px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)
+  }
+  .orc-kpi-strip div{min-width:0}
+  .orc-kpi-strip span{
+    display:block;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:2px
+  }
+  .orc-kpi-strip strong{font-size:12px;font-weight:650}
+  .orc-treat-list{display:grid;gap:10px;margin:10px 0 12px}
+  .orc-line{
+    display:grid;gap:10px;padding:12px 14px;
+    border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,#fcfbf8,#f7f5ef)
+  }
+  .orc-line-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .orc-line-title{min-width:0;flex:1}
+  .orc-line-title strong{display:block;font-size:13px;line-height:1.3}
+  .orc-line-fields{
+    display:grid;grid-template-columns:72px 140px minmax(0,1fr);gap:10px;align-items:end
   }
   .orc-field{display:grid;gap:4px;min-width:0}
   .orc-field span{
     font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600
   }
-  .orc-field .input{height:36px;font-size:12px;width:100%}
+  .orc-field .input{height:38px;font-size:13px;width:100%}
   .orc-field .tl-qty{text-align:center}
   .orc-field .tl-practiced{font-variant-numeric:tabular-nums}
-  .orc-add{margin-top:4px}
+  .orc-add{margin-top:2px}
   .orc-add #oAddQty{width:72px;flex:0 0 72px}
-  .orc-breakdown,.orc-bom{margin-top:12px}
+  .orc-breakdown{margin-top:12px}
   .orc-breakdown table,.orc-bom table{width:100%;border-collapse:collapse;font-size:12px}
   .orc-breakdown th,.orc-bom th{
     text-align:left;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
@@ -420,6 +436,15 @@
   .orc-breakdown td,.orc-bom td{padding:7px 0;border-bottom:1px solid var(--line);vertical-align:top}
   .orc-breakdown td:last-child,.orc-bom td:last-child,.orc-breakdown th:last-child,.orc-bom th:last-child{text-align:right}
   .orc-empty{font-size:12px;color:var(--muted);padding:8px 0}
+  .orc-bom-details{margin-top:10px}
+  .orc-bom-details summary{
+    cursor:pointer;font-size:11px;font-weight:600;color:var(--muted);list-style:none;
+    padding:6px 0
+  }
+  .orc-bom-details summary::-webkit-details-marker{display:none}
+  .orc-bom-details summary::before{content:'▸ ';font-size:10px}
+  .orc-bom-details[open] summary::before{content:'▾ '}
+  .orc-bom-details table{margin-top:6px}
   .patient-pick{display:flex;gap:8px;align-items:center}
   .patient-pick .select{flex:1;min-width:0}
   .new-patient-box{padding:12px;border:1px dashed var(--line);border-radius:12px;background:var(--panel-2)}
@@ -545,16 +570,13 @@
     .modal.modal-wide{width:100%}
     .orcamento-layout{grid-template-columns:1fr}
     .orcamento-summary{position:static}
-    .orc-kpi-hero,.orc-kpi-grid{grid-template-columns:1fr 1fr}
+    .orc-meta-row{grid-template-columns:1fr}
+    .orc-kpi-hero{grid-template-columns:1fr 1fr}
+    .orc-kpi-strip{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .orc-line-fields{grid-template-columns:72px 1fr;gap:8px}
+    .orc-line-fields .orc-field-tooth{grid-column:1/-1}
     .treat-line{grid-template-columns:1fr 36px}
     .treat-line .tl-tooth{grid-column:1/-1}
-    .orc-treat-list .treat-line.orc-line{
-      grid-template-columns:1fr 1fr;
-      align-items:stretch
-    }
-    .orc-treat-list .treat-line.orc-line .treat-line-main{grid-column:1/-1}
-    .orc-treat-list .treat-line.orc-line .icon-x{grid-column:2;justify-self:end;align-self:start}
-    .orc-treat-list .treat-line.orc-line .orc-field-tooth{grid-column:1/-1}
     .bill-layout{grid-template-columns:1fr}
     .bill-preview{position:static}
     .ai-banner{flex-direction:column;align-items:stretch}

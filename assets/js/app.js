@@ -1375,25 +1375,29 @@ function orcamentoLineRow(line={}, clinicId=''){
   const practiced=line.practicedValue!=null && line.practicedValue!==''
     ? moneyRound(Number(line.practicedValue)||0)
     : defaultPracticedFor(id, cid);
-  return `<div class="treat-line orc-line" data-proc="${esc(id)}">
-    <div class="treat-line-main">
-      <strong>${esc(p.name)}</strong>
-      <span class="cell-sub">${esc(specialtyName(p.specialty))} · ${kind}</span>
+  return `<div class="orc-line" data-proc="${esc(id)}">
+    <div class="orc-line-top">
+      <div class="orc-line-title">
+        <strong>${esc(p.name)}</strong>
+        <span class="cell-sub">${esc(specialtyName(p.specialty))} · ${kind}</span>
+      </div>
+      <button type="button" class="btn small icon-x" onclick="this.closest('.orc-line').remove();recalcOrcamento()" title="Remover">×</button>
     </div>
-    <label class="orc-field"><span>Qtd</span>
-      <input class="input tl-qty" type="number" min="1" step="1" value="${qty}" oninput="recalcOrcamento()">
-    </label>
-    <label class="orc-field"><span>Praticado (un.)</span>
-      <input class="input tl-practiced" type="number" min="0" step="0.01" value="${practiced.toFixed(2)}" oninput="recalcOrcamento()">
-    </label>
-    <label class="orc-field orc-field-tooth"><span>Dente / região</span>
-      <input class="input tl-tooth" placeholder="Ex.: 16, 26…" value="${esc(line.tooth||'')}" oninput="recalcOrcamento()">
-    </label>
-    <button type="button" class="btn small icon-x" onclick="this.closest('.treat-line').remove();recalcOrcamento()" title="Remover">×</button>
+    <div class="orc-line-fields">
+      <label class="orc-field"><span>Qtd</span>
+        <input class="input tl-qty" type="number" min="1" step="1" value="${qty}" oninput="recalcOrcamento()">
+      </label>
+      <label class="orc-field"><span>Praticado (R$)</span>
+        <input class="input tl-practiced" type="number" min="0" step="0.01" value="${practiced.toFixed(2)}" oninput="recalcOrcamento()">
+      </label>
+      <label class="orc-field orc-field-tooth"><span>Dente / região</span>
+        <input class="input tl-tooth" placeholder="Opcional" value="${esc(line.tooth||'')}" oninput="recalcOrcamento()">
+      </label>
+    </div>
   </div>`;
 }
 function collectOrcamentoLines(){
-  return [...document.querySelectorAll('#oTreatLines .treat-line')].map(row=>{
+  return [...document.querySelectorAll('#oTreatLines .orc-line')].map(row=>{
     const practicedRaw=row.querySelector('.tl-practiced')?.value;
     const practicedValue=practicedRaw===''||practicedRaw==null?undefined:Number(practicedRaw);
     return {
@@ -1431,7 +1435,7 @@ function onOrcamentoOriginChange(){
 }
 function onOrcamentoClinicChange(){
   const clinicId=document.getElementById('oClinic')?.value||'';
-  document.querySelectorAll('#oTreatLines .treat-line').forEach(row=>{
+  document.querySelectorAll('#oTreatLines .orc-line').forEach(row=>{
     const id=row.dataset.proc;
     const input=row.querySelector('.tl-practiced');
     if(!input||!id) return;
@@ -1489,13 +1493,14 @@ function recalcOrcamento(){
     if(!bom.items.length && !bom.lab){
       bomEl.innerHTML='';
     }else{
-      const rows=bom.items.map(it=>{
+      const rows=bom.items.slice(0,8).map(it=>{
         const m=material(it.materialId);
         const tot=Number(m.unitCost||0)*Number(it.qty||0);
         return `<tr><td>${esc(m.name)}</td><td>${it.qty}</td><td>${brl.format(tot)}</td></tr>`;
       }).join('');
+      const more=bom.items.length>8?`<tr><td colspan="3"><span class="cell-sub">+ ${bom.items.length-8} itens</span></td></tr>`:'';
       const labRow=bom.lab?`<tr><td>Laboratório / extra protético</td><td>—</td><td>${brl.format(bom.lab)}</td></tr>`:'';
-      bomEl.innerHTML=`<table><thead><tr><th>Materiais / lab (BOM)</th><th>Qtd</th><th>Custo</th></tr></thead><tbody>${rows}${labRow}</tbody></table>`;
+      bomEl.innerHTML=`<details class="orc-bom-details"><summary>Materiais / lab (BOM)</summary><table><thead><tr><th>Item</th><th>Qtd</th><th>Custo</th></tr></thead><tbody>${rows}${more}${labRow}</tbody></table></details>`;
     }
   }
   return settled;
@@ -1809,9 +1814,9 @@ function renderOrcamento(){
       const cost=patientCost(p);
       const practiced=Number(p.practicedValue!=null?p.practicedValue:settled.practiced||0);
       return `<tr>
-        ${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${esc(p.origin)}</span>`)}
+        ${td('Paciente',`<strong>${esc(p.name)}</strong><div class="cell-sub">${esc(p.origin)}</div>`)}
         ${td('Clínica',esc(clinic(p.clinicId).name))}
-        ${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} item(ns)</span>`)}
+        ${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><div class="cell-sub">${patientLines(p).length} item(ns)</div>`)}
         ${td('Praticado',brl.format(practiced))}
         ${td('Você recebe',`<strong>${brl.format(value)}</strong>`)}
         ${td('Custos',brl.format(cost))}
