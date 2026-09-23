@@ -370,12 +370,18 @@ function settleLines(lines,clinicId){
   list.forEach(l=>{
     const row=clinicPriceFor(l.procedureId,clinicId);
     const q=Number(l.qty||1)||1;
-    const linePracticed=Number(row.practicedValue||0)*q;
-    const lineShare=(l.honorarium!=null && l.honorarium!=='')?Number(l.honorarium)*q:honorariumFromPrice(row)*q;
+    const hasOverride=l.practicedValue!=null && l.practicedValue!=='' && Number.isFinite(Number(l.practicedValue));
+    const unitPracticed=hasOverride?Number(l.practicedValue):Number(row.practicedValue||0);
+    const linePracticed=moneyRound(unitPracticed*q);
+    const lineShare=(l.honorarium!=null && l.honorarium!=='')
+      ? moneyRound(Number(l.honorarium)*q)
+      : moneyRound(honorariumFromPrice({...row,practicedValue:unitPracticed})*q);
     practiced+=linePracticed;
     baseShare+=lineShare;
-    breakdown.push({procedureId:l.procedureId,practiced:linePracticed,baseShare:lineShare});
+    breakdown.push({procedureId:l.procedureId,practiced:linePracticed,baseShare:lineShare,unitPracticed});
   });
+  practiced=moneyRound(practiced);
+  baseShare=moneyRound(baseShare);
   const bom=combinedProcedureMaterials(list);
   if(!window.ChevalierBilling){
     return {receivable:baseShare,netShare:baseShare,reimbursement:0,cardFee:0,grossShare:baseShare,practiced,costs:{materials:bom.materials,components:bom.components,lab:bom.lab,total:bom.total},profit:baseShare-bom.total,breakdown};
@@ -1357,27 +1363,50 @@ function matchServiceStatus(p, filter){
 }
 
 /* ===== Orçamento de pacientes ===== */
-function orcamentoLineRow(line={}){
+function defaultPracticedFor(procId, clinicId){
+  return moneyRound(clinicPriceFor(procId, clinicId).practicedValue||0);
+}
+function orcamentoLineRow(line={}, clinicId=''){
   const id=line.procedureId||'';
   const p=procedure(id);
   const kind=p.kind==='cirurgico'?'Cirúrgico':'Clínico';
   const qty=Math.max(1, Number(line.qty||1)||1);
-  return `<div class="treat-line" data-proc="${esc(id)}">
-    <div class="treat-line-main">
-      <strong>${esc(p.name)}</strong>
-      <span class="cell-sub">${esc(specialtyName(p.specialty))} · ${kind}</span>
+  const cid=clinicId||document.getElementById('oClinic')?.value||'';
+  const practiced=line.practicedValue!=null && line.practicedValue!==''
+    ? moneyRound(Number(line.practicedValue)||0)
+    : defaultPracticedFor(id, cid);
+  return `<div class="orc-line" data-proc="${esc(id)}">
+    <div class="orc-line-top">
+      <div class="orc-line-title">
+        <strong>${esc(p.name)}</strong>
+        <span class="cell-sub">${esc(specialtyName(p.specialty))} · ${kind}</span>
+      </div>
+      <button type="button" class="btn small icon-x" onclick="this.closest('.orc-line').remove();recalcOrcamento()" title="Remover">×</button>
     </div>
-    <input class="input tl-qty" type="number" min="1" step="1" value="${qty}" title="Qtd" oninput="recalcOrcamento()">
-    <input class="input tl-tooth" placeholder="Dente / região" value="${esc(line.tooth||'')}" oninput="recalcOrcamento()">
-    <button type="button" class="btn small icon-x" onclick="this.closest('.treat-line').remove();recalcOrcamento()" title="Remover">×</button>
+    <div class="orc-line-fields">
+      <label class="orc-field"><span>Qtd</span>
+        <input class="input tl-qty" type="number" min="1" step="1" value="${qty}" oninput="recalcOrcamento()">
+      </label>
+      <label class="orc-field"><span>Praticado (R$)</span>
+        <input class="input tl-practiced" type="number" min="0" step="0.01" value="${practiced.toFixed(2)}" oninput="recalcOrcamento()">
+      </label>
+      <label class="orc-field orc-field-tooth"><span>Dente / região</span>
+        <input class="input tl-tooth" placeholder="Opcional" value="${esc(line.tooth||'')}" oninput="recalcOrcamento()">
+      </label>
+    </div>
   </div>`;
 }
 function collectOrcamentoLines(){
-  return [...document.querySelectorAll('#oTreatLines .treat-line')].map(row=>({
-    procedureId:row.dataset.proc,
-    qty:Math.max(1, Number(row.querySelector('.tl-qty')?.value||1)||1),
-    tooth:row.querySelector('.tl-tooth')?.value||''
-  })).filter(x=>x.procedureId);
+  return [...document.querySelectorAll('#oTreatLines .orc-line')].map(row=>{
+    const practicedRaw=row.querySelector('.tl-practiced')?.value;
+    const practicedValue=practicedRaw===''||practicedRaw==null?undefined:Number(practicedRaw);
+    return {
+      procedureId:row.dataset.proc,
+      qty:Math.max(1, Number(row.querySelector('.tl-qty')?.value||1)||1),
+      tooth:row.querySelector('.tl-tooth')?.value||'',
+      practicedValue:Number.isFinite(practicedValue)?practicedValue:undefined
+    };
+  }).filter(x=>x.procedureId);
 }
 function addOrcamentoLine(){
   const sel=document.getElementById('oAddProc');
@@ -1386,7 +1415,12 @@ function addOrcamentoLine(){
   const qty=Math.max(1, Number(document.getElementById('oAddQty')?.value||1)||1);
   const box=document.getElementById('oTreatLines');
   if(!box) return;
-  box.insertAdjacentHTML('beforeend', orcamentoLineRow({procedureId:id, qty}));
+  const clinicId=document.getElementById('oClinic')?.value||'';
+  box.insertAdjacentHTML('beforeend', orcamentoLineRow({
+    procedureId:id,
+    qty,
+    practicedValue:defaultPracticedFor(id, clinicId)
+  }, clinicId));
   if(document.getElementById('oAddQty')) document.getElementById('oAddQty').value='1';
   recalcOrcamento();
 }
@@ -1397,6 +1431,16 @@ function onOrcamentoOriginChange(){
     const part=state.clinics.find(c=>c.id==='particular'||c.type==='Próprio');
     if(part) clinicEl.value=part.id;
   }
+  onOrcamentoClinicChange();
+}
+function onOrcamentoClinicChange(){
+  const clinicId=document.getElementById('oClinic')?.value||'';
+  document.querySelectorAll('#oTreatLines .orc-line').forEach(row=>{
+    const id=row.dataset.proc;
+    const input=row.querySelector('.tl-practiced');
+    if(!input||!id) return;
+    input.value=defaultPracticedFor(id, clinicId).toFixed(2);
+  });
   recalcOrcamento();
 }
 function setText(id, text){
@@ -1416,6 +1460,8 @@ function recalcOrcamento(){
   setText('oCostTotal', brl.format(settled.costs?.total||0));
   setText('oProfit', brl.format(settled.profit||0));
   setText('oCardFee', brl.format(settled.cardFee||0));
+  const profitEl=document.getElementById('oProfit');
+  if(profitEl) profitEl.classList.toggle('is-neg', Number(settled.profit||0)<0);
   const chipsEl=document.getElementById('oBillingChips');
   if(chipsEl){
     if(!clinicId){
@@ -1433,7 +1479,7 @@ function recalcOrcamento(){
     if(!lines.length){
       brEl.innerHTML=`<p class="orc-empty">Adicione procedimentos para ver o detalhamento.</p>`;
     }else{
-      brEl.innerHTML=`<table><thead><tr><th>Procedimento</th><th>Qtd</th><th>Praticado</th><th>Base honorário</th></tr></thead><tbody>${
+      brEl.innerHTML=`<table><thead><tr><th>Procedimento</th><th>Qtd</th><th>Praticado</th><th>Seu honorário</th></tr></thead><tbody>${
         (settled.breakdown||[]).map((b,i)=>{
           const l=lines[i]||{};
           const q=Number(l.qty||1)||1;
@@ -1447,13 +1493,14 @@ function recalcOrcamento(){
     if(!bom.items.length && !bom.lab){
       bomEl.innerHTML='';
     }else{
-      const rows=bom.items.map(it=>{
+      const rows=bom.items.slice(0,8).map(it=>{
         const m=material(it.materialId);
         const tot=Number(m.unitCost||0)*Number(it.qty||0);
         return `<tr><td>${esc(m.name)}</td><td>${it.qty}</td><td>${brl.format(tot)}</td></tr>`;
       }).join('');
+      const more=bom.items.length>8?`<tr><td colspan="3"><span class="cell-sub">+ ${bom.items.length-8} itens</span></td></tr>`:'';
       const labRow=bom.lab?`<tr><td>Laboratório / extra protético</td><td>—</td><td>${brl.format(bom.lab)}</td></tr>`:'';
-      bomEl.innerHTML=`<table><thead><tr><th>Materiais / lab (BOM)</th><th>Qtd</th><th>Custo</th></tr></thead><tbody>${rows}${labRow}</tbody></table>`;
+      bomEl.innerHTML=`<details class="orc-bom-details"><summary>Materiais / lab (BOM)</summary><table><thead><tr><th>Item</th><th>Qtd</th><th>Custo</th></tr></thead><tbody>${rows}${more}${labRow}</tbody></table></details>`;
     }
   }
   return settled;
@@ -1486,7 +1533,7 @@ function loadOrcamento(id){
   const notes=document.getElementById('oNotes');
   if(notes) notes.value=p.notes||p.observation||'';
   const box=document.getElementById('oTreatLines');
-  if(box) box.innerHTML=patientLines(p).map(orcamentoLineRow).join('');
+  if(box) box.innerHTML=patientLines(p).map(l=>orcamentoLineRow(l, p.clinicId)).join('');
   recalcOrcamento();
   toast('Orçamento carregado para edição.');
 }
@@ -1597,7 +1644,7 @@ function buildOrcamentoPrintHtml(payload){
   const rows=lines.map((l,i)=>{
     const b=breakdown[i]||{};
     const q=Number(l.qty||1)||1;
-    const unit=q>0?moneyRound((b.practiced||0)/q):0;
+    const unit=Number(b.unitPracticed!=null?b.unitPracticed:(q>0?(b.practiced||0)/q:0));
     const tooth=l.tooth?`<div class="op-sub">Dente / região: ${esc(l.tooth)}</div>`:'';
     return `<tr>
       <td><strong>${esc(procedure(l.procedureId).name)}</strong>${tooth}</td>
@@ -1698,7 +1745,7 @@ function buildOrcamentoPrintHtml(payload){
       Documento gerado pelo sistema Dr Gabriel Rosa — Gestão.
     </footer>
   </div>
-  <script>window.addEventListener('load',()=>setTimeout(()=>window.print(),250));</script>
+  <script>/* print triggered by host */</script>
 </body>
 </html>`;
 }
@@ -1706,14 +1753,41 @@ function printOrcamento(id=''){
   const payload=orcamentoPrintPayload(id||'');
   if(!payload) return;
   const html=buildOrcamentoPrintHtml(payload);
-  const w=window.open('','_blank','noopener,noreferrer,width=900,height=1100');
-  if(!w){
-    toast('Permita pop-ups para imprimir o orçamento.');
+  // iframe evita bloqueio de pop-up (causa frequente de “não imprime”)
+  let frame=document.getElementById('orcamentoPrintFrame');
+  if(!frame){
+    frame=document.createElement('iframe');
+    frame.id='orcamentoPrintFrame';
+    frame.title='Impressão de orçamento';
+    frame.setAttribute('aria-hidden','true');
+    frame.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none';
+    document.body.appendChild(frame);
+  }
+  const win=frame.contentWindow;
+  const doc=win?.document;
+  if(!doc){
+    toast('Não foi possível preparar a impressão.');
     return;
   }
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
+  doc.open();
+  doc.write(html);
+  doc.close();
+  let printed=false;
+  const run=()=>{
+    if(printed) return;
+    printed=true;
+    try{
+      win.focus();
+      win.print();
+    }catch(err){
+      const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+      const url=URL.createObjectURL(blob);
+      const tab=window.open(url,'_blank');
+      if(!tab) toast('Não foi possível imprimir. Permita pop-ups neste site.');
+      else setTimeout(()=>URL.revokeObjectURL(url), 120000);
+    }
+  };
+  setTimeout(run, 350);
 }
 
 function renderOrcamento(){
@@ -1740,9 +1814,9 @@ function renderOrcamento(){
       const cost=patientCost(p);
       const practiced=Number(p.practicedValue!=null?p.practicedValue:settled.practiced||0);
       return `<tr>
-        ${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${esc(p.origin)}</span>`)}
+        ${td('Paciente',`<strong>${esc(p.name)}</strong><div class="cell-sub">${esc(p.origin)}</div>`)}
         ${td('Clínica',esc(clinic(p.clinicId).name))}
-        ${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} item(ns)</span>`)}
+        ${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><div class="cell-sub">${patientLines(p).length} item(ns)</div>`)}
         ${td('Praticado',brl.format(practiced))}
         ${td('Você recebe',`<strong>${brl.format(value)}</strong>`)}
         ${td('Custos',brl.format(cost))}
