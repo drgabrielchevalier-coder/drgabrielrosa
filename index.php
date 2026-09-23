@@ -316,63 +316,99 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
       <!-- ORÇAMENTO -->
       <section class="page" id="page-orcamento">
         <div class="page-head">
-          <div><h2>Orçamento de pacientes</h2><p>Monte o tratamento por clínica — honorário, materiais, lab e margem calculam sozinhos pelo modelo de cobrança.</p></div>
+          <div>
+            <h2>Orçamento de pacientes</h2>
+            <p>Monte o tratamento, ajuste o praticado e veja o que você recebe — depois imprima para o paciente.</p>
+          </div>
           <div class="page-actions">
             <button class="btn" type="button" onclick="clearOrcamento()">Limpar</button>
             <button class="btn" type="button" onclick="printOrcamento()">Imprimir</button>
             <button class="btn primary" type="button" onclick="saveOrcamentoAsPatient()">Salvar orçamento</button>
           </div>
         </div>
-        <div class="orcamento-layout">
-          <div class="card orcamento-builder">
-            <div class="orc-form">
-              <div class="orc-meta-row">
-                <div class="field"><label>Paciente</label><input id="oName" class="input" placeholder="Nome do paciente"></div>
-                <div class="field"><label>Clínica</label><select id="oClinic" class="select" onchange="onOrcamentoClinicChange()"></select></div>
-                <div class="field"><label>Origem</label>
-                  <select id="oOrigin" class="select" onchange="onOrcamentoOriginChange()">
-                    <option>Prestação</option>
-                    <option>Particular</option>
-                  </select>
-                </div>
-              </div>
-              <div class="field">
-                <label>Composição do tratamento</label>
-                <p class="field-hint">Edite o praticado de cada item — o cálculo ao lado atualiza na hora.</p>
-                <div id="oTreatLines" class="orc-treat-list"></div>
-                <div class="treat-add orc-add">
-                  <select id="oAddProc" class="select"></select>
-                  <input id="oAddQty" class="input" type="number" min="1" step="1" value="1" title="Quantidade" aria-label="Quantidade">
-                  <button type="button" class="btn small primary" onclick="addOrcamentoLine()">＋ Adicionar</button>
-                </div>
-              </div>
-              <div class="field"><label>Observações</label><textarea id="oNotes" class="textarea" rows="2" placeholder="Opcional — aparece na impressão"></textarea></div>
-            </div>
-            <input type="hidden" id="oEditId" value="">
-          </div>
-          <aside class="card orcamento-summary" id="orcamentoSummary">
-            <div class="orc-summary-head">
-              <h3>Resumo</h3>
-              <p class="field-hint" id="oBillingChips">Selecione a clínica e os procedimentos.</p>
-            </div>
-            <div class="orc-kpi-hero">
-              <div class="orc-kpi"><small>Praticado</small><strong id="oPracticed">R$ 0</strong></div>
-              <div class="orc-kpi accent"><small>Você recebe</small><strong id="oReceivable">R$ 0</strong></div>
-            </div>
-            <div class="orc-kpi-strip">
-              <div><span>Materiais</span><strong id="oMatCost">R$ 0</strong></div>
-              <div><span>Componentes</span><strong id="oCompCost">R$ 0</strong></div>
-              <div><span>Lab</span><strong id="oLabCost">R$ 0</strong></div>
-              <div><span>Custo</span><strong id="oCostTotal">R$ 0</strong></div>
-              <div><span>Margem</span><strong id="oProfit">R$ 0</strong></div>
-              <div><span>Cartão</span><strong id="oCardFee">R$ 0</strong></div>
-            </div>
-            <div class="orc-breakdown" id="oBreakdown"></div>
-            <div class="orc-bom" id="oBom"></div>
-          </aside>
+
+        <div class="grid kpi-grid orc-top-kpis" style="grid-template-columns:repeat(4,1fr)">
+          <div class="kpi"><div class="label">Praticado (clínica)</div><div class="value" id="oPracticed">R$ 0</div></div>
+          <div class="kpi"><div class="label">Você recebe</div><div class="value" id="oReceivable">R$ 0</div></div>
+          <div class="kpi"><div class="label">Seu custo</div><div class="value" id="oCostTotal">R$ 0</div></div>
+          <div class="kpi"><div class="label">Margem projetada</div><div class="value" id="oProfit">R$ 0</div></div>
         </div>
+        <p class="orc-billing-hint" id="oBillingChips">Selecione clínica e procedimentos para calcular.</p>
+
+        <div class="card orcamento-builder">
+          <div class="card-head">
+            <h3>1. Dados do orçamento</h3>
+            <small id="oEditHint"></small>
+          </div>
+          <div class="orc-section">
+            <div class="orc-meta-row">
+              <div class="field"><label>Paciente</label><input id="oName" class="input" placeholder="Nome completo"></div>
+              <div class="field"><label>Clínica</label><select id="oClinic" class="select" onchange="onOrcamentoClinicChange()"></select></div>
+              <div class="field"><label>Origem</label>
+                <select id="oOrigin" class="select" onchange="onOrcamentoOriginChange()">
+                  <option>Prestação</option>
+                  <option>Particular</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-head orc-section-head">
+            <h3>2. Procedimentos</h3>
+            <small>Edite o praticado se o valor da clínica estiver diferente</small>
+          </div>
+          <div class="orc-section">
+            <div class="table-wrap orc-lines-wrap">
+              <table class="orc-lines-table">
+                <thead>
+                  <tr>
+                    <th>Procedimento</th>
+                    <th class="num">Qtd</th>
+                    <th class="num">Praticado (R$)</th>
+                    <th>Dente / região</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="oTreatLines"></tbody>
+              </table>
+            </div>
+            <div class="treat-add orc-add">
+              <select id="oAddProc" class="select"></select>
+              <input id="oAddQty" class="input" type="number" min="1" step="1" value="1" title="Quantidade" aria-label="Quantidade">
+              <button type="button" class="btn small primary" onclick="addOrcamentoLine()">＋ Adicionar</button>
+            </div>
+            <p class="orc-empty" id="oLinesEmpty">Nenhum procedimento ainda. Escolha acima e clique em Adicionar.</p>
+          </div>
+
+          <div class="card-head orc-section-head">
+            <h3>3. Custos internos</h3>
+            <small>Não aparecem na impressão do paciente</small>
+          </div>
+          <div class="orc-section">
+            <div class="orc-detail-grid">
+              <div class="orc-detail"><span>Materiais</span><strong id="oMatCost">R$ 0</strong></div>
+              <div class="orc-detail"><span>Componentes</span><strong id="oCompCost">R$ 0</strong></div>
+              <div class="orc-detail"><span>Laboratório</span><strong id="oLabCost">R$ 0</strong></div>
+              <div class="orc-detail"><span>Taxa cartão</span><strong id="oCardFee">R$ 0</strong></div>
+            </div>
+            <div class="orc-bom" id="oBom"></div>
+          </div>
+
+          <div class="card-head orc-section-head">
+            <h3>4. Observações</h3>
+            <small>Aparecem na impressão</small>
+          </div>
+          <div class="orc-section">
+            <textarea id="oNotes" class="textarea" rows="2" placeholder="Ex.: inclui acompanhamento de 30 dias"></textarea>
+          </div>
+          <input type="hidden" id="oEditId" value="">
+        </div>
+
         <div class="card" style="margin-top:16px">
-          <div class="card-head"><h3>Orçamentos salvos</h3><div class="right"><input class="input" id="oSearch" placeholder="Buscar paciente…" oninput="renderOrcamento()" style="min-width:200px"></div></div>
+          <div class="card-head">
+            <h3>Orçamentos salvos</h3>
+            <div class="right"><input class="input" id="oSearch" placeholder="Buscar paciente…" oninput="renderOrcamento()" style="min-width:220px"></div>
+          </div>
           <div class="table-wrap"><table>
             <thead><tr><th>Paciente</th><th>Clínica</th><th>Tratamento</th><th>Praticado</th><th>Você recebe</th><th>Custos</th><th>Margem</th><th>Data</th><th></th></tr></thead>
             <tbody id="orcamentoTable"></tbody>
