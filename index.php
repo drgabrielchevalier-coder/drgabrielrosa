@@ -792,6 +792,23 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
             </div>
           </div>
           <div class="card">
+            <div class="card-head"><h3>Notaas (NFS-e)</h3></div>
+            <div class="card-body">
+              <p class="field-hint" id="notaasStatusHint">Carregando status da chave…</p>
+              <div class="form-grid" style="margin-top:10px">
+                <div class="field full"><label>API Key (ntaas_…)</label><input id="notaasKeyInput" class="input" type="password" autocomplete="off" placeholder="Cole a chave gerada no Notaas"></div>
+                <div class="field"><label>Alíquota ISS (%)</label><input id="notaasAliquota" class="input" type="number" min="0" max="100" step="0.01" placeholder="5"></div>
+                <div class="field"><label>Código LC 116</label><input id="notaasServicoCodigo" class="input" placeholder="ex.: 040101 (opcional)"></div>
+                <div class="field full"><label>Descrição padrão do serviço</label><input id="notaasServicoDescricao" class="input" placeholder="Serviços odontológicos / honorários profissionais"></div>
+              </div>
+              <div class="row-actions" style="margin-top:10px">
+                <button type="button" class="btn primary" onclick="saveNotaasSettings()">Salvar Notaas</button>
+                <button type="button" class="btn" onclick="testNotaasSettings()">Testar conexão</button>
+              </div>
+              <p class="field-hint" style="margin-top:12px">A chave fica só no servidor (<code>api/config.local.php</code>), fora do Git. Emita pela ficha da cobrança após a baixa.</p>
+            </div>
+          </div>
+          <div class="card">
             <div class="card-head"><h3>Integrações</h3></div>
             <div class="card-body">
               <div class="settings-row"><div class="desc"><strong>Importar planilha</strong><span>Padrão CSV (ou HTML com tabela). Honorários por clínica ou Controle de Custos — detecta colunas e não duplica.</span></div>
