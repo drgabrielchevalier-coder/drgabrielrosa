@@ -32,3 +32,9 @@ if (!defined('AUTH_PASS')) {
    define('OPENAI_CHAT_MODEL', 'gpt-4o-mini');
    define('OPENAI_VISION_MODEL', 'gpt-4o-mini');
 */
+/* Opcional Notaas (NFS-e) — prefira Configurações no app:
+   define('NOTAAS_API_KEY', 'ntaas_...');
+   define('NOTAAS_ALIQUOTA_ISS', '5');
+   define('NOTAAS_SERVICO_CODIGO', '040101');
+   define('NOTAAS_SERVICO_DESCRICAO', 'Serviços odontológicos / honorários profissionais');
+*/

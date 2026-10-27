@@ -144,7 +144,66 @@ function renderSettings(){
     el.setAttribute('aria-checked', on?'true':'false');
   });
   refreshOpenAiSettings();
+  refreshNotaasSettings();
 }
+async function refreshNotaasSettings(){
+  const hint=document.getElementById('notaasStatusHint');
+  if(!hint) return;
+  try{
+    const res=await fetch('api/notaas-config.php',{cache:'no-store',credentials:'same-origin'});
+    const data=await res.json().catch(()=>({}));
+    applyCsrfFromResponse(data);
+    if(res.status===401){location.href='login.php';return;}
+    if(data.configured){
+      hint.innerHTML=`Chave ativa: <strong>${esc(data.maskedKey||'ntaas_…')}</strong> · ISS ${esc(String(data.aliquotaIss??''))}%`;
+    }else{
+      hint.textContent='Nenhuma chave Notaas configurada. Cole a ntaas_… gerada no onboarding.';
+    }
+    const ali=document.getElementById('notaasAliquota');
+    if(ali && !ali.value && data.aliquotaIss!=null) ali.value=String(data.aliquotaIss);
+    const cod=document.getElementById('notaasServicoCodigo');
+    if(cod && !cod.value && data.servicoCodigo) cod.value=String(data.servicoCodigo);
+    const desc=document.getElementById('notaasServicoDescricao');
+    if(desc && !desc.value && data.servicoDescricao) desc.value=String(data.servicoDescricao);
+  }catch(_){
+    hint.textContent='Não foi possível ler o status do Notaas.';
+  }
+}
+async function saveNotaasSettings(){
+  const apiKey=getv('notaasKeyInput').trim();
+  const aliquotaIss=getv('notaasAliquota').trim();
+  const servicoCodigo=getv('notaasServicoCodigo').trim();
+  const servicoDescricao=getv('notaasServicoDescricao').trim();
+  if(!apiKey && !aliquotaIss && !servicoCodigo && !servicoDescricao) return toast('Informe a chave ou os padrões fiscais.');
+  const res=await fetch('api/notaas-config.php',{
+    method:'POST',
+    headers:csrfHeaders({'Content-Type':'application/json'}),
+    credentials:'same-origin',
+    body:JSON.stringify({action:'save',apiKey,aliquotaIss,servicoCodigo,servicoDescricao,csrf:csrfToken()})
+  });
+  const data=await res.json().catch(()=>({}));
+  applyCsrfFromResponse(data);
+  if(!data.ok) return toast(data.error||'Falha ao salvar Notaas.');
+  const keyEl=document.getElementById('notaasKeyInput');
+  if(keyEl) keyEl.value='';
+  toast(data.note||'Notaas salvo.');
+  setTimeout(()=>location.reload(),600);
+}
+async function testNotaasSettings(){
+  toast('Testando Notaas…');
+  const res=await fetch('api/notaas-config.php',{
+    method:'POST',
+    headers:csrfHeaders({'Content-Type':'application/json'}),
+    credentials:'same-origin',
+    body:JSON.stringify({action:'test',csrf:csrfToken()})
+  });
+  const data=await res.json().catch(()=>({}));
+  applyCsrfFromResponse(data);
+  if(!data.ok) return toast(data.error||'Teste falhou.');
+  toast(data.note||'Notaas OK');
+}
+window.saveNotaasSettings=saveNotaasSettings;
+window.testNotaasSettings=testNotaasSettings;
 async function refreshOpenAiSettings(){
   const hint=document.getElementById('openaiStatusHint');
   if(!hint) return;
@@ -474,6 +533,23 @@ function recentPaymentMovements(limit=40){
   });
   return rows.sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0, limit);
 }
+function nfseHistoryHtml(p){
+  const list=Array.isArray(p?.nfse)?p.nfse.slice().reverse():[];
+  if(!list.length) return `<div class="empty">Nenhuma NFS-e emitida nesta cobrança.</div>`;
+  return `<div class="detail-timeline pay-timeline">${list.map(n=>{
+    const st=String(n.status||'');
+    const ok=/issued/i.test(st);
+    const err=/error|cancel/i.test(st);
+    const label=ok?'NFS-e emitida':(err?`NFS-e · ${st}`:`NFS-e · ${st||'pendente'}`);
+    return `<div class="detail-event">
+      <span class="event-dot ${err?'amber':''}"></span>
+      <div>
+        <strong>${esc(label)}${n.nNFSe?` nº ${esc(String(n.nNFSe))}`:''}${n.amount!=null?` · ${brl.format(n.amount)}`:''}</strong>
+        <p>${n.issuedAt?esc(String(n.issuedAt).slice(0,19).replace('T',' ')):(n.queuedAt?fmtDate(String(n.queuedAt).slice(0,10)):'—')}${n.invoiceId?` · ${esc(n.invoiceId)}`:''}${n.errorMessage?` · ${esc(n.errorMessage)}`:''}</p>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
 function openChargeSheet(id){
   const p=state.patients.find(x=>x.id===id);
   if(!p) return toast('Cobrança não encontrada.');
@@ -500,8 +576,11 @@ function openChargeSheet(id){
     </div>
     <h3 class="section-title">Histórico de baixas</h3>
     ${paymentHistoryHtml(p)}
+    <h3 class="section-title">NFS-e</h3>
+    ${nfseHistoryHtml(p)}
     <div class="form-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
       ${bal>0?`<button class="btn primary" type="button" onclick="closeModal();markReceived('${p.id}')">Baixar recebimento</button>`:''}
+      <button class="btn" type="button" onclick="closeModal();openNfseEmitModal('${p.id}')">Emitir NFS-e</button>
       <button class="btn" type="button" onclick="closeModal();editPatient('${p.id}')">Editar lançamento</button>
       <button class="btn" type="button" onclick="closeModal()">Fechar</button>
     </div>
@@ -510,6 +589,130 @@ function openChargeSheet(id){
   if(saveBtn) saveBtn.style.display='none';
 }
 window.openChargeSheet=openChargeSheet;
+
+async function openNfseEmitModal(id){
+  const p=state.patients.find(x=>x.id===id);
+  if(!p) return toast('Cobrança não encontrada.');
+  let defaults={aliquotaIss:5,servicoCodigo:'',servicoDescricao:'Serviços odontológicos / honorários profissionais',configured:false};
+  try{
+    const res=await fetch('api/notaas-config.php',{cache:'no-store',credentials:'same-origin'});
+    const data=await res.json().catch(()=>({}));
+    applyCsrfFromResponse(data);
+    if(res.status===401){location.href='login.php';return;}
+    defaults={...defaults,...data};
+  }catch(_){}
+  if(!defaults.configured){
+    toast('Configure a chave Notaas em Configurações primeiro.');
+    go('config');
+    return;
+  }
+  const cl=clinic(p.clinicId);
+  const valorPadrao=moneyRound(Number(p.received||0)>0?p.received:p.value||0);
+  const descPadrao=`${defaults.servicoDescricao||'Serviços odontológicos'} — ${patientProcedureLabel(p)} — paciente ${p.name}`;
+  openModal('Emitir NFS-e', `
+    <div class="form-grid">
+      <div class="field full"><label>Tomador (nome)</label><input id="nfseTomadorNome" class="input" value="${esc(cl.name||'')}" placeholder="Clínica ou paciente"></div>
+      <div class="field"><label>CPF ou CNPJ do tomador</label><input id="nfseTomadorDoc" class="input" inputmode="numeric" placeholder="Somente números"></div>
+      <div class="field"><label>E-mail do tomador</label><input id="nfseTomadorEmail" class="input" type="email" placeholder="opcional"></div>
+      <div class="field"><label>Valor da nota (R$)</label><input id="nfseTotal" type="number" class="input" min="0.01" step="0.01" value="${valorPadrao}"></div>
+      <div class="field"><label>Alíquota ISS (%)</label><input id="nfseAliquota" type="number" class="input" min="0" max="100" step="0.01" value="${Number(defaults.aliquotaIss||5)}"></div>
+      <div class="field"><label>Código LC 116</label><input id="nfseCodigo" class="input" value="${esc(defaults.servicoCodigo||'')}" placeholder="opcional / padrão do projeto"></div>
+      <div class="field full"><label>Descrição do serviço</label><textarea id="nfseDescricao" class="textarea" rows="3">${esc(descPadrao)}</textarea></div>
+      <p class="field-hint full">Em prestação, o tomador costuma ser a clínica. Deixe CPF/CNPJ e nome vazios só se o município aceitar consumidor final.</p>
+    </div>
+  `, ()=>commitNfseEmit(p.id));
+  document.getElementById('modalSave').textContent='Emitir NFS-e';
+}
+async function commitNfseEmit(patientId){
+  const p=state.patients.find(x=>x.id===patientId); if(!p) return;
+  const tomadorNome=getv('nfseTomadorNome').trim();
+  const tomadorDoc=getv('nfseTomadorDoc').replace(/\D+/g,'');
+  const tomadorEmail=getv('nfseTomadorEmail').trim();
+  const total=parseMoneyInput(document.getElementById('nfseTotal')?.value);
+  const aliquotaIss=parseMoneyInput(document.getElementById('nfseAliquota')?.value);
+  const codigo=getv('nfseCodigo').replace(/\D+/g,'');
+  const descricao=getv('nfseDescricao').trim();
+  if(total<=0) return toast('Informe o valor da nota.');
+  toast('Enfileirando NFS-e…');
+  const res=await fetch('api/notaas-nfse.php',{
+    method:'POST',
+    headers:csrfHeaders({'Content-Type':'application/json'}),
+    credentials:'same-origin',
+    body:JSON.stringify({
+      action:'emit',
+      patientId,
+      tomadorNome,
+      tomadorDoc,
+      tomadorEmail,
+      total,
+      aliquotaIss,
+      codigo,
+      descricao,
+      csrf:csrfToken()
+    })
+  });
+  const data=await res.json().catch(()=>({}));
+  applyCsrfFromResponse(data);
+  if(!data.ok) return toast(data.error||'Falha ao emitir NFS-e.');
+  if(!Array.isArray(p.nfse)) p.nfse=[];
+  const entry={
+    id:uid(),
+    invoiceId:data.invoiceId||'',
+    status:data.status||'queued',
+    amount:total,
+    queuedAt:todayISO(),
+    tomadorNome,
+    tomadorDoc
+  };
+  p.nfse.push(entry);
+  save();
+  closeModal();
+  toast(`NFS-e enfileirada${data.invoiceId?' · '+data.invoiceId:''}. Consultando status…`);
+  if(data.invoiceId) await pollNfseStatus(patientId, data.invoiceId);
+  else openChargeSheet(patientId);
+}
+async function pollNfseStatus(patientId, invoiceId, attempt=0){
+  const p=state.patients.find(x=>x.id===patientId);
+  if(!p || !invoiceId) return;
+  if(attempt>24){
+    toast('NFS-e ainda processando — confira depois na ficha.');
+    openChargeSheet(patientId);
+    return;
+  }
+  try{
+    const res=await fetch('api/notaas-nfse.php',{
+      method:'POST',
+      headers:csrfHeaders({'Content-Type':'application/json'}),
+      credentials:'same-origin',
+      body:JSON.stringify({action:'status',invoiceId,csrf:csrfToken()})
+    });
+    const data=await res.json().catch(()=>({}));
+    applyCsrfFromResponse(data);
+    if(data.ok){
+      const entry=(p.nfse||[]).find(n=>n.invoiceId===invoiceId);
+      if(entry){
+        entry.status=data.status||entry.status;
+        if(data.nNFSe) entry.nNFSe=data.nNFSe;
+        if(data.chNFSe) entry.chNFSe=data.chNFSe;
+        if(data.issuedAt) entry.issuedAt=data.issuedAt;
+        if(data.errorMessage) entry.errorMessage=data.errorMessage;
+        save();
+      }
+      if(/issued/i.test(String(data.status||''))){
+        toast(`NFS-e emitida${data.nNFSe?' nº '+data.nNFSe:''}.`);
+        openChargeSheet(patientId);
+        return;
+      }
+      if(/error|cancel/i.test(String(data.status||''))){
+        toast(data.errorMessage||`NFS-e com status ${data.status}`);
+        openChargeSheet(patientId);
+        return;
+      }
+    }
+  }catch(_){}
+  setTimeout(()=>pollNfseStatus(patientId, invoiceId, attempt+1), 3500);
+}
+window.openNfseEmitModal=openNfseEmitModal;
 function pct(a,b){return b?Math.round((a/b)*100):0}
 function badge(status){
   const s=(status||'').toLowerCase();
@@ -2776,7 +2979,8 @@ function openPatientModal(origin='',editId=''){
         progress:getv('fProgress'),
         consumedItems:consumed,
         payments:Array.isArray(prev?.payments)?prev.payments:[],
-        lastPaymentDate:prev?.lastPaymentDate||''
+        lastPaymentDate:prev?.lastPaymentDate||'',
+        nfse:Array.isArray(prev?.nfse)?prev.nfse:[]
       };
       if(editId){
         if(prev?.consumedItems?.length) applyStockConsumption(prev.consumedItems,true);
