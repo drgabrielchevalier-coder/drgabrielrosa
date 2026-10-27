@@ -763,7 +763,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
         <div class="page-head">
           <div><h2>Configurações</h2><p>Preferências financeiras, automações e integrações futuras.</p></div>
         </div>
-        <div class="grid layout-2">
+        <div class="grid settings-layout">
           <div class="card">
             <div class="card-head"><h3>Motor financeiro</h3></div>
             <div class="card-body">
