@@ -571,23 +571,76 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
       <!-- RECEBIVEIS -->
       <section class="page" id="page-recebiveis">
         <div class="page-head">
-          <div><h2>Recebíveis</h2><p>Valores contratados, recebimentos parciais, cobranças e vencimentos.</p></div>
+          <div><h2>Recebíveis</h2><p>Valores contratados, baixas parciais/quitação, conciliação e fechamento por clínica.</p></div>
           <div class="page-actions"><button class="btn primary" onclick="openReceivableModal()">＋ Novo recebível</button></div>
         </div>
-        <div class="toolbar">
-          <button class="filter-chip active" onclick="setReceivableFilter('',this)">Todos</button>
-          <button class="filter-chip" onclick="setReceivableFilter('À receber',this)">À receber</button>
-          <button class="filter-chip" onclick="setReceivableFilter('Recebido parcial',this)">Parcial</button>
-          <button class="filter-chip" onclick="setReceivableFilter('Faturado / Recebido',this)">Recebidos</button>
-          <button class="filter-chip" onclick="setReceivableFilter('Aguardando acerto',this)">Aguardando acerto</button>
+        <div class="bill-tabs recv-tabs" role="tablist" aria-label="Recebíveis">
+          <button type="button" class="bill-tab active" data-recv-tab="lista" onclick="setReceivablesTab('lista')">Lista e baixas</button>
+          <button type="button" class="bill-tab" data-recv-tab="fechamento" onclick="setReceivablesTab('fechamento')">Fechamento por clínica</button>
         </div>
-        <div class="card"><div class="table-wrap"><table>
-          <thead><tr><th>Paciente</th><th>Origem</th><th>Valor</th><th>Recebido</th><th>Saldo</th><th>Vencimento</th><th>Status</th><th></th></tr></thead>
-          <tbody id="receivablesTable"></tbody>
-        </table></div></div>
-        <h3 class="section-title">Extrato de baixas</h3>
-        <p class="page-subhint">Histórico de movimentações — quitação ou pagamento parcial.</p>
-        <div class="card" id="receivablesPaymentExtrato"><div class="empty">Nenhuma baixa registrada ainda.</div></div>
+
+        <div id="recvPaneLista" data-recv-pane="lista">
+          <div class="grid kpi-grid recv-kpi" style="grid-template-columns:repeat(7,minmax(100px,1fr))">
+            <div class="kpi"><div class="label">Previsto</div><div class="value" id="recvKpiPrevisto">R$ 0</div></div>
+            <div class="kpi"><div class="label">Recebido</div><div class="value" id="recvKpiRecebido">R$ 0</div></div>
+            <div class="kpi"><div class="label">Em aberto</div><div class="value" id="recvKpiAberto">R$ 0</div></div>
+            <div class="kpi"><div class="label">Parciais</div><div class="value" id="recvKpiParcial">0</div></div>
+            <div class="kpi"><div class="label">Vencidos</div><div class="value" id="recvKpiVencido">0</div></div>
+            <div class="kpi"><div class="label">Quitados</div><div class="value" id="recvKpiQuitado">0</div></div>
+            <div class="kpi"><div class="label">Divergências</div><div class="value" id="recvKpiDiverg">0</div></div>
+          </div>
+          <div class="toolbar patients-toolbar recv-toolbar">
+            <input class="input" id="recvSearch" placeholder="Buscar paciente…" oninput="renderReceivables()">
+            <select class="select" id="recvClinicFilter" onchange="renderReceivables()"><option value="">Todas as clínicas</option></select>
+            <select class="select" id="recvProcFilter" onchange="renderReceivables()"><option value="">Todos os procedimentos</option></select>
+            <input class="input" id="recvFrom" type="date" title="Período (data do lançamento) de" onchange="renderReceivables()">
+            <input class="input" id="recvTo" type="date" title="até" onchange="renderReceivables()">
+            <select class="select" id="recvDueFilter" onchange="renderReceivables()">
+              <option value="">Vencimento: todos</option>
+              <option value="overdue">Vencidos</option>
+              <option value="open">Em aberto</option>
+              <option value="due7">Vence em 7 dias</option>
+              <option value="diverg">Só divergências</option>
+            </select>
+            <select class="select" id="recvMethodFilter" onchange="renderReceivables()">
+              <option value="">Forma de pgto: todas</option>
+            </select>
+            <input class="input" id="recvMinValue" type="number" min="0" step="0.01" placeholder="Valor mín." title="Valor mínimo do recebível" oninput="renderReceivables()">
+            <input class="input" id="recvMaxValue" type="number" min="0" step="0.01" placeholder="Valor máx." title="Valor máximo do recebível" oninput="renderReceivables()">
+          </div>
+          <div class="toolbar">
+            <button type="button" class="filter-chip active" data-recv-status="" onclick="setReceivableFilter('',this)">Todos</button>
+            <button type="button" class="filter-chip" data-recv-status="À receber" onclick="setReceivableFilter('À receber',this)">À receber</button>
+            <button type="button" class="filter-chip" data-recv-status="Recebido parcial" onclick="setReceivableFilter('Recebido parcial',this)">Parcial</button>
+            <button type="button" class="filter-chip" data-recv-status="Faturado / Recebido" onclick="setReceivableFilter('Faturado / Recebido',this)">Recebidos</button>
+            <button type="button" class="filter-chip" data-recv-status="Aguardando acerto" onclick="setReceivableFilter('Aguardando acerto',this)">Aguardando acerto</button>
+          </div>
+          <div class="card"><div class="table-wrap"><table>
+            <thead><tr><th>Paciente</th><th>Clínica</th><th>Tratamento</th><th>Valor</th><th>Recebido</th><th>Saldo</th><th>Vencimento</th><th>Status</th><th></th></tr></thead>
+            <tbody id="receivablesTable"></tbody>
+          </table></div></div>
+          <h3 class="section-title">Extrato de baixas</h3>
+          <p class="page-subhint">Histórico individual — quitação, parcial ou estorno. O valor original do recebível nunca é substituído pela parcela.</p>
+          <div class="card" id="receivablesPaymentExtrato"><div class="empty">Nenhuma baixa registrada ainda.</div></div>
+        </div>
+
+        <div id="recvPaneFechamento" data-recv-pane="fechamento" hidden>
+          <p class="page-subhint">Demonstrativo por clínica e período. Usa o snapshot da regra nos lançamentos novos; não recalcula histórico ao mudar o contrato.</p>
+          <div class="toolbar patients-toolbar">
+            <select class="select" id="closeClinic" onchange="onClosingClinicChange()"><option value="">Selecione a clínica</option></select>
+            <input class="input" id="closeFrom" type="date" onchange="renderClinicClosing()">
+            <input class="input" id="closeTo" type="date" onchange="renderClinicClosing()">
+            <button type="button" class="btn" id="closeSuggestBtn" onclick="suggestClosingPeriod()">Usar período do contrato</button>
+          </div>
+          <div class="grid kpi-grid" style="grid-template-columns:repeat(5,minmax(120px,1fr));margin-bottom:14px">
+            <div class="kpi"><div class="label">Honorários</div><div class="value" id="closeKpiHonor">R$ 0</div></div>
+            <div class="kpi"><div class="label">Taxas</div><div class="value" id="closeKpiTaxa">R$ 0</div></div>
+            <div class="kpi"><div class="label">Reembolsos</div><div class="value" id="closeKpiReemb">R$ 0</div></div>
+            <div class="kpi"><div class="label">Recebido</div><div class="value" id="closeKpiRec">R$ 0</div></div>
+            <div class="kpi"><div class="label">Saldo</div><div class="value" id="closeKpiSaldo">R$ 0</div></div>
+          </div>
+          <div class="card" id="clinicClosingBox"><div class="empty">Selecione clínica e período.</div></div>
+        </div>
       </section>
 
       <!-- CUSTOS -->

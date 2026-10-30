@@ -406,6 +406,13 @@
   .receive-preview-grid strong{font-size:13px;font-weight:650}
   .receive-preview-grid strong.ok{color:var(--green)}
   .receive-preview-grid strong.warn{color:var(--amber)}
+  .recv-tabs{margin-bottom:16px}
+  .recv-kpi{margin-bottom:14px}
+  .recv-toolbar .input[type="date"]{min-width:140px}
+  .detail-event.is-voided{opacity:.72}
+  .detail-event.is-voided strong{text-decoration:line-through}
+  .row-voided td{opacity:.65}
+  .pay-timeline .detail-event .btn.small{margin-top:6px}
   .svc-filter-row{
     display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;
   }
