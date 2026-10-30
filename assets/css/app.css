@@ -555,7 +555,29 @@
   }
   .bill-formula{margin-top:10px;font-size:11px;color:var(--text);line-height:1.45;display:grid;gap:3px}
   .bill-example{margin:8px 0 0;font-size:10px;color:var(--muted);line-height:1.4}
+  .bill-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+  .bill-tab{
+    height:34px;padding:0 12px;border:1px solid var(--line);background:var(--panel-2);
+    border-radius:999px;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer
+  }
+  .bill-tab.active{background:#262724;color:#fff;border-color:#262724}
   .bill-layout{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(240px,.8fr);gap:16px;align-items:start}
+  .b-fee-list{display:grid;gap:10px}
+  .b-fee-row{
+    display:grid;grid-template-columns:120px repeat(4,minmax(0,1fr));gap:8px;align-items:end;
+    padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--panel-2)
+  }
+  .b-fee-name{font-size:12px;padding-bottom:8px}
+  .b-proc-rule{
+    border:1px solid var(--line);border-radius:12px;padding:12px;margin:0 0 10px;background:var(--panel-2)
+  }
+  .bill-calc-steps{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px}
+  .bill-calc-steps li{
+    display:flex;justify-content:space-between;gap:10px;font-size:11px;
+    padding:6px 0;border-bottom:1px solid var(--line)
+  }
+  .bill-calc-steps li:last-child{border-bottom:0;font-weight:650}
+  .bill-sim-result{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fcfbf8}
   .bill-config{display:grid;gap:10px}
   .bill-section-title{margin:8px 0 4px;font-size:12px;font-weight:650;color:var(--text)}
   .bill-preview{
@@ -695,6 +717,7 @@
     .treat-line .tl-tooth{grid-column:1/-1}
     .bill-layout{grid-template-columns:1fr}
     .bill-preview{position:static}
+    .b-fee-row{grid-template-columns:1fr 1fr}
     .ai-banner{flex-direction:column;align-items:stretch}
     .ai-banner .btn{width:100%;justify-content:center}
     .consume-row{grid-template-columns:1fr 64px 80px 36px}

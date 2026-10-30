@@ -1,10 +1,10 @@
 {
-  "version": "2.10.0",
-  "name": "Fase 1 — Navegação em 8 módulos",
+  "version": "2.11.0",
+  "name": "Fase 2 — Motor financeiro configurável",
   "releasedAt": "2026-10-30",
   "changes": [
-    "Sidebar reorganizada em Início, Pacientes, Agenda, Tratamentos, Prótese, Financeiro, Materiais e Gestão.",
-    "Submenus expansíveis em accordion, modo compacto com ícones/tooltips e breadcrumbs.",
-    "Configurações e logout permanecem na área fixa inferior; IDs de página e baixas financeiras preservados."
+    "Motor de cobrança ampliado: fixo+%, regras por procedimento com vigência, taxas por forma de pagamento.",
+    "Simulador de honorários na configuração financeira da clínica, com memória de cálculo.",
+    "Snapshot imutável da regra em novos lançamentos; baixas parciais e quitação preservadas."
   ]
 }
