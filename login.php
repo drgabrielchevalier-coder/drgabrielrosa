@@ -105,6 +105,9 @@ $csrf = htmlspecialchars(chevalier_csrf_token(), ENT_QUOTES, 'UTF-8');
           <span>Senha</span>
           <input type="password" name="pass" required placeholder="••••••••" maxlength="200" autocomplete="current-password">
         </label>
+        <div class="login-actions-row">
+          <a class="login-link" href="forgot-password.php">Esqueci minha senha</a>
+        </div>
         <button type="submit" class="login-submit">Entrar</button>
       </form>
       <p class="login-foot">Dr Gabriel Rosa · acesso restrito</p>
