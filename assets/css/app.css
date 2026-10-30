@@ -169,6 +169,27 @@
   .b-gray{background:#f0f0ec;color:#666b63}
   .b-purple{background:#f3eef6;color:var(--purple)}
   .toolbar{display:flex;gap:9px;margin-bottom:14px;flex-wrap:wrap}
+  .patients-toolbar{align-items:center}
+  .view-toggle{
+    display:inline-flex;gap:4px;padding:3px;border:1px solid var(--line);
+    border-radius:12px;background:var(--panel-2)
+  }
+  .view-tab{
+    height:32px;padding:0 12px;border:0;border-radius:9px;background:transparent;
+    color:var(--muted);font-size:12px;font-weight:600;cursor:pointer
+  }
+  .view-tab.active{background:var(--sidebar);color:#fff}
+  .patients-kanban-wrap{margin-top:0}
+  .patients-kanban .list-item{align-items:flex-start}
+  .patients-kanban .list-main{min-width:0}
+  .patients-kanban .list-main .cell-sub{margin-top:4px}
+  .patients-kanban .list-value{font-size:11px;font-weight:650;white-space:nowrap}
+  .patients-chart{display:grid;gap:14px}
+  .patients-chart-row{display:grid;gap:6px}
+  .patients-chart-label{display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap}
+  .patients-chart-label strong{font-size:13px}
+  .patients-chart-label span{font-size:11px;color:var(--muted)}
+  .patients-chart-bar{height:10px}
   .input,.select,.textarea{
     border:1px solid var(--line);background:var(--panel);border-radius:10px;outline:0;padding:10px 11px;font-size:12px;color:var(--text)
   }

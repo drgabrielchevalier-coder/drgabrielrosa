@@ -243,27 +243,36 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <div><h2>Pacientes</h2><p>Cadastro único, origem, clínica, tratamento e resultado de cada caso.</p></div>
           <div class="page-actions"><button class="btn primary" onclick="openPatientModal()">＋ Novo paciente</button></div>
         </div>
-        <div class="toolbar">
+        <div class="toolbar patients-toolbar">
           <input class="input" id="patientSearch" placeholder="Buscar paciente..." oninput="renderPatients()">
           <select class="select" id="patientClinicFilter" onchange="renderPatients()">
             <option value="">Todas as clínicas</option>
           </select>
+          <div class="view-toggle" role="tablist" aria-label="Visualização">
+            <button type="button" class="view-tab active" data-view="lista" onclick="setPatientView('lista',this)">Lista</button>
+            <button type="button" class="view-tab" data-view="kanban" onclick="setPatientView('kanban',this)">Kanban</button>
+            <button type="button" class="view-tab" data-view="grafico" onclick="setPatientView('grafico',this)">Gráfico</button>
+          </div>
+          <select class="select" id="patientAxisFilter" onchange="setPatientAxis(this.value)" title="Agrupar / filtrar por">
+            <option value="financeiro">Status financeiro</option>
+            <option value="tratamento">Status de tratamento</option>
+          </select>
           <select class="select" id="patientStatusFilter" onchange="renderPatients()">
             <option value="">Todos os status</option>
-            <option>À receber</option>
-            <option>Recebido parcial</option>
-            <option>Faturado / Recebido</option>
-            <option>Aguardando acerto</option>
-            <option>Retrabalho</option>
           </select>
         </div>
-        <div class="card">
+        <div id="patientsListView" class="card">
           <div class="table-wrap">
             <table>
               <thead><tr><th>Paciente</th><th>Origem / Clínica</th><th>Tratamento</th><th>Data</th><th>Valor</th><th>Custos</th><th>Lucro</th><th>Status</th><th></th></tr></thead>
               <tbody id="patientsTable"></tbody>
             </table>
           </div>
+        </div>
+        <div id="patientsKanbanView" class="patients-kanban-wrap" hidden></div>
+        <div id="patientsChartView" class="card" hidden>
+          <div class="card-head"><h3 id="patientsChartTitle">Distribuição</h3><div class="right"><span class="badge b-gray" id="patientsChartCount">0</span></div></div>
+          <div class="card-body" id="patientsChartBody"></div>
         </div>
       </section>
 
