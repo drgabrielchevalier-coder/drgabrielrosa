@@ -1,9 +1,11 @@
 {
-  "version": "2.8.9",
-  "name": "Pacientes — Lista, Kanban e Gráfico",
+  "version": "2.9.0",
+  "name": "Kanban editável — Pacientes e Produção",
   "releasedAt": "2026-10-30",
   "changes": [
-    "Visualização em Lista, Kanban e Gráfico na tela Pacientes.",
-    "Visor para agrupar/filtrar por status financeiro ou status de tratamento."
+    "Kanban de Pacientes com arrastar e soltar entre colunas.",
+    "Faturado / Recebido como última coluna; casos quitados saem após 15 dias.",
+    "Ao soltar em status financeiro que implica baixa, abre a ficha de recebimento.",
+    "Kanban de Produção também editável por arraste, abrindo o registro de evolução."
   ]
 }

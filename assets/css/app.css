@@ -278,7 +278,12 @@
   .row-link:hover strong{text-decoration:underline}
   .cell-sub{display:block;font-size:10px;color:var(--muted);margin-top:3px}
   .urgent-row td{background:#fbf4e6}
-  .kanban-item{width:100%;border:0;background:transparent;cursor:pointer;text-align:left}
+  .kanban-item{width:100%;border:0;background:transparent;cursor:grab;text-align:left}
+  .kanban-item:active{cursor:grabbing}
+  .kanban-item.is-dragging{opacity:.42}
+  .kanban-col.is-drop-target{border-color:var(--gold,#c4b086);box-shadow:inset 0 0 0 1px var(--gold,#c4b086);background:#f7f3ea}
+  .kanban-col.is-drop-target .card-body.list{background:rgba(247,243,234,.65)}
+  .patients-kanban-hint{margin:0 0 12px}
   .flow-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
   .flow-tab{height:38px;padding:0 16px;border:1px solid var(--line);background:var(--panel);border-radius:999px;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer}
   .flow-tab.active{background:#262724;color:#fff;border-color:#262724}
@@ -621,6 +626,9 @@
     .boleto-result dl{grid-template-columns:1fr}
     .toolbar{flex-direction:column}
     .toolbar .input,.toolbar .select{width:100%;min-width:0}
+    .patients-toolbar .view-toggle{width:100%;justify-content:stretch}
+    .patients-toolbar .view-tab{flex:1}
+    .patients-kanban-hint{font-size:11px}
     .table-wrap{overflow:visible}
     .table-wrap table,.table-wrap thead,.table-wrap tbody,.table-wrap th,.table-wrap td,.table-wrap tr{display:block}
     .table-wrap thead{display:none}
