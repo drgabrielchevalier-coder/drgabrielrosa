@@ -413,6 +413,19 @@
   .detail-event.is-voided strong{text-decoration:line-through}
   .row-voided td{opacity:.65}
   .pay-timeline .detail-event .btn.small{margin-top:6px}
+  .sheet-tabs{margin:14px 0 12px}
+  .sheet-pane{min-height:120px}
+  .sheet-doc-list{margin:0;padding-left:18px;line-height:1.7;font-size:13px}
+  .form-section-label{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:4px 0 0;padding-top:4px;border-top:1px solid #efebe4}
+  .form-section-label span{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:650;color:var(--muted)}
+  .form-section-label small{font-size:11px;color:var(--muted)}
+  .progressive-block{border:1px solid #efebe4;border-radius:12px;padding:10px 14px;background:var(--panel-2)}
+  .progressive-block>summary{cursor:pointer;font-weight:650;font-size:13px;list-style:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .progressive-block>summary::-webkit-details-marker{display:none}
+  .progressive-block>summary::before{content:'▸';color:var(--muted);font-size:11px}
+  .progressive-block[open]>summary::before{content:'▾'}
+  .detail-grid .full,.detail-grid div.full{grid-column:1/-1}
+  .person-form .progressive-block{margin-top:4px}
   .svc-filter-row{
     display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;
   }
