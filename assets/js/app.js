@@ -95,6 +95,7 @@ const seed = {
 let state = JSON.parse(localStorage.getItem('chevalier_gestao_v1')||'null') || structuredClone(seed);
 let persistReady = false;
 let receivableFilter = '';
+let receivablesTab = 'lista';
 // planning-calendar.js lê window.state — `let` não cria propriedade global
 function bindGlobalState(next){
   state = next;
@@ -506,11 +507,34 @@ function syncPatientPaymentStatus(p){
 function patientPayments(p){
   return Array.isArray(p?.payments)?p.payments.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))):[];
 }
+/** Soma baixas ativas (ignora anuladas e lançamentos de estorno). */
+function sumActivePayments(p){
+  return moneyRound(patientPayments(p).reduce((s,pay)=>{
+    if(pay.voided) return s;
+    const m=String(pay.mode||'').toLowerCase();
+    if(m==='estorno' || m==='void') return s;
+    return s+Number(pay.amount||0);
+  },0));
+}
+/** Divergência de conciliação: soma do histórico ativo ≠ campo received (só quando há ledger). */
+function hasReceivableDivergence(p){
+  if(!p || p.progress==='Orçamento') return false;
+  if(!Array.isArray(p.payments) || !p.payments.length) return false;
+  const ledger=sumActivePayments(p);
+  const rec=moneyRound(p.received||0);
+  return Math.abs(ledger-rec)>0.009;
+}
 function paymentModeLabel(mode, balanceAfter){
   const m=String(mode||'').toLowerCase();
+  if(m==='estorno' || m==='void') return 'Estorno';
   if(m==='total' || (balanceAfter!=null && Number(balanceAfter)<=0)) return 'Quitação';
   if(m==='parcial' || m==='partial') return 'Pagamento parcial';
   return 'Recebimento';
+}
+function paymentMethodLabel(method){
+  if(!method) return '';
+  const hit=(window.ChevalierBilling?.PAYMENT_METHODS||[]).find(m=>m.id===method);
+  return hit?.label||String(method);
 }
 function paymentHistoryHtml(p, opts={}){
   const list=patientPayments(p);
@@ -518,13 +542,28 @@ function paymentHistoryHtml(p, opts={}){
     return `<div class="empty">${opts.empty||'Nenhuma baixa registrada ainda.'}</div>`;
   }
   return `<div class="detail-timeline pay-timeline">${list.map(pay=>{
-    const label=paymentModeLabel(pay.mode, pay.balanceAfter);
+    const voided=!!pay.voided;
+    const label=voided?'Estorno / anulado':paymentModeLabel(pay.mode, pay.balanceAfter);
     const partial=/parcial/i.test(label);
-    return `<div class="detail-event">
-      <span class="event-dot ${partial?'amber':''}"></span>
+    const meta=[
+      fmtDate(pay.date),
+      pay.method?paymentMethodLabel(pay.method):'',
+      pay.balanceAfter!=null && !voided?`saldo após ${brl.format(pay.balanceAfter)}`:'',
+      pay.by?`por ${pay.by}`:'',
+      pay.note||'',
+      voided&&pay.voidReason?`motivo: ${pay.voidReason}`:'',
+      pay.receipt?`comp. ${pay.receipt}`:''
+    ].filter(Boolean).join(' · ');
+    const isEstorno=/estorno|void/i.test(String(pay.mode||''));
+    const voidBtn=(!voided && !isEstorno && opts.allowVoid!==false && p?.id)
+      ? `<button type="button" class="btn small danger" onclick="voidPatientPayment('${p.id}','${pay.id}')">Estornar</button>`
+      : '';
+    return `<div class="detail-event ${voided?'is-voided':''}">
+      <span class="event-dot ${voided?'':(partial?'amber':'')}"></span>
       <div>
         <strong>${esc(label)} · ${brl.format(pay.amount||0)}</strong>
-        <p>${fmtDate(pay.date)}${pay.balanceAfter!=null?` · saldo após baixa ${brl.format(pay.balanceAfter)}`:''}${pay.note?` · ${esc(pay.note)}`:''}</p>
+        <p>${esc(meta)}</p>
+        ${voidBtn}
       </div>
     </div>`;
   }).join('')}</div>`;
@@ -535,14 +574,19 @@ function recentPaymentMovements(limit=40){
     patientPayments(p).forEach(pay=>{
       rows.push({
         patientId:p.id,
+        paymentId:pay.id,
         patientName:p.name,
         clinicId:p.clinicId,
         origin:p.origin,
         date:pay.date||'',
         amount:Number(pay.amount||0),
         mode:pay.mode,
+        method:pay.method||'',
+        note:pay.note||'',
+        by:pay.by||'',
+        voided:!!pay.voided,
         balanceAfter:pay.balanceAfter,
-        label:paymentModeLabel(pay.mode, pay.balanceAfter)
+        label:pay.voided?'Estorno / anulado':paymentModeLabel(pay.mode, pay.balanceAfter)
       });
     });
   });
@@ -3017,17 +3061,142 @@ function onAdvanceStageChange(){
 window.onAdvanceStageChange=onAdvanceStageChange;
 function setReceivableFilter(v,btn){
   receivableFilter=v;
-  document.querySelectorAll('#page-recebiveis .filter-chip').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderReceivables();
+  document.querySelectorAll('#page-recebiveis .filter-chip').forEach(b=>{
+    b.classList.toggle('active', (b.dataset.recvStatus||'')===String(v||''));
+  });
+  if(btn) btn.classList.add('active');
+  renderReceivables();
+}
+function setReceivablesTab(tab){
+  receivablesTab=tab==='fechamento'?'fechamento':'lista';
+  document.querySelectorAll('.recv-tabs .bill-tab').forEach(b=>b.classList.toggle('active',b.dataset.recvTab===receivablesTab));
+  const lista=document.getElementById('recvPaneLista');
+  const fech=document.getElementById('recvPaneFechamento');
+  if(lista) lista.hidden=receivablesTab!=='lista';
+  if(fech) fech.hidden=receivablesTab!=='fechamento';
+  if(receivablesTab==='fechamento'){
+    fillClosingClinicOptions();
+    renderClinicClosing();
+  }else renderReceivables();
+}
+window.setReceivablesTab=setReceivablesTab;
+
+function filteredReceivables(){
+  const q=(document.getElementById('recvSearch')?.value||'').toLowerCase().trim();
+  const clinicId=document.getElementById('recvClinicFilter')?.value||'';
+  const procId=document.getElementById('recvProcFilter')?.value||'';
+  const from=document.getElementById('recvFrom')?.value||'';
+  const to=document.getElementById('recvTo')?.value||'';
+  const dueF=document.getElementById('recvDueFilter')?.value||'';
+  const method=document.getElementById('recvMethodFilter')?.value||'';
+  const minV=parseMoneyInput(document.getElementById('recvMinValue')?.value);
+  const maxV=parseMoneyInput(document.getElementById('recvMaxValue')?.value);
+  const hasMin=String(document.getElementById('recvMinValue')?.value||'').trim()!=='';
+  const hasMax=String(document.getElementById('recvMaxValue')?.value||'').trim()!=='';
+  return (state.patients||[]).filter(p=>{
+    if(p.progress==='Orçamento') return false;
+    if(receivableFilter && paymentStatusOf(p)!==receivableFilter) return false;
+    if(clinicId && p.clinicId!==clinicId) return false;
+    if(procId){
+      const lines=patientLines(p);
+      const hit=lines.some(l=>l.procedureId===procId) || p.procedureId===procId;
+      if(!hit) return false;
+    }
+    if(q && !(String(p.name||'').toLowerCase().includes(q)||patientProcedureSearchText(p).toLowerCase().includes(q))) return false;
+    if(from && String(p.date||'')<from) return false;
+    if(to && String(p.date||'')>to) return false;
+    const val=Number(p.value||0);
+    if(hasMin && val<minV) return false;
+    if(hasMax && val>maxV) return false;
+    if(method){
+      const pays=patientPayments(p).filter(pay=>!pay.voided && String(pay.method||'')===method);
+      if(!pays.length) return false;
+    }
+    const bal=balance(p);
+    if(dueF==='overdue' && !isOverdue(p)) return false;
+    if(dueF==='open' && bal<=0) return false;
+    if(dueF==='due7'){
+      if(bal<=0 || !p.due) return false;
+      if(p.due<todayISO() || p.due>addDays(7)) return false;
+    }
+    if(dueF==='diverg' && !hasReceivableDivergence(p)) return false;
+    return true;
+  });
+}
+function fillReceivableClinicOptions(){
+  const sel=document.getElementById('recvClinicFilter');
+  if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML='<option value="">Todas as clínicas</option>'+(state.clinics||[]).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  if(cur) sel.value=cur;
+}
+function fillReceivableProcOptions(){
+  const sel=document.getElementById('recvProcFilter');
+  if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML='<option value="">Todos os procedimentos</option>'+(state.procedures||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+  if(cur) sel.value=cur;
+}
+function fillReceivableMethodOptions(){
+  const sel=document.getElementById('recvMethodFilter');
+  if(!sel) return;
+  const cur=sel.value;
+  const methods=window.ChevalierBilling?.PAYMENT_METHODS||[
+    {id:'pix',label:'Pix'},{id:'cash',label:'Dinheiro'},{id:'transfer',label:'Transferência'},
+    {id:'debit',label:'Débito'},{id:'credit',label:'Crédito à vista'},{id:'credit_installments',label:'Crédito parcelado'},
+    {id:'boleto',label:'Boleto'},{id:'other',label:'Outras'}
+  ];
+  sel.innerHTML='<option value="">Forma de pgto: todas</option>'+methods.map(m=>`<option value="${esc(m.id)}">${esc(m.label)}</option>`).join('');
+  if(cur) sel.value=cur;
 }
 function renderReceivables(){
-  const arr=state.patients.filter(p=>!receivableFilter||p.status===receivableFilter);
-  document.getElementById('receivablesTable').innerHTML=arr.map(p=>`<tr>${td('Paciente',`<strong>${esc(p.name)}</strong>`)}${td('Origem',esc(clinic(p.clinicId).name))}${td('Valor',brl.format(p.value))}${td('Recebido',brl.format(p.received))}${td('Saldo',`<strong>${brl.format(balance(p))}</strong>`)}${td('Vencimento',fmtDate(p.due))}${td('Status',badge(paymentStatusOf(p)))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="openChargeSheet('${p.id}')">Abrir</button><button class="btn small" onclick="markReceived('${p.id}')">Baixar</button><button class="btn small" onclick="editPatient('${p.id}')">Editar</button><button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button></div></td></tr>`).join('');
-  renderPaymentExtrato('receivablesPaymentExtrato');
+  fillReceivableClinicOptions();
+  fillReceivableProcOptions();
+  fillReceivableMethodOptions();
+  const arr=filteredReceivables();
+  const previsto=arr.reduce((s,p)=>s+Number(p.value||0),0);
+  const recebido=arr.reduce((s,p)=>s+Number(p.received||0),0);
+  const aberto=arr.reduce((s,p)=>s+balance(p),0);
+  const parcial=arr.filter(p=>paymentStatusOf(p)==='Recebido parcial').length;
+  const vencido=arr.filter(isOverdue).length;
+  const quitado=arr.filter(p=>paymentStatusOf(p)==='Faturado / Recebido').length;
+  const diverg=arr.filter(hasReceivableDivergence).length;
+  const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
+  set('recvKpiPrevisto', brl.format(previsto));
+  set('recvKpiRecebido', brl.format(recebido));
+  set('recvKpiAberto', brl.format(aberto));
+  set('recvKpiParcial', String(parcial));
+  set('recvKpiVencido', String(vencido));
+  set('recvKpiQuitado', String(quitado));
+  set('recvKpiDiverg', String(diverg));
+
+  const tbody=document.getElementById('receivablesTable');
+  if(tbody){
+    tbody.innerHTML=arr.map(p=>`<tr>
+      ${td('Paciente',`<strong>${esc(p.name)}</strong>`)}
+      ${td('Clínica',esc(clinic(p.clinicId).name))}
+      ${td('Tratamento',`<span class="cell-sub">${esc(patientProcedureLabel(p))}</span>`)}
+      ${td('Valor',brl.format(p.value))}
+      ${td('Recebido',brl.format(p.received))}
+      ${td('Saldo',`<strong>${brl.format(balance(p))}</strong>`)}
+      ${td('Vencimento',fmtDate(p.due))}
+      ${td('Status',badge(paymentStatusOf(p)))}
+      <td class="actions-cell"><div class="row-actions">
+        <button class="btn small" onclick="openChargeSheet('${p.id}')">Abrir</button>
+        <button class="btn small" onclick="markReceived('${p.id}')">Baixar</button>
+        <button class="btn small" onclick="editPatient('${p.id}')">Editar</button>
+        <button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button>
+      </div></td>
+    </tr>`).join('')||`<tr><td colspan="9"><div class="empty">Nenhum recebível neste filtro.</div></td></tr>`;
+  }
+  renderPaymentExtrato('receivablesPaymentExtrato', {
+    clinicId:document.getElementById('recvClinicFilter')?.value||''
+  });
 }
 function renderPaymentExtrato(elId, opts={}){
   const box=document.getElementById(elId);
   if(!box) return;
-  let rows=recentPaymentMovements(50);
+  let rows=recentPaymentMovements(80);
   if(opts.origin) rows=rows.filter(r=>{
     const p=state.patients.find(x=>x.id===r.patientId);
     return p && String(p.origin||'')===opts.origin;
@@ -3038,21 +3207,200 @@ function renderPaymentExtrato(elId, opts={}){
     return;
   }
   box.innerHTML=`<div class="table-wrap"><table>
-    <thead><tr><th>Data</th><th>Paciente</th><th>Origem</th><th>Tipo</th><th>Valor</th><th>Saldo após</th><th></th></tr></thead>
+    <thead><tr><th>Data</th><th>Paciente</th><th>Clínica</th><th>Tipo</th><th>Forma</th><th>Valor</th><th>Saldo após</th><th></th></tr></thead>
     <tbody>${rows.map(r=>{
       const partial=/parcial/i.test(r.label);
-      return `<tr>
+      const voided=!!r.voided;
+      return `<tr class="${voided?'row-voided':''}">
         ${td('Data',fmtDate(r.date))}
-        ${td('Paciente',`<strong>${esc(r.patientName)}</strong>`)}
-        ${td('Origem',esc(clinic(r.clinicId).name))}
-        ${td('Tipo',partial?`<span class="badge b-amber">${esc(r.label)}</span>`:`<span class="badge b-green">${esc(r.label)}</span>`)}
+        ${td('Paciente',`<strong>${esc(r.patientName)}</strong>${r.by?`<span class="cell-sub">${esc(r.by)}</span>`:''}`)}
+        ${td('Clínica',esc(clinic(r.clinicId).name))}
+        ${td('Tipo',voided?`<span class="badge b-gray">${esc(r.label)}</span>`:(partial?`<span class="badge b-amber">${esc(r.label)}</span>`:`<span class="badge b-green">${esc(r.label)}</span>`))}
+        ${td('Forma',esc(paymentMethodLabel(r.method)||'—'))}
         ${td('Valor',brl.format(r.amount))}
-        ${td('Saldo após',r.balanceAfter!=null?brl.format(r.balanceAfter):'—')}
+        ${td('Saldo após',r.balanceAfter!=null && !voided?brl.format(r.balanceAfter):'—')}
         <td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="openChargeSheet('${r.patientId}')">Ficha</button></div></td>
       </tr>`;
     }).join('')}</tbody>
   </table></div>`;
 }
+
+function fillClosingClinicOptions(){
+  const sel=document.getElementById('closeClinic');
+  if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML='<option value="">Selecione a clínica</option>'+(state.clinics||[]).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  if(cur) sel.value=cur;
+}
+function isoLocal(d){
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+/** Sugere período de fechamento conforme periodicidade do contrato da clínica. */
+function suggestClosingPeriod(){
+  const clinicId=document.getElementById('closeClinic')?.value||'';
+  const billing=clinicId?billingForClinic(clinicId):null;
+  const mode=billing?.payout?.mode||'monthly';
+  const fixedDay=Math.min(28, Math.max(1, Number(billing?.payout?.fixedDay)||10));
+  const now=new Date();
+  const y=now.getFullYear();
+  const mo=now.getMonth();
+  let fromD, toD;
+  if(mode==='weekly'){
+    const day=(now.getDay()+6)%7; // segunda=0
+    fromD=new Date(y, mo, now.getDate()-day);
+    toD=new Date(fromD.getFullYear(), fromD.getMonth(), fromD.getDate()+6);
+  }else if(mode==='biweekly'){
+    if(now.getDate()<=15){
+      fromD=new Date(y, mo, 1);
+      toD=new Date(y, mo, 15);
+    }else{
+      fromD=new Date(y, mo, 16);
+      toD=new Date(y, mo+1, 0);
+    }
+  }else if(mode==='fixed_day'){
+    // Janela do último dia fixo até o próximo (exclusive end = dia fixo atual ou anterior)
+    const thisFixed=new Date(y, mo, Math.min(fixedDay, new Date(y, mo+1, 0).getDate()));
+    if(now.getDate()>=fixedDay){
+      fromD=new Date(y, mo-1, Math.min(fixedDay, new Date(y, mo, 0).getDate()));
+      toD=new Date(thisFixed.getFullYear(), thisFixed.getMonth(), thisFixed.getDate()-1);
+    }else{
+      fromD=new Date(y, mo-2, Math.min(fixedDay, new Date(y, mo-1, 0).getDate()));
+      toD=new Date(y, mo-1, Math.min(fixedDay, new Date(y, mo, 0).getDate())-1);
+    }
+  }else{
+    // monthly | after_days | custom → mês calendário
+    fromD=new Date(y, mo, 1);
+    toD=new Date(y, mo+1, 0);
+  }
+  const fromEl=document.getElementById('closeFrom');
+  const toEl=document.getElementById('closeTo');
+  if(fromEl) fromEl.value=isoLocal(fromD);
+  if(toEl) toEl.value=isoLocal(toD);
+  const btn=document.getElementById('closeSuggestBtn');
+  if(btn){
+    const label=window.ChevalierBilling?.payoutLabel?.(billing)||'Período sugerido';
+    btn.textContent=`Usar: ${label}`;
+  }
+  renderClinicClosing();
+}
+function onClosingClinicChange(){
+  fillClosingClinicOptions();
+  const clinicId=document.getElementById('closeClinic')?.value||'';
+  const btn=document.getElementById('closeSuggestBtn');
+  if(btn){
+    if(!clinicId) btn.textContent='Usar período do contrato';
+    else{
+      const billing=billingForClinic(clinicId);
+      btn.textContent=`Usar: ${window.ChevalierBilling?.payoutLabel?.(billing)||'período'}`;
+    }
+  }
+  if(clinicId) suggestClosingPeriod();
+  else renderClinicClosing();
+}
+window.suggestClosingPeriod=suggestClosingPeriod;
+window.onClosingClinicChange=onClosingClinicChange;
+
+/** Demonstrativo: usa billingSnap quando existir (imutável); senão valores lançados sem recalcular contrato. */
+function buildClinicClosing(clinicId, from, to){
+  const rows=[];
+  (state.patients||[]).forEach(p=>{
+    if(p.clinicId!==clinicId) return;
+    if(p.progress==='Orçamento') return;
+    const d=String(p.date||'');
+    if(from && d<from) return;
+    if(to && d>to) return;
+    const snap=p.billingSnap&&typeof p.billingSnap==='object'?p.billingSnap:null;
+    const honor=snap?.netShare!=null?Number(snap.netShare):Number(p.value||0);
+    const fee=snap?.cardFee!=null?Number(snap.cardFee):0;
+    const reimb=snap?.reimbursement!=null?Number(snap.reimbursement):0;
+    const gross=snap?.grossShare!=null?Number(snap.grossShare):(honor+fee);
+    const receivable=snap?.receivable!=null?Number(snap.receivable):Number(p.value||0);
+    rows.push({
+      id:p.id,
+      name:p.name,
+      date:d,
+      treatment:patientProcedureLabel(p),
+      practiced:snap?.practiced!=null?Number(snap.practiced):Number(p.practicedValue||p.value||0),
+      grossShare:moneyRound(gross),
+      cardFee:moneyRound(fee),
+      reimbursement:moneyRound(reimb),
+      receivable:moneyRound(receivable),
+      received:moneyRound(p.received||0),
+      open:balance(p),
+      status:paymentStatusOf(p),
+      hasSnap:!!snap,
+      ruleSource:snap?.ruleSource||snap?.ruleSnap?.ruleSource||''
+    });
+  });
+  const totals=rows.reduce((acc,r)=>({
+    practiced:acc.practiced+r.practiced,
+    grossShare:acc.grossShare+r.grossShare,
+    cardFee:acc.cardFee+r.cardFee,
+    reimbursement:acc.reimbursement+r.reimbursement,
+    receivable:acc.receivable+r.receivable,
+    received:acc.received+r.received,
+    open:acc.open+r.open
+  }),{practiced:0,grossShare:0,cardFee:0,reimbursement:0,receivable:0,received:0,open:0});
+  Object.keys(totals).forEach(k=>totals[k]=moneyRound(totals[k]));
+  const billing=billingForClinic(clinicId);
+  return {rows, totals, payoutLabel:window.ChevalierBilling?.payoutLabel?.(billing)||''};
+}
+function renderClinicClosing(){
+  fillClosingClinicOptions();
+  const clinicId=document.getElementById('closeClinic')?.value||'';
+  const from=document.getElementById('closeFrom')?.value||'';
+  const to=document.getElementById('closeTo')?.value||'';
+  const box=document.getElementById('clinicClosingBox');
+  const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
+  if(!clinicId){
+    set('closeKpiHonor','R$ 0'); set('closeKpiTaxa','R$ 0'); set('closeKpiReemb','R$ 0'); set('closeKpiRec','R$ 0'); set('closeKpiSaldo','R$ 0');
+    if(box) box.innerHTML='<div class="empty">Selecione a clínica.</div>';
+    return;
+  }
+  const report=buildClinicClosing(clinicId, from, to);
+  set('closeKpiHonor', brl.format(report.totals.grossShare));
+  set('closeKpiTaxa', brl.format(report.totals.cardFee));
+  set('closeKpiReemb', brl.format(report.totals.reimbursement));
+  set('closeKpiRec', brl.format(report.totals.received));
+  set('closeKpiSaldo', brl.format(report.totals.open));
+  if(!box) return;
+  if(!report.rows.length){
+    box.innerHTML='<div class="empty">Nenhum lançamento no período.</div>';
+    return;
+  }
+  box.innerHTML=`
+    <div class="card-head"><h3>${esc(clinic(clinicId).name)}</h3><div class="right"><small>${esc(report.payoutLabel||'Repasse conforme contrato')}</small></div></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Data</th><th>Paciente</th><th>Tratamento</th><th>Bruto</th><th>Taxa</th><th>Reemb.</th><th>A receber</th><th>Recebido</th><th>Saldo</th><th>Status</th></tr></thead>
+      <tbody>${report.rows.map(r=>`<tr>
+        ${td('Data',fmtDate(r.date))}
+        ${td('Paciente',`<strong>${esc(r.name)}</strong>${r.hasSnap?'':'<span class="cell-sub">sem snapshot</span>'}`)}
+        ${td('Tratamento',esc(r.treatment))}
+        ${td('Bruto',brl.format(r.grossShare))}
+        ${td('Taxa',brl.format(r.cardFee))}
+        ${td('Reemb.',brl.format(r.reimbursement))}
+        ${td('A receber',brl.format(r.receivable))}
+        ${td('Recebido',brl.format(r.received))}
+        ${td('Saldo',brl.format(r.open))}
+        ${td('Status',badge(r.status))}
+      </tr>`).join('')}</tbody>
+      <tfoot><tr>
+        <td colspan="3"><strong>Totais</strong></td>
+        <td><strong>${brl.format(report.totals.grossShare)}</strong></td>
+        <td><strong>${brl.format(report.totals.cardFee)}</strong></td>
+        <td><strong>${brl.format(report.totals.reimbursement)}</strong></td>
+        <td><strong>${brl.format(report.totals.receivable)}</strong></td>
+        <td><strong>${brl.format(report.totals.received)}</strong></td>
+        <td><strong>${brl.format(report.totals.open)}</strong></td>
+        <td></td>
+      </tr></tfoot>
+    </table></div>
+    <p class="field-hint" style="padding:12px 16px">Linhas com snapshot preservam a memória de cálculo da época do lançamento. Alterar o contrato da clínica não recalcula estes valores.</p>`;
+}
+window.renderClinicClosing=renderClinicClosing;
 function renderCosts(){
   const total=state.costs.reduce((s,c)=>s+Number(c.value||0),0), paid=state.costs.filter(c=>c.status==='PAGO').reduce((s,c)=>s+Number(c.value||0),0);
   const cats={};state.costs.forEach(c=>cats[c.type]=(cats[c.type]||0)+Number(c.value||0));const largest=Object.entries(cats).sort((a,b)=>b[1]-a[1])[0]?.[0]||'—';
@@ -3936,7 +4284,7 @@ function openClinicBillingModal(clinicId){
         </div>
 
         <div class="bill-pane" data-bill-pane="repasse" hidden>
-          <p class="field-hint">Prazo de fechamento desta clínica. Demonstrativos por período entram na Fase 3.</p>
+          <p class="field-hint">Prazo de fechamento desta clínica. O demonstrativo em Recebíveis → Fechamento usa esta periodicidade.</p>
           <div class="form-grid">
             <div class="field full"><label>Periodicidade</label>
               <select id="bPayoutMode" class="select" onchange="refreshClinicBillingPreview()">
@@ -4660,34 +5008,45 @@ function markReceived(id){
   const valor=moneyRound(p.value||0);
   const jaRecebido=moneyRound(p.received||0);
   const hist=patientPayments(p);
+  const methodOpts=(window.ChevalierBilling?.PAYMENT_METHODS||[
+    {id:'pix',label:'Pix'},{id:'cash',label:'Dinheiro'},{id:'transfer',label:'Transferência'},
+    {id:'debit',label:'Débito'},{id:'credit',label:'Crédito à vista'},{id:'credit_installments',label:'Crédito parcelado'},
+    {id:'boleto',label:'Boleto'},{id:'other',label:'Outras'}
+  ]).map(m=>`<option value="${esc(m.id)}">${esc(m.label)}</option>`).join('');
   openModal('Baixar recebimento', `
     <div class="form-grid">
       <div class="field full"><label>Paciente</label><input class="input" value="${esc(p.name)}" disabled></div>
-      <div class="field"><label>Honorário</label><input class="input" value="${brl.format(valor)}" disabled></div>
+      <div class="field"><label>Honorário (original)</label><input class="input" value="${brl.format(valor)}" disabled></div>
       <div class="field"><label>Já recebido</label><input class="input" value="${brl.format(jaRecebido)}" disabled></div>
       <div class="field"><label>Saldo atual</label><input class="input" id="receiveSaldoAtual" value="${brl.format(saldo)}" disabled></div>
       <div class="field"><label>Data da baixa</label><input id="receiveDate" type="date" class="input" value="${todayISO()}"></div>
+      <div class="field"><label>Forma de pagamento</label>
+        <select id="receiveMethod" class="select"><option value="">— opcional —</option>${methodOpts}</select>
+      </div>
       <div class="field full">
         <label>Tipo de baixa</label>
         <div class="receive-mode-tabs" role="tablist" aria-label="Tipo de baixa">
           <button type="button" class="subtab" id="receiveModeTotal" onclick="setReceiveMode('total')">Quitar saldo</button>
           <button type="button" class="subtab active" id="receiveModePartial" onclick="setReceiveMode('partial')">Baixa parcial</button>
         </div>
-        <span class="field-hint">Saldo atual em aberto: ${brl.format(saldo)}. “Quitar saldo” zera o restante; parcial mantém em aberto.</span>
+        <span class="field-hint">Saldo em aberto: ${brl.format(saldo)}. O valor original do recebível não é alterado. Não é permitido receber acima do saldo.</span>
       </div>
       <div class="field full"><label>Valor recebido agora</label>
         <input id="receiveAmount" type="number" class="input" min="0.01" step="0.01" max="${saldo}" value="" placeholder="0,00" oninput="refreshReceivePreview()">
       </div>
+      <div class="field"><label>Responsável</label><input id="receiveBy" class="input" placeholder="Quem lançou (opcional)" value="${esc(document.getElementById('sidebarUser')?.textContent||'')}"></div>
+      <div class="field"><label>Comprovante / ref.</label><input id="receiveReceipt" class="input" placeholder="Nº, chave Pix, etc."></div>
+      <div class="field full"><label>Observações</label><textarea id="receiveNote" class="textarea" rows="2" placeholder="Opcional"></textarea></div>
       <div class="field full">
         <div class="receive-preview" id="receivePreview"></div>
       </div>
       ${hist.length?`<div class="field full">
         <h3 class="section-title" style="margin-top:4px">Histórico de baixas</h3>
-        ${paymentHistoryHtml(p)}
+        ${paymentHistoryHtml(p,{allowVoid:false})}
       </div>`:''}
     </div>
   `, ()=>commitReceivePayment(p.id));
-  window.__receiveModal={patientId:p.id, saldo, mode:'partial'};
+  window.__receiveModal={patientId:p.id, saldo, mode:'partial', originalValue:valor};
   refreshReceivePreview();
 }
 function setReceiveMode(mode){
@@ -4715,16 +5074,20 @@ function refreshReceivePreview(){
   const p=state.patients.find(x=>x.id===ctx.patientId); if(!p) return;
   const saldo=balance(p);
   ctx.saldo=saldo;
-  let amt=parseMoneyInput(document.getElementById('receiveAmount')?.value);
-  if(amt<0) amt=0;
+  let raw=parseMoneyInput(document.getElementById('receiveAmount')?.value);
+  if(raw<0) raw=0;
+  let amt=raw;
   if(ctx.mode==='total') amt=saldo;
+  const over=ctx.mode!=='total' && raw>saldo+0.0001;
   amt=Math.min(saldo, moneyRound(amt));
   const newReceived=moneyRound(Math.min(Number(p.value||0), Number(p.received||0)+amt));
   const newBal=moneyRound(Math.max(0, Number(p.value||0)-newReceived));
   const ficaraQuitado=newBal<=0;
   const box=document.getElementById('receivePreview');
   if(box){
-    if(amt<=0){
+    if(over){
+      box.innerHTML=`<p class="field-hint" style="margin:0;color:var(--red)">Valor acima do saldo (${brl.format(saldo)}). Reduza o valor — o recebível original permanece ${brl.format(p.value||0)}.</p>`;
+    }else if(amt<=0){
       box.innerHTML=`<p class="field-hint" style="margin:0">Informe o valor desta baixa para ver o saldo previsto.</p>`;
     }else{
       box.innerHTML=`
@@ -4749,11 +5112,22 @@ function commitReceivePayment(patientId){
   const ctx=window.__receiveModal||{mode:'partial'};
   let amt=parseMoneyInput(document.getElementById('receiveAmount')?.value);
   if(ctx.mode==='total') amt=saldo;
-  amt=Math.min(saldo, Math.max(0, moneyRound(amt)));
+  amt=moneyRound(amt);
   if(amt<=0){ toast('Informe um valor maior que zero.'); return; }
+  if(amt>saldo+0.0001){
+    toast('Valor acima do saldo em aberto. Ajuste o valor — crédito/ajuste exige lançamento explícito.');
+    return;
+  }
+  amt=Math.min(saldo, Math.max(0, amt));
+  // Nunca altera o valor original do recebível
+  const original=moneyRound(p.value||0);
   const date=getv('receiveDate')||todayISO();
+  const method=getv('receiveMethod')||'';
+  const note=getv('receiveNote').trim();
+  const by=getv('receiveBy').trim();
+  const receipt=getv('receiveReceipt').trim();
   const before=moneyRound(p.received||0);
-  p.received=moneyRound(Math.min(Number(p.value||0), before+amt));
+  p.received=moneyRound(Math.min(original, before+amt));
   syncPatientPaymentStatus(p);
   const open=balance(p);
   p.lastPaymentDate=date;
@@ -4763,7 +5137,12 @@ function commitReceivePayment(patientId){
     date,
     amount:amt,
     mode:open<=0?'total':'parcial',
-    balanceAfter:open
+    balanceAfter:open,
+    method,
+    note,
+    by,
+    receipt,
+    voided:false
   });
   save();
   closeModal();
@@ -4774,8 +5153,47 @@ function commitReceivePayment(patientId){
     : `Baixa parcial de ${brl.format(amt)} · saldo ${brl.format(open)}.`);
   openChargeSheet(p.id);
 }
+/** Estorno autorizado: mantém o registro histórico e reabre o saldo. */
+function voidPatientPayment(patientId, paymentId){
+  const p=state.patients.find(x=>x.id===patientId); if(!p) return;
+  if(!Array.isArray(p.payments)) return;
+  const pay=p.payments.find(x=>x.id===paymentId);
+  if(!pay) return toast('Baixa não encontrada.');
+  if(pay.voided) return toast('Esta baixa já foi estornada.');
+  if(/estorno|void/i.test(String(pay.mode||''))) return toast('Não é possível estornar um lançamento de estorno.');
+  const reason=window.prompt('Motivo do estorno autorizado:','Estorno autorizado');
+  if(reason==null) return;
+  if(!String(reason).trim()) return toast('Informe o motivo do estorno.');
+  pay.voided=true;
+  pay.voidedAt=todayISO();
+  pay.voidReason=String(reason).trim();
+  pay.voidedBy=document.getElementById('sidebarUser')?.textContent||'';
+  const original=moneyRound(p.value||0);
+  // Preferir reconciliação pelo ledger ativo; fallback no received atual
+  const ledger=sumActivePayments(p);
+  p.received=moneyRound(Math.max(0, Math.min(original, ledger)));
+  syncPatientPaymentStatus(p);
+  p.payments.push({
+    id:uid(),
+    date:todayISO(),
+    amount:Number(pay.amount||0),
+    mode:'estorno',
+    balanceAfter:balance(p),
+    method:pay.method||'',
+    note:`Estorno da baixa ${pay.id}`,
+    by:pay.voidedBy,
+    receipt:'',
+    voided:false,
+    reverses:pay.id
+  });
+  save();
+  renderAll();
+  toast('Estorno registrado. Histórico preservado.');
+  openChargeSheet(p.id);
+}
 window.setReceiveMode=setReceiveMode;
 window.refreshReceivePreview=refreshReceivePreview;
+window.voidPatientPayment=voidPatientPayment;
 function toggleCost(id){const c=state.costs.find(x=>x.id===id);if(!c)return;c.status=c.status==='PAGO'?'À PAGAR':'PAGO';save();renderAll();toast('Status do custo atualizado.')}
 function exportData(){
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='chevalier-gestao-backup.json';a.click();URL.revokeObjectURL(a.href);

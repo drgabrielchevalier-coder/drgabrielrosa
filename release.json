@@ -1,10 +1,10 @@
 {
-  "version": "2.11.0",
-  "name": "Fase 2 — Motor financeiro configurável",
+  "version": "2.12.0",
+  "name": "Fase 3 — Recebíveis, baixas e fechamento",
   "releasedAt": "2026-10-30",
   "changes": [
-    "Motor de cobrança ampliado: fixo+%, regras por procedimento com vigência, taxas por forma de pagamento.",
-    "Simulador de honorários na configuração financeira da clínica, com memória de cálculo.",
-    "Snapshot imutável da regra em novos lançamentos; baixas parciais e quitação preservadas."
+    "Recebíveis com filtros (clínica, período, vencimento, busca) e KPIs de conciliação.",
+    "Baixa com forma de pagamento, responsável, comprovante e observações; bloqueio acima do saldo.",
+    "Estorno autorizado preservando histórico; demonstrativo de fechamento por clínica/período com snapshot."
   ]
 }
