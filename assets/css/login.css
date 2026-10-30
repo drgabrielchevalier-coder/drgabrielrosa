@@ -188,6 +188,22 @@ html,body{margin:0;min-height:100%;}
   box-shadow:0 0 0 3px rgba(196,176,134,.18);
   background:rgba(12,13,11,.55);
 }
+.login-actions-row{
+  display:flex;justify-content:flex-end;margin-top:-2px;
+}
+.login-link{
+  color:rgba(212,190,150,.92);text-decoration:none;font-size:.84rem;font-weight:500;
+}
+.login-link:hover{text-decoration:underline;color:#f0e2c4}
+.login-hint{
+  margin:0;font-size:.78rem;line-height:1.45;color:rgba(243,239,230,.55);font-weight:300;
+}
+.login-ok{
+  margin:0 0 14px;padding:10px 12px;border-radius:12px;
+  background:rgba(47,125,91,.18);border:1px solid rgba(47,125,91,.38);
+  color:#d7efe3;font-size:.88rem;line-height:1.45;
+}
+.login-error code{font-size:.8em;opacity:.9}
 .login-submit{
   margin-top:4px;height:48px;border:0;border-radius:13px;cursor:pointer;
   background:linear-gradient(135deg,#d0be95,#8e7d5b);
@@ -201,6 +217,7 @@ html,body{margin:0;min-height:100%;}
   margin:16px 0 0;text-align:center;
   font-size:.75rem;color:rgba(243,239,230,.45);letter-spacing:.04em;
 }
+.login-foot .login-link{font-size:.82rem}
 
 @media (max-width:900px){
   .login-shell{

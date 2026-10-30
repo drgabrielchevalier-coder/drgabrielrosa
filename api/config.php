@@ -27,6 +27,20 @@ if (!defined('AUTH_PASS')) {
     define('AUTH_PASS', 'chevalier');
 }
 /* Opcional: define('AUTH_PASS_HASH', password_hash('sua-senha', PASSWORD_DEFAULT)); */
+/* E-mail vinculado à conta (recuperação de senha) */
+if (!defined('AUTH_EMAIL')) {
+    define('AUTH_EMAIL', 'drgabrielchevalier@hotmail.com');
+}
+/* Remetente do sistema — use um e-mail do seu domínio Hostinger para melhor entrega:
+   define('MAIL_FROM', 'noreply@seudominio.com');
+   define('MAIL_FROM_NAME', 'Dr Gabriel Rosa');
+   // SMTP opcional:
+   // define('MAIL_SMTP_HOST', 'smtp.hostinger.com');
+   // define('MAIL_SMTP_PORT', 465);
+   // define('MAIL_SMTP_USER', 'noreply@seudominio.com');
+   // define('MAIL_SMTP_PASS', '...');
+   // define('MAIL_SMTP_SECURE', 'ssl');
+*/
 /* Opcional OpenAI — prefira Configurações no app ou api/config.local.php:
    define('OPENAI_API_KEY', 'sk-...');
    define('OPENAI_CHAT_MODEL', 'gpt-4o-mini');

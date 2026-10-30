@@ -17,3 +17,16 @@ declare(strict_types=1);
 // define('DB_PASS', '...');
 // define('AUTH_USER', 'gabriel');
 // define('AUTH_PASS', '...');
+// define('AUTH_PASS_HASH', '...'); // preferível à senha em texto claro
+// define('AUTH_EMAIL', 'drgabrielchevalier@hotmail.com');
+
+// E-mail do sistema (recuperação de senha) — use caixa do seu domínio:
+// define('MAIL_FROM', 'noreply@seudominio.com');
+// define('MAIL_FROM_NAME', 'Dr Gabriel Rosa');
+// define('APP_BASE_URL', 'https://seudominio.com');
+// SMTP Hostinger (recomendado se mail() não entregar):
+// define('MAIL_SMTP_HOST', 'smtp.hostinger.com');
+// define('MAIL_SMTP_PORT', 465);
+// define('MAIL_SMTP_USER', 'noreply@seudominio.com');
+// define('MAIL_SMTP_PASS', '...');
+// define('MAIL_SMTP_SECURE', 'ssl');

@@ -39,5 +39,21 @@ function chevalier_pdo(): PDO
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
 
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS password_resets (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(120) NOT NULL,
+            email VARCHAR(190) NOT NULL,
+            token_hash CHAR(64) NOT NULL,
+            expires_at INT UNSIGNED NOT NULL,
+            used_at INT UNSIGNED NULL DEFAULT NULL,
+            created_at INT UNSIGNED NOT NULL,
+            request_ip VARCHAR(64) NOT NULL DEFAULT "",
+            INDEX (token_hash),
+            INDEX (expires_at),
+            INDEX (username)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+
     return $pdo;
 }

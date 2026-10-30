@@ -1,3 +1,13 @@
 <Files "config.local.php">
   Require all denied
 </Files>
+
+# Tokens / dados sensíveis
+<IfModule mod_authz_core.c>
+  <DirectoryMatch "(?i)/storage">
+    Require all denied
+  </DirectoryMatch>
+</IfModule>
+<FilesMatch "(?i)^(password_resets\.json)$">
+  Require all denied
+</FilesMatch>

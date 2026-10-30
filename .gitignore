@@ -7,3 +7,4 @@ api/config.local.php
 Thumbs.db
 uploads/planning/*
 !uploads/planning/.htaccess
+api/storage/password_resets.json
