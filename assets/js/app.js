@@ -1510,6 +1510,124 @@ function renderDashboard(){
 }
 
 
+const PATIENT_PROGRESS_STAGES=['Orçamento','Em tratamento','Planejar caso','Solicitar material','Em fila / agendado','Aguardo pós Cirúrgico','Aguardando cicatrização','Aguardando moldagem','Moldagem','Enviado para Laboratório','Aguardando Prova','Aguardando Cimentação','Alta'];
+const PATIENT_FINANCIAL_STATUSES=['À receber','Recebido parcial','Faturado / Recebido','Aguardando acerto','Retrabalho','Não vai receber'];
+let patientViewMode=(typeof localStorage!=='undefined' && localStorage.getItem('chevalier_patient_view'))||'lista';
+let patientAxisMode=(typeof localStorage!=='undefined' && localStorage.getItem('chevalier_patient_axis'))||'financeiro';
+
+function patientAxisColumns(axis=patientAxisMode){
+  return axis==='tratamento'?PATIENT_PROGRESS_STAGES.slice():PATIENT_FINANCIAL_STATUSES.slice();
+}
+function patientAxisValue(p, axis=patientAxisMode){
+  if(axis==='tratamento') return String(p.progress||'Em tratamento')||'Em tratamento';
+  return paymentStatusOf(p);
+}
+function patientAxisLabel(axis=patientAxisMode){
+  return axis==='tratamento'?'Status de tratamento':'Status financeiro';
+}
+function filteredPatients(){
+  const q=(document.getElementById('patientSearch')?.value||'').toLowerCase();
+  const cf=document.getElementById('patientClinicFilter')?.value||'';
+  const sf=document.getElementById('patientStatusFilter')?.value||'';
+  return state.patients.filter(p=>{
+    if(q && !(p.name.toLowerCase().includes(q)||patientProcedureSearchText(p).toLowerCase().includes(q))) return false;
+    if(cf && p.clinicId!==cf) return false;
+    if(sf && patientAxisValue(p)!==sf) return false;
+    return true;
+  });
+}
+function refreshPatientStatusFilterOptions(){
+  const sel=document.getElementById('patientStatusFilter');
+  if(!sel) return;
+  const prev=sel.value;
+  const cols=patientAxisColumns();
+  sel.innerHTML=`<option value="">Todos os status</option>`+cols.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  if(prev && cols.includes(prev)) sel.value=prev;
+  else sel.value='';
+}
+function setPatientView(mode,btn){
+  patientViewMode=['lista','kanban','grafico'].includes(mode)?mode:'lista';
+  try{localStorage.setItem('chevalier_patient_view',patientViewMode)}catch(e){}
+  document.querySelectorAll('#page-pacientes .view-tab').forEach(b=>b.classList.toggle('active',b.dataset.view===patientViewMode));
+  if(btn) btn.classList.add('active');
+  renderPatients();
+}
+function setPatientAxis(axis){
+  patientAxisMode=axis==='tratamento'?'tratamento':'financeiro';
+  try{localStorage.setItem('chevalier_patient_axis',patientAxisMode)}catch(e){}
+  const sel=document.getElementById('patientAxisFilter');
+  if(sel) sel.value=patientAxisMode;
+  refreshPatientStatusFilterOptions();
+  renderPatients();
+}
+window.setPatientView=setPatientView;
+window.setPatientAxis=setPatientAxis;
+
+function patientKanbanCard(p){
+  const fin=paymentStatusOf(p);
+  const prog=p.progress||'—';
+  const secondary=patientAxisMode==='tratamento'?fin:prog;
+  return `<button type="button" class="list-item kanban-item" onclick="editPatient('${p.id}')">
+    <div class="avatar">${esc(initials(p.name))}</div>
+    <div class="list-main">
+      <strong>${esc(p.name)}</strong>
+      <span>${esc(clinic(p.clinicId).name)} · ${esc(patientProcedureLabel(p))}</span>
+      <span class="cell-sub">${badge(secondary)} · ${brl.format(p.value||0)}</span>
+    </div>
+    <div class="list-value">${brl.format(patientProfit(p))}</div>
+  </button>`;
+}
+function renderPatientsKanban(rows){
+  const box=document.getElementById('patientsKanbanView');
+  if(!box) return;
+  const cols=patientAxisColumns();
+  const activeCols=cols.filter(c=>rows.some(p=>patientAxisValue(p)===c));
+  const extras=[...new Set(rows.map(p=>patientAxisValue(p)).filter(v=>v && !cols.includes(v)))];
+  const show=activeCols.length?activeCols.concat(extras):cols.slice(0,6).concat(extras);
+  const boardCols=show.length||1;
+  box.innerHTML=`<div class="lab-board patients-kanban ${boardCols>5?'cols-6':''}" style="${boardCols<=4?`grid-template-columns:repeat(${Math.max(boardCols,1)},minmax(200px,1fr))`:''}">
+    ${show.map(col=>{
+      const arr=rows.filter(p=>patientAxisValue(p)===col);
+      return `<div class="card">
+        <div class="card-head"><h3>${esc(col)}</h3><div class="right"><span class="badge b-gray">${arr.length}</span></div></div>
+        <div class="card-body list">${arr.length?arr.map(patientKanbanCard).join(''):'<div class="empty">Nenhum caso.</div>'}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function renderPatientsChart(rows){
+  const body=document.getElementById('patientsChartBody');
+  const title=document.getElementById('patientsChartTitle');
+  const countEl=document.getElementById('patientsChartCount');
+  if(!body) return;
+  if(title) title.textContent=`Distribuição por ${patientAxisLabel().toLowerCase()}`;
+  if(countEl) countEl.textContent=String(rows.length);
+  const cols=patientAxisColumns();
+  const extras=[...new Set(rows.map(p=>patientAxisValue(p)).filter(v=>v && !cols.includes(v)))];
+  const labels=cols.concat(extras);
+  const data=labels.map(label=>{
+    const arr=rows.filter(p=>patientAxisValue(p)===label);
+    return {
+      label,
+      count:arr.length,
+      value:arr.reduce((s,p)=>s+Number(p.value||0),0),
+      profit:arr.reduce((s,p)=>s+patientProfit(p),0)
+    };
+  }).filter(d=>d.count>0);
+  if(!data.length){
+    body.innerHTML='<div class="empty">Nenhum paciente encontrado.</div>';
+    return;
+  }
+  const max=Math.max(1,...data.map(d=>d.count));
+  body.innerHTML=`<div class="patients-chart">
+    ${data.map(d=>`
+      <div class="patients-chart-row">
+        <div class="patients-chart-label"><strong>${esc(d.label)}</strong><span>${d.count} caso(s) · ${brl.format(d.value)} · lucro ${brl.format(d.profit)}</span></div>
+        <div class="progress patients-chart-bar"><span style="width:${Math.max(6,(d.count/max)*100)}%"></span></div>
+      </div>`).join('')}
+  </div>`;
+}
+
 function fillFilters(){
   const sel=document.getElementById('patientClinicFilter');
   const current=sel.value;
@@ -1518,17 +1636,38 @@ function fillFilters(){
 }
 function renderPatients(){
   fillFilters();
-  const q=(document.getElementById('patientSearch')?.value||'').toLowerCase();
-  const cf=document.getElementById('patientClinicFilter')?.value||'';
-  const sf=document.getElementById('patientStatusFilter')?.value||'';
-  const rows=state.patients.filter(p=>(!q||p.name.toLowerCase().includes(q)||patientProcedureSearchText(p).toLowerCase().includes(q))&&(!cf||p.clinicId===cf)&&(!sf||p.status===sf));
-  document.getElementById('patientsTable').innerHTML=rows.map(p=>`
-    <tr>
+  const axisSel=document.getElementById('patientAxisFilter');
+  if(axisSel && axisSel.value!==patientAxisMode) axisSel.value=patientAxisMode;
+  document.querySelectorAll('#page-pacientes .view-tab').forEach(b=>b.classList.toggle('active',b.dataset.view===patientViewMode));
+  refreshPatientStatusFilterOptions();
+  const rows=filteredPatients();
+  const listView=document.getElementById('patientsListView');
+  const kanbanView=document.getElementById('patientsKanbanView');
+  const chartView=document.getElementById('patientsChartView');
+  if(listView) listView.hidden=patientViewMode!=='lista';
+  if(kanbanView) kanbanView.hidden=patientViewMode!=='kanban';
+  if(chartView) chartView.hidden=patientViewMode!=='grafico';
+
+  if(patientViewMode==='kanban'){
+    renderPatientsKanban(rows);
+    return;
+  }
+  if(patientViewMode==='grafico'){
+    renderPatientsChart(rows);
+    return;
+  }
+
+  const statusCol=patientAxisMode==='tratamento'?'Tratamento':'Status';
+  document.getElementById('patientsTable').innerHTML=rows.map(p=>{
+    const axisVal=patientAxisValue(p);
+    const secondary=patientAxisMode==='tratamento'?paymentStatusOf(p):(p.progress||'—');
+    return `<tr>
       ${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${esc(p.origin)}${p.progress==='Orçamento'?' · Orçamento':''}</span>`)}
-      ${td('Clínica',esc(clinic(p.clinicId).name))}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} item(ns)</span>`)}${td('Data',fmtDate(p.date))}
+      ${td('Clínica',esc(clinic(p.clinicId).name))}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} item(ns) · ${esc(secondary)}</span>`)}${td('Data',fmtDate(p.date))}
       ${td('Valor',brl.format(p.value))}${td('Custos',brl.format(patientCost(p)))}${td('Lucro',`<strong>${brl.format(patientProfit(p))}</strong>`)}
-      ${td('Status',badge(p.status))}<td class="actions-cell">${acts(`editPatient('${p.id}')`,`deletePatient('${p.id}')`)}</td>
-    </tr>`).join('')||'<tr><td colspan="9"><div class="empty">Nenhum paciente encontrado.</div></td></tr>';
+      ${td(statusCol,badge(axisVal))}<td class="actions-cell">${acts(`editPatient('${p.id}')`,`deletePatient('${p.id}')`)}</td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="9"><div class="empty">Nenhum paciente encontrado.</div></td></tr>';
 }
 function renderClinics(){
   document.getElementById('clinicsGrid').innerHTML=state.clinics.map(c=>{
