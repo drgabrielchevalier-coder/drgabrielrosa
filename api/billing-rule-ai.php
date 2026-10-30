@@ -53,9 +53,10 @@ if (!chevalier_openai_configured()) {
 $clinic = $clinicName !== '' ? $clinicName : 'a clínica';
 $prompt = "Você configura o algoritmo de cobrança de um cirurgião-dentista em prestação de serviço. "
     . "Clínica: {$clinic}. Regra descrita pelo usuário:\n\"\"\"{$text}\"\"\"\n"
-    . "Responda SOMENTE JSON com: shareMode (procedure|percent|fixed), professionalPercent (0-100), "
+    . "Responda SOMENTE JSON com: shareMode (procedure|percent|fixed|mixed), professionalPercent (0-100), "
     . "fixedAmount (number), cardFeeEnabled (bool), cardFeePercent (0-100), cardFeeOn (share|practiced), "
-    . "materialsPaidBy (doctor|clinic), reimburseComponents (bool), reimburseMaterials (bool), reimburseLab (bool), "
+    . "cardFeePaidBy (doctor|clinic|split), materialsPaidBy (doctor|clinic), reimburseComponents (bool), "
+    . "reimburseMaterials (bool), reimburseLab (bool), "
     . "notes (string curta), aiSummary (string curta em português), examplePracticed (number), exampleComponents (number). "
     . "Exemplo: implante 3000, 50% profissional, 10% cartão na parte do profissional, reembolso de componentes "
     . "→ shareMode=percent, professionalPercent=50, cardFeeEnabled=true, cardFeePercent=10, cardFeeOn=share, "

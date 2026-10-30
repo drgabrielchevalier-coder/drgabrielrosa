@@ -354,13 +354,13 @@ function procedure(id){return state.procedures.find(x=>x.id===id)||{name:'—',p
 function material(id){return state.materials.find(x=>x.id===id)||{name:'—',unitCost:0};}
 function normalizeClinicPrice(row={},fallbackPrice=0){
   const practiced=Number(row.practicedValue ?? fallbackPrice ?? 0);
-  const mode=row.receiveMode==='percent'?'percent':'fixed';
+  const mode=['percent','mixed'].includes(row.receiveMode)?row.receiveMode:'fixed';
   return {
     clinicId:String(row.clinicId||''),
     practicedValue:practiced,
     receiveMode:mode,
-    receiveAmount:Number(row.receiveAmount ?? (mode==='fixed'?practiced:0)),
-    receivePercent:Number(row.receivePercent ?? (mode==='percent'?50:100))
+    receiveAmount:Number(row.receiveAmount ?? (mode==='fixed'||mode==='mixed'?practiced:0)),
+    receivePercent:Number(row.receivePercent ?? (mode==='percent'||mode==='mixed'?50:100))
   };
 }
 function ensureClinicPrices(){
@@ -376,8 +376,9 @@ function clinicPriceFor(procId,clinicId){
 }
 function honorariumFromPrice(row){
   const r=normalizeClinicPrice(row);
-  if(r.receiveMode==='percent') return Math.round((Number(r.practicedValue||0)*Number(r.receivePercent||0)/100)*100)/100;
-  return Math.round(Number(r.receiveAmount||0)*100)/100;
+  if(r.receiveMode==='percent') return moneyRound(Number(r.practicedValue||0)*Number(r.receivePercent||0)/100);
+  if(r.receiveMode==='mixed') return moneyRound(Number(r.receiveAmount||0)+Number(r.practicedValue||0)*Number(r.receivePercent||0)/100);
+  return moneyRound(Number(r.receiveAmount||0));
 }
 function procedureHonorarium(procId,clinicId){
   return honorariumFromPrice(clinicPriceFor(procId,clinicId));
@@ -422,10 +423,10 @@ function procedureSettlement(procId,clinicId,qty=1){
     lab:bom.lab
   },billing);
 }
-function settleLines(lines,clinicId){
+function settleLines(lines,clinicId,settleOpts={}){
   const list=(lines||[]).filter(l=>l&&l.procedureId);
   if(!list.length){
-    return {receivable:0,netShare:0,reimbursement:0,cardFee:0,grossShare:0,practiced:0,costs:{materials:0,components:0,lab:0,total:0},profit:0,breakdown:[]};
+    return {receivable:0,netShare:0,reimbursement:0,cardFee:0,grossShare:0,practiced:0,costs:{materials:0,components:0,lab:0,total:0},profit:0,breakdown:[],ruleSource:'clinic',calcSteps:[],ruleSnap:null};
   }
   const billing=billingForClinic(clinicId);
   // Agrega praticado + share base por linha, BOM total uma vez
@@ -448,11 +449,19 @@ function settleLines(lines,clinicId){
   baseShare=moneyRound(baseShare);
   const bom=combinedProcedureMaterials(list);
   if(!window.ChevalierBilling){
-    return {receivable:baseShare,netShare:baseShare,reimbursement:0,cardFee:0,grossShare:baseShare,practiced,costs:{materials:bom.materials,components:bom.components,lab:bom.lab,total:bom.total},profit:baseShare-bom.total,breakdown};
+    return {receivable:baseShare,netShare:baseShare,reimbursement:0,cardFee:0,grossShare:baseShare,practiced,costs:{materials:bom.materials,components:bom.components,lab:bom.lab,total:bom.total},profit:baseShare-bom.total,breakdown,ruleSource:'clinic',calcSteps:[],ruleSnap:null};
   }
+  // Uma linha: aplica regra específica do procedimento. Várias: regra padrão da clínica sobre o agregado
+  // (exceções por linha ficam para Fase 3 — evita alterar consolidação histórica).
+  const procedureId=list.length===1?list[0].procedureId:'';
   const settled=ChevalierBilling.settleCase({
     practiced, baseShare,
-    components:bom.components, materials:bom.materials, lab:bom.lab
+    components:bom.components, materials:bom.materials, lab:bom.lab,
+    procedureId,
+    asOf:settleOpts.asOf||todayISO(),
+    paymentMethod:settleOpts.paymentMethod||'',
+    installments:settleOpts.installments,
+    exception:settleOpts.exception||null
   },billing);
   return {...settled,breakdown};
 }
@@ -462,6 +471,7 @@ function honorariumForLines(lines,clinicId){
 function clinicPriceLabel(row){
   const r=normalizeClinicPrice(row);
   if(r.receiveMode==='percent') return `${brl.format(r.practicedValue)} · ${r.receivePercent}% = ${brl.format(honorariumFromPrice(r))}`;
+  if(r.receiveMode==='mixed') return `${brl.format(r.practicedValue)} · fixo ${brl.format(r.receiveAmount)} + ${r.receivePercent}% = ${brl.format(honorariumFromPrice(r))}`;
   return `${brl.format(r.practicedValue)} · fechado ${brl.format(r.receiveAmount)}`;
 }
 function patientCost(p){return Number(p.cost||0)+Number(p.lab||0)+Number(p.components||0)+Number(p.clinical||0);}
@@ -2170,7 +2180,9 @@ function saveOrcamentoAsPatient(){
     notes,
     observation:notes,
     practicedValue:moneyRound(settled.practiced||0),
-    billingSnap:billingForClinic(clinicId),
+    billingSnap:window.ChevalierBilling?.snapshotSettlement
+      ? ChevalierBilling.snapshotSettlement(settled)
+      : {rule:billingForClinic(clinicId),receivable:settled.receivable,netShare:settled.netShare},
     consumedItems:bom.items
   };
   if(editId) state.patients=state.patients.map(x=>x.id===editId?{...x,...obj}:x);
@@ -3573,6 +3585,25 @@ function openClinicModal(editId=''){
 }
 function collectClinicBillingFromForm(){
   const shareMode=getv('bShareMode')||'procedure';
+  const feeSchedule=[...document.querySelectorAll('.b-fee-row')].map(row=>({
+    method:row.dataset.method,
+    feePercent:Number(row.querySelector('.b-fee-pct')?.value||0),
+    feeFixed:Number(row.querySelector('.b-fee-fixed')?.value||0),
+    feeBase:row.querySelector('.b-fee-base')?.value||'share',
+    paidBy:row.querySelector('.b-fee-who')?.value||'doctor',
+    installmentsMin:Number(row.querySelector('.b-fee-imin')?.value||1),
+    installmentsMax:Number(row.querySelector('.b-fee-imax')?.value||12)
+  }));
+  const procedureRules=[...document.querySelectorAll('.b-proc-rule')].map(row=>({
+    id:row.dataset.ruleId||uid(),
+    procedureId:row.querySelector('.b-proc-id')?.value||'',
+    shareMode:row.querySelector('.b-proc-mode')?.value||'',
+    professionalPercent:Number(row.querySelector('.b-proc-pct')?.value||0),
+    fixedAmount:Number(row.querySelector('.b-proc-fixed')?.value||0),
+    validFrom:row.querySelector('.b-proc-from')?.value||'',
+    validTo:row.querySelector('.b-proc-to')?.value||'',
+    notes:row.querySelector('.b-proc-notes')?.value||''
+  })).filter(r=>r.procedureId);
   return window.ChevalierBilling.normalizeBilling({
     shareMode,
     professionalPercent:num('bProPercent'),
@@ -3580,6 +3611,7 @@ function collectClinicBillingFromForm(){
     cardFeeEnabled:document.getElementById('bCardOn')?.checked||false,
     cardFeePercent:num('bCardPct'),
     cardFeeOn:getv('bCardOnWhat')||'share',
+    cardFeePaidBy:getv('bCardWho')||'doctor',
     materialsPaidBy:getv('bMatWho')||'doctor',
     reimburseComponents:document.getElementById('bReimbComp')?.checked||false,
     reimburseMaterials:document.getElementById('bReimbMat')?.checked||false,
@@ -3589,40 +3621,175 @@ function collectClinicBillingFromForm(){
     examplePracticed:num('bExPracticed')||3000,
     exampleComponents:num('bExComp')||0,
     exampleMaterials:num('bExMat')||0,
-    exampleLab:num('bExLab')||0
+    exampleLab:num('bExLab')||0,
+    feeSchedule,
+    procedureRules,
+    payout:{
+      mode:getv('bPayoutMode')||'after_days',
+      daysAfter:num('bPayoutDays'),
+      fixedDay:num('bPayoutDay')||10,
+      notes:getv('bPayoutNotes')
+    }
   });
 }
+function setClinicBillingTab(tab){
+  const t=['padrao','procedimentos','taxas','simulador','repasse'].includes(tab)?tab:'padrao';
+  document.querySelectorAll('.bill-tab').forEach(b=>b.classList.toggle('active',b.dataset.billTab===t));
+  document.querySelectorAll('.bill-pane').forEach(p=>p.hidden=p.dataset.billPane!==t);
+  if(t==='simulador') refreshClinicBillingSimulator();
+  else refreshClinicBillingPreview();
+}
+window.setClinicBillingTab=setClinicBillingTab;
+
+function feeScheduleRowsHtml(billing){
+  const methods=window.ChevalierBilling?.PAYMENT_METHODS||[];
+  const schedule=billing.feeSchedule||[];
+  return methods.map(m=>{
+    const row=schedule.find(f=>f.method===m.id)||{feePercent:0,feeFixed:0,feeBase:'share',paidBy:'doctor',installmentsMin:2,installmentsMax:12};
+    const isInst=m.id==='credit_installments';
+    return `<div class="b-fee-row" data-method="${esc(m.id)}">
+      <div class="b-fee-name"><strong>${esc(m.label)}</strong></div>
+      <div class="field"><label>%</label><input class="input b-fee-pct" type="number" min="0" max="100" step="0.01" value="${row.feePercent||0}" oninput="refreshClinicBillingPreview()"></div>
+      <div class="field"><label>Fixo R$</label><input class="input b-fee-fixed" type="number" min="0" step="0.01" value="${row.feeFixed||0}" oninput="refreshClinicBillingPreview()"></div>
+      <div class="field"><label>Base</label>
+        <select class="select b-fee-base" onchange="refreshClinicBillingPreview()">
+          <option value="share" ${row.feeBase!=='practiced'?'selected':''}>Honorário</option>
+          <option value="practiced" ${row.feeBase==='practiced'?'selected':''}>Praticado</option>
+        </select>
+      </div>
+      <div class="field"><label>Quem paga</label>
+        <select class="select b-fee-who" onchange="refreshClinicBillingPreview()">
+          <option value="doctor" ${row.paidBy!=='clinic'&&row.paidBy!=='split'?'selected':''}>Profissional</option>
+          <option value="clinic" ${row.paidBy==='clinic'?'selected':''}>Clínica</option>
+          <option value="split" ${row.paidBy==='split'?'selected':''}>Rateado 50/50</option>
+        </select>
+      </div>
+      ${isInst?`<div class="field"><label>Parcelas de</label><input class="input b-fee-imin" type="number" min="1" value="${row.installmentsMin||2}" oninput="refreshClinicBillingPreview()"></div>
+      <div class="field"><label>até</label><input class="input b-fee-imax" type="number" min="1" value="${row.installmentsMax||12}" oninput="refreshClinicBillingPreview()"></div>`:
+      `<input type="hidden" class="b-fee-imin" value="1"><input type="hidden" class="b-fee-imax" value="1">`}
+    </div>`;
+  }).join('');
+}
+function procedureRuleRowHtml(rule={},procs){
+  const r=window.ChevalierBilling.normalizeProcedureRule(rule);
+  const opts=(procs||state.procedures||[]).map(p=>`<option value="${esc(p.id)}" ${p.id===r.procedureId?'selected':''}>${esc(p.name)}</option>`).join('');
+  return `<div class="b-proc-rule" data-rule-id="${esc(r.id||uid())}">
+    <div class="form-grid">
+      <div class="field full"><label>Procedimento</label><select class="select b-proc-id" onchange="refreshClinicBillingPreview()"><option value="">Selecione…</option>${opts}</select></div>
+      <div class="field"><label>Modelo</label>
+        <select class="select b-proc-mode" onchange="refreshClinicBillingPreview()">
+          <option value="percent" ${r.shareMode==='percent'?'selected':''}>Percentual</option>
+          <option value="fixed" ${r.shareMode==='fixed'?'selected':''}>Fixo</option>
+          <option value="mixed" ${r.shareMode==='mixed'?'selected':''}>Fixo + %</option>
+          <option value="procedure" ${!r.shareMode||r.shareMode==='procedure'?'selected':''}>Herdar / ficha</option>
+        </select>
+      </div>
+      <div class="field"><label>% </label><input class="input b-proc-pct" type="number" min="0" max="100" step="0.01" value="${r.professionalPercent??50}" oninput="refreshClinicBillingPreview()"></div>
+      <div class="field"><label>Fixo R$</label><input class="input b-proc-fixed" type="number" min="0" step="0.01" value="${r.fixedAmount??0}" oninput="refreshClinicBillingPreview()"></div>
+      <div class="field"><label>Vigência de</label><input class="input b-proc-from" type="date" value="${esc(r.validFrom||'')}" onchange="refreshClinicBillingPreview()"></div>
+      <div class="field"><label>até</label><input class="input b-proc-to" type="date" value="${esc(r.validTo||'')}" onchange="refreshClinicBillingPreview()"></div>
+      <div class="field full"><label>Observação</label><input class="input b-proc-notes" value="${esc(r.notes||'')}" placeholder="Opcional"></div>
+    </div>
+    <div class="row-actions"><button type="button" class="btn small danger" onclick="this.closest('.b-proc-rule').remove();refreshClinicBillingPreview()">Remover regra</button></div>
+  </div>`;
+}
+function addClinicProcedureRule(){
+  const box=document.getElementById('bProcRules');
+  if(!box) return;
+  if(box.querySelector('.empty')) box.innerHTML='';
+  box.insertAdjacentHTML('beforeend', procedureRuleRowHtml({}, state.procedures));
+}
+window.addClinicProcedureRule=addClinicProcedureRule;
+
 function refreshClinicBillingPreview(){
   if(!window.ChevalierBilling) return;
+  toggleClinicBillingFields();
   const billing=collectClinicBillingFromForm();
-  const name=getv('cNamePreview')||document.getElementById('bClinicTitle')?.textContent||'Clínica';
+  const name=getv('cNamePreview')||'Clínica';
   const summary=ChevalierBilling.humanSummary(billing,name);
   const box=document.getElementById('bPreview');
   if(box){
+    const steps=(summary.settlement.calcSteps||[]).map(s=>`<li><span>${esc(s.label)}</span><strong>${brl.format(s.amount)}</strong></li>`).join('');
     box.innerHTML=`
       <div class="bill-preview-head">Como o algoritmo entende</div>
       <ul class="bill-preview-list">${summary.bullets.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
       <p class="bill-example">${esc(summary.example)}</p>
+      <p class="field-hint">Repasse: ${esc(ChevalierBilling.payoutLabel(billing))}</p>
       <div class="bill-preview-math">
-        <div><small>Sua parte bruta</small><strong>${brl.format(summary.settlement.grossShare)}</strong></div>
-        <div><small>Taxa cartão</small><strong>− ${brl.format(summary.settlement.cardFee)}</strong></div>
+        <div><small>Honorário bruto</small><strong>${brl.format(summary.settlement.grossShare)}</strong></div>
+        <div><small>Taxa</small><strong>− ${brl.format(summary.settlement.cardFee)}</strong></div>
         <div><small>Reembolso</small><strong>+ ${brl.format(summary.settlement.reimbursement)}</strong></div>
-        <div><small>Você recebe</small><strong>${brl.format(summary.settlement.receivable)}</strong></div>
-      </div>`;
+        <div><small>Total a receber</small><strong>${brl.format(summary.settlement.receivable)}</strong></div>
+      </div>
+      <div class="bill-section-title">Memória de cálculo</div>
+      <ul class="bill-calc-steps">${steps}</ul>`;
   }
   const sumEl=document.getElementById('bAiSummary');
   if(sumEl && !sumEl.dataset.locked) sumEl.value=billing.aiSummary||ChevalierBilling.formulaLines(billing).join(' · ');
-  toggleClinicBillingFields();
+  const pane=document.querySelector('.bill-pane:not([hidden])')?.dataset.billPane;
+  if(pane==='simulador') refreshClinicBillingSimulator();
 }
+function refreshClinicBillingSimulator(){
+  if(!window.ChevalierBilling) return;
+  toggleClinicBillingFields();
+  const billing=collectClinicBillingFromForm();
+  const clinicId=window.__billingClinicId||'';
+  const procId=getv('bSimProc');
+  const qty=Math.max(1, num('bSimQty')||1);
+  const unitInput=num('bSimPracticed');
+  const row=procId?clinicPriceFor(procId, clinicId):null;
+  const unitPracticed=unitInput>0?unitInput:Number(row?.practicedValue||billing.examplePracticed||0);
+  const practicedFinal=moneyRound(unitPracticed*qty);
+  let baseShare;
+  if(procId && row){
+    baseShare=moneyRound(honorariumFromPrice({...row, practicedValue:unitPracticed})*qty);
+  }else if(billing.shareMode==='procedure'){
+    baseShare=moneyRound(practicedFinal*((billing.professionalPercent||50)/100));
+  }
+  const settled=ChevalierBilling.settleCase({
+    practiced:practicedFinal,
+    baseShare,
+    components:num('bSimComp'),
+    materials:num('bSimMat'),
+    lab:num('bSimLab'),
+    procedureId:procId,
+    paymentMethod:getv('bSimPay')||'',
+    installments:num('bSimInst')||1,
+    asOf:todayISO()
+  }, billing);
+  const box=document.getElementById('bSimResult');
+  if(!box) return;
+  box.innerHTML=`
+    <div class="bill-preview-math">
+      <div><small>Praticado</small><strong>${brl.format(settled.practiced)}</strong></div>
+      <div><small>Honorário bruto</small><strong>${brl.format(settled.honorariumGross)}</strong></div>
+      <div><small>Honorário líquido</small><strong>${brl.format(settled.honorariumNet)}</strong></div>
+      <div><small>Reembolso</small><strong>${brl.format(settled.reimbursement)}</strong></div>
+      <div><small>Total a receber</small><strong>${brl.format(settled.receivable)}</strong></div>
+      <div><small>Resultado operacional</small><strong>${brl.format(settled.profit)}</strong></div>
+    </div>
+    <p class="field-hint">Fonte da regra: ${esc(settled.ruleSource)} · simulação não altera lançamentos reais.</p>
+    <ul class="bill-calc-steps">${(settled.calcSteps||[]).map(s=>`<li><span>${esc(s.label)}</span><strong>${brl.format(s.amount)}</strong></li>`).join('')}</ul>`;
+}
+window.refreshClinicBillingSimulator=refreshClinicBillingSimulator;
+
 function toggleClinicBillingFields(){
   const mode=getv('bShareMode');
   const pct=document.getElementById('bWrapPercent');
   const fix=document.getElementById('bWrapFixed');
-  if(pct) pct.hidden=mode!=='percent';
-  if(fix) fix.hidden=mode!=='fixed';
+  if(pct) pct.hidden=!(mode==='percent'||mode==='mixed');
+  if(fix) fix.hidden=!(mode==='fixed'||mode==='mixed');
   const cardOn=document.getElementById('bCardOn')?.checked;
   const cardFields=document.getElementById('bCardFields');
   if(cardFields) cardFields.hidden=!cardOn;
+  const payoutMode=getv('bPayoutMode');
+  const days=document.getElementById('bWrapPayoutDays');
+  const day=document.getElementById('bWrapPayoutDay');
+  if(days) days.hidden=payoutMode!=='after_days';
+  if(day) day.hidden=payoutMode!=='fixed_day';
+  const pay=getv('bSimPay');
+  const inst=document.getElementById('bWrapSimInst');
+  if(inst) inst.hidden=pay!=='credit_installments';
 }
 function applyBillingToForm(billing){
   const b=window.ChevalierBilling.normalizeBilling(billing);
@@ -3634,6 +3801,7 @@ function applyBillingToForm(billing){
   check('bCardOn',b.cardFeeEnabled);
   set('bCardPct',b.cardFeePercent);
   set('bCardOnWhat',b.cardFeeOn);
+  set('bCardWho',b.cardFeePaidBy||'doctor');
   set('bMatWho',b.materialsPaidBy);
   check('bReimbComp',b.reimburseComponents);
   check('bReimbMat',b.reimburseMaterials);
@@ -3644,6 +3812,18 @@ function applyBillingToForm(billing){
   set('bExComp',b.exampleComponents);
   set('bExMat',b.exampleMaterials);
   set('bExLab',b.exampleLab);
+  set('bPayoutMode',b.payout?.mode||'after_days');
+  set('bPayoutDays',b.payout?.daysAfter??30);
+  set('bPayoutDay',b.payout?.fixedDay??10);
+  set('bPayoutNotes',b.payout?.notes||'');
+  const feeBox=document.getElementById('bFeeSchedule');
+  if(feeBox) feeBox.innerHTML=feeScheduleRowsHtml(b);
+  const procBox=document.getElementById('bProcRules');
+  if(procBox){
+    procBox.innerHTML=(b.procedureRules||[]).length
+      ? b.procedureRules.map(r=>procedureRuleRowHtml(r, state.procedures)).join('')
+      : '<div class="empty">Nenhuma regra específica. O padrão da clínica vale para todos.</div>';
+  }
   refreshClinicBillingPreview();
 }
 function openClinicBillingModal(clinicId){
@@ -3651,81 +3831,157 @@ function openClinicBillingModal(clinicId){
   if(!c) return toast('Clínica não encontrada.');
   ensureClinicBilling();
   const billing=billingForClinic(clinicId);
-  openModal(`Cobrança · ${c.name}`,`
+  window.__billingClinicId=clinicId;
+  const procOpts=state.procedures.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+  const payOpts=(window.ChevalierBilling?.PAYMENT_METHODS||[]).map(m=>`<option value="${esc(m.id)}">${esc(m.label)}</option>`).join('');
+  openModal(`Configurações financeiras · ${c.name}`,`
     <input type="hidden" id="cNamePreview" value="${esc(c.name)}">
+    <div class="bill-tabs" role="tablist" aria-label="Configuração financeira">
+      <button type="button" class="bill-tab active" data-bill-tab="padrao" onclick="setClinicBillingTab('padrao')">Padrão</button>
+      <button type="button" class="bill-tab" data-bill-tab="procedimentos" onclick="setClinicBillingTab('procedimentos')">Por procedimento</button>
+      <button type="button" class="bill-tab" data-bill-tab="taxas" onclick="setClinicBillingTab('taxas')">Formas de pagamento</button>
+      <button type="button" class="bill-tab" data-bill-tab="simulador" onclick="setClinicBillingTab('simulador')">Simulador</button>
+      <button type="button" class="bill-tab" data-bill-tab="repasse" onclick="setClinicBillingTab('repasse')">Repasse</button>
+    </div>
     <div class="bill-layout">
       <div class="bill-config">
-        <p class="field-hint" id="bClinicTitle">Configure o modelo desta clínica. O mesmo algoritmo alimenta orçamento, prestação e custos.</p>
+        <p class="field-hint" id="bClinicTitle">Gestão → Clínicas → configurações financeiras. Precedência: exceção do atendimento → regra do procedimento → padrão da clínica.</p>
 
-        <div class="field full"><label>Descreva a regra (texto livre)</label>
-          <textarea id="bNotes" class="textarea" rows="3" placeholder="Ex.: Implante R$ 3.000 — 50% pra mim, desconta 10% de cartão dessa parte; a clínica me reembolsa os componentes.">${esc(billing.notes||'')}</textarea>
-          <div class="row-actions" style="margin-top:8px">
-            <button type="button" class="btn small primary" onclick="interpretClinicBillingAi()">✦ Interpretar com IA</button>
-            <button type="button" class="btn small" onclick="applyClinicBillingPreset('gerlucia')">Preset Gerlúcia</button>
-            <button type="button" class="btn small" onclick="applyClinicBillingPreset('closed')">Por procedimento</button>
-            <button type="button" class="btn small" onclick="applyClinicBillingPreset('particular')">Particular 100%</button>
+        <div class="bill-pane" data-bill-pane="padrao">
+          <div class="field full"><label>Descreva a regra (texto livre)</label>
+            <textarea id="bNotes" class="textarea" rows="3" placeholder="Ex.: 50% pra mim, desconta 10% de cartão dessa parte; a clínica me reembolsa os componentes.">${esc(billing.notes||'')}</textarea>
+            <div class="row-actions" style="margin-top:8px">
+              <button type="button" class="btn small primary" onclick="interpretClinicBillingAi()">✦ Interpretar com IA</button>
+              <button type="button" class="btn small" onclick="applyClinicBillingPreset('gerlucia')">Preset Gerlúcia</button>
+              <button type="button" class="btn small" onclick="applyClinicBillingPreset('closed')">Por procedimento</button>
+              <button type="button" class="btn small" onclick="applyClinicBillingPreset('particular')">Particular 100%</button>
+              <button type="button" class="btn small" onclick="applyClinicBillingPreset('mixed')">Fixo + %</button>
+            </div>
+          </div>
+          <div class="bill-section-title">Como você divide o valor</div>
+          <div class="form-grid">
+            <div class="field full"><label>Base do honorário</label>
+              <select id="bShareMode" class="select" onchange="refreshClinicBillingPreview()">
+                <option value="procedure" ${billing.shareMode==='procedure'?'selected':''}>Conforme cada procedimento (ficha)</option>
+                <option value="percent" ${billing.shareMode==='percent'?'selected':''}>Porcentagem do valor praticado</option>
+                <option value="fixed" ${billing.shareMode==='fixed'?'selected':''}>Valor fechado</option>
+                <option value="mixed" ${billing.shareMode==='mixed'?'selected':''}>Fixo + percentual</option>
+              </select>
+            </div>
+            <div class="field" id="bWrapPercent" ${billing.shareMode!=='percent'&&billing.shareMode!=='mixed'?'hidden':''}><label>% que você recebe</label><input id="bProPercent" type="number" min="0" max="100" step="0.01" class="input" value="${billing.professionalPercent}" oninput="refreshClinicBillingPreview()"></div>
+            <div class="field" id="bWrapFixed" ${billing.shareMode!=='fixed'&&billing.shareMode!=='mixed'?'hidden':''}><label>Valor fixo (R$)</label><input id="bFixed" type="number" min="0" step="0.01" class="input" value="${billing.fixedAmount}" oninput="refreshClinicBillingPreview()"></div>
+          </div>
+          <div class="bill-section-title">Taxa de cartão (legado / fallback)</div>
+          <label class="check-row"><input type="checkbox" id="bCardOn" ${billing.cardFeeEnabled?'checked':''} onchange="refreshClinicBillingPreview()"> Usar taxa legado quando a forma de pagamento for cartão</label>
+          <div class="form-grid" id="bCardFields" ${billing.cardFeeEnabled?'':'hidden'}>
+            <div class="field"><label>% da taxa</label><input id="bCardPct" type="number" min="0" max="100" step="0.01" class="input" value="${billing.cardFeePercent}" oninput="refreshClinicBillingPreview()"></div>
+            <div class="field"><label>Incide sobre</label>
+              <select id="bCardOnWhat" class="select" onchange="refreshClinicBillingPreview()">
+                <option value="share" ${billing.cardFeeOn!=='practiced'?'selected':''}>Sua parte</option>
+                <option value="practiced" ${billing.cardFeeOn==='practiced'?'selected':''}>Valor praticado</option>
+              </select>
+            </div>
+            <div class="field"><label>Quem suporta</label>
+              <select id="bCardWho" class="select" onchange="refreshClinicBillingPreview()">
+                <option value="doctor" ${(billing.cardFeePaidBy||'doctor')==='doctor'?'selected':''}>Profissional</option>
+                <option value="clinic" ${billing.cardFeePaidBy==='clinic'?'selected':''}>Clínica</option>
+                <option value="split" ${billing.cardFeePaidBy==='split'?'selected':''}>Rateado</option>
+              </select>
+            </div>
+          </div>
+          <div class="bill-section-title">Materiais e reembolsos</div>
+          <div class="form-grid">
+            <div class="field full"><label>Quem arca com o material</label>
+              <select id="bMatWho" class="select" onchange="refreshClinicBillingPreview()">
+                <option value="doctor" ${billing.materialsPaidBy!=='clinic'?'selected':''}>Você (profissional)</option>
+                <option value="clinic" ${billing.materialsPaidBy==='clinic'?'selected':''}>A clínica</option>
+              </select>
+            </div>
+          </div>
+          <label class="check-row"><input type="checkbox" id="bReimbComp" ${billing.reimburseComponents?'checked':''} onchange="refreshClinicBillingPreview()"> Reembolso de componentes</label>
+          <label class="check-row"><input type="checkbox" id="bReimbMat" ${billing.reimburseMaterials?'checked':''} onchange="refreshClinicBillingPreview()"> Reembolso de materiais</label>
+          <label class="check-row"><input type="checkbox" id="bReimbLab" ${billing.reimburseLab?'checked':''} onchange="refreshClinicBillingPreview()"> Reembolso de laboratório</label>
+          <div class="field full" style="margin-top:12px"><label>Resumo curto (card da clínica)</label><input id="bAiSummary" class="input" value="${esc(billing.aiSummary||'')}"></div>
+        </div>
+
+        <div class="bill-pane" data-bill-pane="procedimentos" hidden>
+          <p class="field-hint">Regras específicas por procedimento, com vigência opcional. Não alteram lançamentos já gravados.</p>
+          <div id="bProcRules">${(billing.procedureRules||[]).length?billing.procedureRules.map(r=>procedureRuleRowHtml(r,state.procedures)).join(''):'<div class="empty">Nenhuma regra específica.</div>'}</div>
+          <div class="row-actions" style="margin-top:10px"><button type="button" class="btn small" onclick="addClinicProcedureRule()">＋ Regra por procedimento</button></div>
+        </div>
+
+        <div class="bill-pane" data-bill-pane="taxas" hidden>
+          <p class="field-hint">Pix, dinheiro e transferência não herdam taxa de cartão. Configure % / fixo por método.</p>
+          <div id="bFeeSchedule" class="b-fee-list">${feeScheduleRowsHtml(billing)}</div>
+        </div>
+
+        <div class="bill-pane" data-bill-pane="simulador" hidden>
+          <p class="field-hint">Teste a configuração sem gravar dados financeiros.</p>
+          <div class="form-grid">
+            <div class="field full"><label>Procedimento (opcional)</label><select id="bSimProc" class="select" onchange="refreshClinicBillingSimulator()"><option value="">— genérico —</option>${procOpts}</select></div>
+            <div class="field"><label>Valor praticado (un.)</label><input id="bSimPracticed" type="number" class="input" value="${billing.examplePracticed||3000}" oninput="refreshClinicBillingSimulator()"></div>
+            <div class="field"><label>Quantidade</label><input id="bSimQty" type="number" min="1" class="input" value="1" oninput="refreshClinicBillingSimulator()"></div>
+            <div class="field"><label>Forma de pagamento</label><select id="bSimPay" class="select" onchange="refreshClinicBillingSimulator()"><option value="">(legado / sem método)</option>${payOpts}</select></div>
+            <div class="field" id="bWrapSimInst" hidden><label>Parcelas</label><input id="bSimInst" type="number" min="1" class="input" value="2" oninput="refreshClinicBillingSimulator()"></div>
+            <div class="field"><label>Componentes</label><input id="bSimComp" type="number" class="input" value="${billing.exampleComponents||0}" oninput="refreshClinicBillingSimulator()"></div>
+            <div class="field"><label>Materiais</label><input id="bSimMat" type="number" class="input" value="${billing.exampleMaterials||0}" oninput="refreshClinicBillingSimulator()"></div>
+            <div class="field"><label>Laboratório</label><input id="bSimLab" type="number" class="input" value="${billing.exampleLab||0}" oninput="refreshClinicBillingSimulator()"></div>
+          </div>
+          <!-- campos de exemplo legado (usados no preview padrão) -->
+          <input type="hidden" id="bExPracticed" value="${billing.examplePracticed||3000}">
+          <input type="hidden" id="bExComp" value="${billing.exampleComponents||0}">
+          <input type="hidden" id="bExMat" value="${billing.exampleMaterials||0}">
+          <input type="hidden" id="bExLab" value="${billing.exampleLab||0}">
+          <div id="bSimResult" class="bill-sim-result"></div>
+        </div>
+
+        <div class="bill-pane" data-bill-pane="repasse" hidden>
+          <p class="field-hint">Prazo de fechamento desta clínica. Demonstrativos por período entram na Fase 3.</p>
+          <div class="form-grid">
+            <div class="field full"><label>Periodicidade</label>
+              <select id="bPayoutMode" class="select" onchange="refreshClinicBillingPreview()">
+                <option value="after_days" ${(billing.payout?.mode||'after_days')==='after_days'?'selected':''}>Dias após o procedimento</option>
+                <option value="weekly" ${billing.payout?.mode==='weekly'?'selected':''}>Semanal</option>
+                <option value="biweekly" ${billing.payout?.mode==='biweekly'?'selected':''}>Quinzenal</option>
+                <option value="monthly" ${billing.payout?.mode==='monthly'?'selected':''}>Mensal</option>
+                <option value="fixed_day" ${billing.payout?.mode==='fixed_day'?'selected':''}>Dia fixo do mês</option>
+                <option value="custom" ${billing.payout?.mode==='custom'?'selected':''}>Personalizado</option>
+              </select>
+            </div>
+            <div class="field" id="bWrapPayoutDays"><label>Dias após</label><input id="bPayoutDays" type="number" min="0" class="input" value="${billing.payout?.daysAfter??30}" oninput="refreshClinicBillingPreview()"></div>
+            <div class="field" id="bWrapPayoutDay" hidden><label>Dia fixo</label><input id="bPayoutDay" type="number" min="1" max="28" class="input" value="${billing.payout?.fixedDay??10}" oninput="refreshClinicBillingPreview()"></div>
+            <div class="field full"><label>Observações do repasse</label><textarea id="bPayoutNotes" class="textarea" rows="2">${esc(billing.payout?.notes||'')}</textarea></div>
           </div>
         </div>
-
-        <div class="bill-section-title">1. Como você divide o valor</div>
-        <div class="form-grid">
-          <div class="field full"><label>Base do honorário</label>
-            <select id="bShareMode" class="select" onchange="refreshClinicBillingPreview()">
-              <option value="procedure" ${billing.shareMode==='procedure'?'selected':''}>Conforme cada procedimento (ficha)</option>
-              <option value="percent" ${billing.shareMode==='percent'?'selected':''}>Porcentagem fixa do valor praticado</option>
-              <option value="fixed" ${billing.shareMode==='fixed'?'selected':''}>Valor fechado (mesmo em todos)</option>
-            </select>
-          </div>
-          <div class="field" id="bWrapPercent" ${billing.shareMode!=='percent'?'hidden':''}><label>% que você recebe</label><input id="bProPercent" type="number" min="0" max="100" step="0.01" class="input" value="${billing.professionalPercent}" oninput="refreshClinicBillingPreview()"></div>
-          <div class="field" id="bWrapFixed" ${billing.shareMode!=='fixed'?'hidden':''}><label>Valor fechado (R$)</label><input id="bFixed" type="number" min="0" step="0.01" class="input" value="${billing.fixedAmount}" oninput="refreshClinicBillingPreview()"></div>
-        </div>
-
-        <div class="bill-section-title">2. Taxa de cartão de crédito</div>
-        <label class="check-row"><input type="checkbox" id="bCardOn" ${billing.cardFeeEnabled?'checked':''} onchange="refreshClinicBillingPreview()"> Desconta taxa de cartão</label>
-        <div class="form-grid" id="bCardFields" ${billing.cardFeeEnabled?'':'hidden'}>
-          <div class="field"><label>% da taxa</label><input id="bCardPct" type="number" min="0" max="100" step="0.01" class="input" value="${billing.cardFeePercent}" oninput="refreshClinicBillingPreview()"></div>
-          <div class="field"><label>Incide sobre</label>
-            <select id="bCardOnWhat" class="select" onchange="refreshClinicBillingPreview()">
-              <option value="share" ${billing.cardFeeOn!=='practiced'?'selected':''}>Sua parte (recomendado)</option>
-              <option value="practiced" ${billing.cardFeeOn==='practiced'?'selected':''}>Valor praticado total</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="bill-section-title">3. Materiais e componentes</div>
-        <div class="form-grid">
-          <div class="field full"><label>Quem arca com o material</label>
-            <select id="bMatWho" class="select" onchange="refreshClinicBillingPreview()">
-              <option value="doctor" ${billing.materialsPaidBy!=='clinic'?'selected':''}>Você (profissional)</option>
-              <option value="clinic" ${billing.materialsPaidBy==='clinic'?'selected':''}>A clínica</option>
-            </select>
-          </div>
-        </div>
-        <label class="check-row"><input type="checkbox" id="bReimbComp" ${billing.reimburseComponents?'checked':''} onchange="refreshClinicBillingPreview()"> Clínica reembolsa componentes do implante</label>
-        <label class="check-row"><input type="checkbox" id="bReimbMat" ${billing.reimburseMaterials?'checked':''} onchange="refreshClinicBillingPreview()"> Clínica reembolsa materiais / biomaterial</label>
-        <label class="check-row"><input type="checkbox" id="bReimbLab" ${billing.reimburseLab?'checked':''} onchange="refreshClinicBillingPreview()"> Clínica reembolsa laboratório</label>
-
-        <div class="bill-section-title">4. Exemplo didático (simulação)</div>
-        <div class="form-grid">
-          <div class="field"><label>Valor praticado</label><input id="bExPracticed" type="number" class="input" value="${billing.examplePracticed}" oninput="refreshClinicBillingPreview()"></div>
-          <div class="field"><label>Componentes</label><input id="bExComp" type="number" class="input" value="${billing.exampleComponents}" oninput="refreshClinicBillingPreview()"></div>
-          <div class="field"><label>Materiais</label><input id="bExMat" type="number" class="input" value="${billing.exampleMaterials}" oninput="refreshClinicBillingPreview()"></div>
-          <div class="field"><label>Laboratório</label><input id="bExLab" type="number" class="input" value="${billing.exampleLab}" oninput="refreshClinicBillingPreview()"></div>
-        </div>
-        <div class="field full"><label>Resumo curto (salvo no card)</label><input id="bAiSummary" class="input" value="${esc(billing.aiSummary||'')}"></div>
       </div>
       <aside class="bill-preview" id="bPreview"></aside>
     </div>
   `,()=>{
     const next=collectClinicBillingFromForm();
+    // sincroniza exemplos do simulador se preenchidos
+    if(num('bSimPracticed')>0) next.examplePracticed=num('bSimPracticed');
+    next.exampleComponents=num('bSimComp');
+    next.exampleMaterials=num('bSimMat');
+    next.exampleLab=num('bSimLab');
     next.aiSummary=getv('bAiSummary')||next.aiSummary;
     state.clinics=state.clinics.map(x=>{
       if(x.id!==clinicId) return x;
       return {...x, billing:next, rule:next.aiSummary||next.notes||x.rule};
     });
-    save();closeModal();renderAll();toast('Modelo de cobrança salvo.');
+    save();closeModal();renderAll();toast('Configurações financeiras salvas.');
   });
   document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  // sync example hidden fields when editing default tab numbers — keep bEx* for humanSummary
+  const syncEx=()=>{
+    const map=[['bExPracticed','bSimPracticed'],['bExComp','bSimComp'],['bExMat','bSimMat'],['bExLab','bSimLab']];
+    map.forEach(([a,b])=>{
+      const from=document.getElementById(b), to=document.getElementById(a);
+      if(from&&to&&from.value) to.value=from.value;
+    });
+  };
+  ['bSimPracticed','bSimComp','bSimMat','bSimLab'].forEach(id=>{
+    document.getElementById(id)?.addEventListener('input',()=>{syncEx();});
+  });
   refreshClinicBillingPreview();
 }
 function applyClinicBillingPreset(key){
@@ -3769,15 +4025,19 @@ async function interpretClinicBillingAi(){
 function clinicPriceRow(row={},fallbackPrice=0){
   const r=normalizeClinicPrice(row,fallbackPrice);
   const c=clinic(r.clinicId);
-  const isPercent=r.receiveMode==='percent';
+  const mode=r.receiveMode;
   const receive=honorariumFromPrice(r);
   return `<div class="clinic-price-row" data-clinic-id="${esc(r.clinicId)}">
     <div class="clinic-price-head"><span class="clinic-logo mini">${esc(c.color||'??')}</span><div><strong>${esc(c.name)}</strong><small>${esc(c.type||'')}</small></div></div>
     <div class="clinic-price-grid">
       <div class="field"><label>Valor praticado na clínica</label><input class="input cp-practiced" type="number" step="0.01" min="0" value="${r.practicedValue||''}" oninput="refreshClinicPriceRow(this)"></div>
-      <div class="field"><label>Como eu recebo</label><select class="select cp-mode" onchange="toggleClinicPriceMode(this)"><option value="fixed" ${!isPercent?'selected':''}>Valor fechado (integral)</option><option value="percent" ${isPercent?'selected':''}>Porcentagem</option></select></div>
-      <div class="field cp-fixed-wrap" ${isPercent?'hidden':''}><label>Valor fechado que eu recebo</label><input class="input cp-amount" type="number" step="0.01" min="0" value="${r.receiveAmount||''}" oninput="refreshClinicPriceRow(this)"></div>
-      <div class="field cp-percent-wrap" ${isPercent?'':'hidden'}><label>% que eu recebo</label><input class="input cp-percent" type="number" step="0.01" min="0" max="100" value="${r.receivePercent||''}" oninput="refreshClinicPriceRow(this)"></div>
+      <div class="field"><label>Como eu recebo</label><select class="select cp-mode" onchange="toggleClinicPriceMode(this)">
+        <option value="fixed" ${mode==='fixed'?'selected':''}>Valor fechado</option>
+        <option value="percent" ${mode==='percent'?'selected':''}>Porcentagem</option>
+        <option value="mixed" ${mode==='mixed'?'selected':''}>Fixo + %</option>
+      </select></div>
+      <div class="field cp-fixed-wrap" ${mode==='percent'?'hidden':''}><label>Valor fixo que eu recebo</label><input class="input cp-amount" type="number" step="0.01" min="0" value="${r.receiveAmount||''}" oninput="refreshClinicPriceRow(this)"></div>
+      <div class="field cp-percent-wrap" ${mode==='fixed'?'hidden':''}><label>% que eu recebo</label><input class="input cp-percent" type="number" step="0.01" min="0" max="100" value="${r.receivePercent||''}" oninput="refreshClinicPriceRow(this)"></div>
     </div>
     <small class="cp-preview">Você recebe: <strong>${brl.format(receive)}</strong></small>
   </div>`;
@@ -3785,9 +4045,9 @@ function clinicPriceRow(row={},fallbackPrice=0){
 function toggleClinicPriceMode(sel){
   const row=sel.closest('.clinic-price-row');
   if(!row)return;
-  const percent=sel.value==='percent';
-  row.querySelector('.cp-fixed-wrap').hidden=percent;
-  row.querySelector('.cp-percent-wrap').hidden=!percent;
+  const mode=sel.value;
+  row.querySelector('.cp-fixed-wrap').hidden=mode==='percent';
+  row.querySelector('.cp-percent-wrap').hidden=mode==='fixed';
   refreshClinicPriceRow(sel);
 }
 function refreshClinicPriceRow(el){
@@ -3805,13 +4065,16 @@ function refreshClinicPriceRow(el){
   preview.innerHTML=`Você recebe: <strong>${brl.format(honorariumFromPrice(data))}</strong>`;
 }
 function collectClinicPrices(){
-  return [...document.querySelectorAll('.clinic-price-row')].map(row=>({
-    clinicId:row.dataset.clinicId,
-    practicedValue:Number(row.querySelector('.cp-practiced')?.value||0),
-    receiveMode:row.querySelector('.cp-mode')?.value==='percent'?'percent':'fixed',
-    receiveAmount:Number(row.querySelector('.cp-amount')?.value||0),
-    receivePercent:Number(row.querySelector('.cp-percent')?.value||0)
-  })).filter(x=>x.clinicId);
+  return [...document.querySelectorAll('.clinic-price-row')].map(row=>{
+    const mode=row.querySelector('.cp-mode')?.value||'fixed';
+    return {
+      clinicId:row.dataset.clinicId,
+      practicedValue:Number(row.querySelector('.cp-practiced')?.value||0),
+      receiveMode:['percent','mixed'].includes(mode)?mode:'fixed',
+      receiveAmount:Number(row.querySelector('.cp-amount')?.value||0),
+      receivePercent:Number(row.querySelector('.cp-percent')?.value||0)
+    };
+  }).filter(x=>x.clinicId);
 }
 function openProcedureModal(editId=''){
   const p=state.procedures.find(x=>x.id===editId)||{items:[],extra:0,price:0,clinicPrices:[],specialty:'clinica',kind:'clinico'};
@@ -3921,7 +4184,9 @@ function openReceivableModal(type=''){
       id:uid(),name:getv('rName'),origin:cl==='particular'?'Particular':'Prestação',clinicId:cl,
       procedureId:lines[0].procedureId,lines,date:todayISO(),value:num('rValue'),received:num('rReceived'),due:getv('rDue'),status:getv('rStatus'),
       cost:settled.costs.materials,lab:settled.costs.lab,components:settled.costs.components,clinical:0,progress:getv('rProgress')||'Em tratamento',consumedItems:bom.items,
-      billingSnap:{cardFee:settled.cardFee,reimbursement:settled.reimbursement,netShare:settled.netShare}
+      billingSnap:window.ChevalierBilling?.snapshotSettlement
+        ? ChevalierBilling.snapshotSettlement(settled)
+        : {cardFee:settled.cardFee,reimbursement:settled.reimbursement,netShare:settled.netShare,grossShare:settled.grossShare,receivable:settled.receivable,ruleSource:settled.ruleSource||'clinic'}
     });
     applyStockConsumption(bom.items,false);
     syncProductionFromPatient(state.patients[0]);
