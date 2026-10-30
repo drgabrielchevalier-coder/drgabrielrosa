@@ -265,6 +265,11 @@ function updateNotifBadge(){
   if(btn) btn.title=n?`Notificações (${n})`:'Notificações';
   if(btn) btn.dataset.count=String(n);
   btn?.classList.toggle('has-notif', n>0);
+  const side=document.getElementById('badgePendencias');
+  if(side){
+    side.textContent=String(n);
+    side.hidden=n<=0;
+  }
 }
 function collectNotifications(){
   const items=[];
@@ -272,7 +277,7 @@ function collectNotifications(){
     state.patients.filter(isOverdue).forEach(p=>items.push({
       title:`Cobrança vencida · ${p.name}`,
       sub:`${clinic(p.clinicId).name} · venceu ${fmtDate(p.due)} · ${brl.format(balance(p))}`,
-      go:'receber'
+      go:'prestacao'
     }));
   }
   if(getSetting('alertStock')){
@@ -3097,48 +3102,149 @@ function syncMobileNav(page){
   document.querySelectorAll('.mb-nav-btn[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===cur));
 }
 
+/** Módulos do sidebar (Fase 1). Só páginas/ações já existentes — sem botões ornamentais. */
 const NAV_GROUP_PAGES={
-  inicio:['dashboard','calendario','planejamento'],
-  cadastros:['pacientes','clinicas','procedimentos'],
-  atendimento:['orcamento','prestacao','particular'],
-  producao:['protese','trabalhos','entregas','timeline','consulta'],
-  financeiro:['recebiveis','custos','folha','relatorios'],
-  estoque:['materiais','estoque','banco'],
-  sistema:['config']
+  inicio:['dashboard'],
+  pacientes:['pacientes'],
+  agenda:['calendario','planejamento'],
+  tratamentos:['orcamento','planejamento','particular','prestacao'],
+  protese:['trabalhos','protese','entregas','timeline','consulta'],
+  financeiro:['relatorios','recebiveis','custos','prestacao','folha'],
+  materiais:['estoque','materiais','banco','procedimentos'],
+  gestao:['clinicas','relatorios','config']
+};
+const PAGE_META={
+  dashboard:{module:'Início',title:'Dashboard'},
+  pacientes:{module:'Pacientes',title:'Todos os pacientes'},
+  calendario:{module:'Agenda',title:'Agenda clínica'},
+  planejamento:{module:'Agenda',title:'Lembretes e planejamento'},
+  orcamento:{module:'Tratamentos',title:'Orçamentos'},
+  particular:{module:'Tratamentos',title:'Atendimentos particulares'},
+  prestacao:{module:'Tratamentos',title:'Prestação de serviços'},
+  trabalhos:{module:'Prótese',title:'Trabalhos'},
+  protese:{module:'Prótese',title:'Fluxo de produção'},
+  entregas:{module:'Prótese',title:'Entregas'},
+  timeline:{module:'Prótese',title:'Timeline'},
+  consulta:{module:'Prótese',title:'Consulta por código'},
+  recebiveis:{module:'Financeiro',title:'Recebíveis e baixas'},
+  custos:{module:'Financeiro',title:'Contas a pagar'},
+  folha:{module:'Financeiro',title:'Folha de pagamento'},
+  relatorios:{module:'Financeiro',title:'Visão financeira'},
+  materiais:{module:'Materiais',title:'Catálogo de materiais'},
+  estoque:{module:'Materiais',title:'Estoque'},
+  banco:{module:'Materiais',title:'Banco de custos'},
+  procedimentos:{module:'Materiais',title:'Procedimentos'},
+  clinicas:{module:'Gestão',title:'Clínicas parceiras'},
+  config:{module:'Gestão',title:'Configurações'}
+};
+const NAV_GROUP_LABELS={
+  inicio:'Início',pacientes:'Pacientes',agenda:'Agenda',tratamentos:'Tratamentos',
+  protese:'Prótese',financeiro:'Financeiro',materiais:'Materiais',gestao:'Gestão'
 };
 function loadNavGroupState(){
-  try{return JSON.parse(localStorage.getItem('chevalier_nav_groups')||'{}')||{}}catch(e){return {}}
+  try{return JSON.parse(localStorage.getItem('chevalier_nav_groups_v2')||'{}')||{}}catch(e){return {}}
 }
 function saveNavGroupState(map){
-  try{localStorage.setItem('chevalier_nav_groups',JSON.stringify(map))}catch(e){}
+  try{localStorage.setItem('chevalier_nav_groups_v2',JSON.stringify(map))}catch(e){}
 }
+function isSidebarCompact(){
+  return document.documentElement.classList.contains('sidebar-compact');
+}
+function setSidebarCompact(on){
+  document.documentElement.classList.toggle('sidebar-compact', !!on);
+  const btn=document.getElementById('sidebarCompactBtn');
+  if(btn){
+    btn.setAttribute('aria-pressed', on?'true':'false');
+    btn.title=on?'Expandir menu':'Recolher menu';
+    btn.setAttribute('aria-label', on?'Expandir menu':'Recolher menu');
+    const mark=btn.querySelector('span');
+    if(mark) mark.textContent=on?'›':'‹';
+  }
+  try{localStorage.setItem('chevalier_sidebar_compact', on?'1':'0')}catch(e){}
+  if(!on) closeNavFlyout();
+}
+function toggleSidebarCompact(){
+  setSidebarCompact(!isSidebarCompact());
+}
+window.toggleSidebarCompact=toggleSidebarCompact;
+
 function setNavGroupCollapsed(groupEl, collapsed){
   if(!groupEl) return;
   groupEl.classList.toggle('is-collapsed', !!collapsed);
   const btn=groupEl.querySelector('.nav-label');
   if(btn) btn.setAttribute('aria-expanded', collapsed?'false':'true');
 }
+function persistAllNavGroups(){
+  const map={};
+  document.querySelectorAll('.nav-group[data-nav-group]').forEach(g=>{
+    map[g.dataset.navGroup]=g.classList.contains('is-collapsed');
+  });
+  saveNavGroupState(map);
+}
+function collapseOtherNavGroups(exceptEl){
+  document.querySelectorAll('.nav-group[data-nav-group]').forEach(g=>{
+    if(g!==exceptEl) setNavGroupCollapsed(g, true);
+  });
+}
+function closeNavFlyout(){
+  document.querySelectorAll('.nav-group.is-flyout-open').forEach(g=>g.classList.remove('is-flyout-open'));
+}
 function toggleNavGroup(btn){
   const group=btn?.closest('.nav-group');
   if(!group) return;
-  const next=!group.classList.contains('is-collapsed')?true:false;
-  setNavGroupCollapsed(group, next);
-  const key=group.dataset.navGroup;
-  if(key){
-    const map=loadNavGroupState();
-    map[key]=next;
-    saveNavGroupState(map);
+  const compact=isSidebarCompact();
+  if(compact){
+    const open=!group.classList.contains('is-flyout-open');
+    closeNavFlyout();
+    if(open){
+      group.classList.add('is-flyout-open');
+      setNavGroupCollapsed(group, false);
+    }
+    return;
+  }
+  const willCollapse=!group.classList.contains('is-collapsed');
+  if(!willCollapse){
+    // Abrir este e recolher os demais (accordion)
+    collapseOtherNavGroups(group);
+    setNavGroupCollapsed(group, false);
+  }else{
+    setNavGroupCollapsed(group, true);
+  }
+  persistAllNavGroups();
+}
+function expandNavGroupForPage(page, preferGroupKey){
+  let key=preferGroupKey;
+  if(!key || !NAV_GROUP_PAGES[key]){
+    const entry=Object.entries(NAV_GROUP_PAGES).find(([,pages])=>pages.includes(page));
+    key=entry?.[0];
+  }
+  if(!key) return;
+  const group=document.querySelector(`.nav-group[data-nav-group="${key}"]`);
+  if(!group) return;
+  if(!isSidebarCompact()){
+    collapseOtherNavGroups(group);
+    setNavGroupCollapsed(group, false);
+    persistAllNavGroups();
+  }else{
+    setNavGroupCollapsed(group, false);
   }
 }
-function expandNavGroupForPage(page){
-  const entry=Object.entries(NAV_GROUP_PAGES).find(([,pages])=>pages.includes(page));
-  if(!entry) return;
-  const [key]=entry;
-  const group=document.querySelector(`.nav-group[data-nav-group="${key}"]`);
-  if(group) setNavGroupCollapsed(group, false);
+function updateBreadcrumb(page){
+  const box=document.getElementById('pageBreadcrumb');
+  if(!box) return;
+  const meta=PAGE_META[page]||{module:'Início',title:page};
+  const moduleKey=Object.entries(NAV_GROUP_PAGES).find(([,pages])=>pages.includes(page))?.[0];
+  const moduleLabel=meta.module||NAV_GROUP_LABELS[moduleKey]||'Início';
+  box.innerHTML=`<ol class="breadcrumb-list">
+    <li><button type="button" class="breadcrumb-link" onclick="go('dashboard')">Início</button></li>
+    ${page==='dashboard'?'':`<li><span class="breadcrumb-sep" aria-hidden="true">/</span><span class="breadcrumb-module">${esc(moduleLabel)}</span></li>`}
+    <li aria-current="page"><span class="breadcrumb-sep" aria-hidden="true">/</span><span class="breadcrumb-current">${esc(meta.title)}</span></li>
+  </ol>`;
 }
 function initNavGroups(){
   const saved=loadNavGroupState();
+  const compactSaved=(()=>{try{return localStorage.getItem('chevalier_sidebar_compact')==='1'}catch(e){return false}})();
+  setSidebarCompact(compactSaved);
   document.querySelectorAll('.nav-group[data-nav-group]').forEach(group=>{
     const key=group.dataset.navGroup;
     const label=group.querySelector('.nav-label');
@@ -3146,29 +3252,68 @@ function initNavGroups(){
     const collapsed=saved[key]!=null?!!saved[key]:defaultCollapsed;
     setNavGroupCollapsed(group, collapsed);
   });
-  const active=document.querySelector('.nav-btn.active')?.dataset.page;
-  if(active) expandNavGroupForPage(active);
+  const active=document.querySelector('.nav-btn.active')?.dataset.page||'dashboard';
+  expandNavGroupForPage(active);
+  updateBreadcrumb(active);
+  // Fecha flyout ao clicar fora
+  document.addEventListener('click',e=>{
+    if(!isSidebarCompact()) return;
+    if(e.target.closest('.nav-group')||e.target.closest('#sidebarCompactBtn')) return;
+    closeNavFlyout();
+  });
 }
 window.toggleNavGroup=toggleNavGroup;
 
-function go(page){
+function runNavAction(action){
+  switch(action){
+    case 'pendencias':
+      openNotifications();
+      return;
+    case 'novo-paciente':
+      openPatientModal();
+      return;
+    case 'novo-lembrete':
+      go('planejamento');
+      try{ window.ChevalierPlan?.openReminderModal?.(); }catch(_){}
+      return;
+    case 'importar':
+      if(typeof openImportSpreadsheetModal==='function') openImportSpreadsheetModal();
+      else { go('config'); toast('Abra Importar planilha em Configurações.'); }
+      return;
+    default:
+      toast('Ação indisponível.');
+  }
+}
+
+function go(page, preferGroupKey){
+  if(!page) return;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+page)?.classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b=>{
+    if(b.dataset.navAction){ b.classList.remove('active'); return; }
     const on=b.dataset.page===page && (!b.dataset.tab || b.dataset.tab===bancoTab);
     b.classList.toggle('active',on);
   });
-  expandNavGroupForPage(page);
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('overlay').classList.remove('open');
+  expandNavGroupForPage(page, preferGroupKey);
+  updateBreadcrumb(page);
+  closeNavFlyout();
+  document.getElementById('sidebar')?.classList.remove('open');
+  document.getElementById('overlay')?.classList.remove('open');
   document.body.classList.remove('nav-open');
   syncMobileNav(page);
   window.scrollTo({top:0,behavior:'smooth'});
 }
-document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>{
-  if(b.dataset.tab) bancoTab=b.dataset.tab;
-  go(b.dataset.page);
-  if(b.dataset.page==='banco') setBancoTab(bancoTab);
+document.querySelectorAll('.nav-btn').forEach(b=>{
+  b.addEventListener('click',()=>{
+    if(b.dataset.navAction){
+      runNavAction(b.dataset.navAction);
+      return;
+    }
+    if(b.dataset.tab) bancoTab=b.dataset.tab;
+    const groupKey=b.closest('.nav-group')?.dataset.navGroup;
+    go(b.dataset.page, groupKey);
+    if(b.dataset.page==='banco') setBancoTab(bancoTab);
+  });
 });
 initNavGroups();
 function openMobileNav(){
@@ -3269,6 +3414,10 @@ function setBancoTab(tab){
     const on=b.dataset.page==='banco' && b.dataset.tab===bancoTab;
     if(b.dataset.page==='banco') b.classList.toggle('active',on);
   });
+  if(PAGE_META.banco){
+    PAGE_META.banco.title=bancoTab==='procedimentos'?'Banco de procedimentos':'Banco de custos';
+    if(document.getElementById('page-banco')?.classList.contains('active')) updateBreadcrumb('banco');
+  }
   renderBanco();
 }
 function importDentalCatalog(){

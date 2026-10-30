@@ -1,11 +1,10 @@
 {
-  "version": "2.9.0",
-  "name": "Kanban editável — Pacientes e Produção",
+  "version": "2.10.0",
+  "name": "Fase 1 — Navegação em 8 módulos",
   "releasedAt": "2026-10-30",
   "changes": [
-    "Kanban de Pacientes com arrastar e soltar entre colunas.",
-    "Faturado / Recebido como última coluna; casos quitados saem após 15 dias.",
-    "Ao soltar em status financeiro que implica baixa, abre a ficha de recebimento.",
-    "Kanban de Produção também editável por arraste, abrindo o registro de evolução."
+    "Sidebar reorganizada em Início, Pacientes, Agenda, Tratamentos, Prótese, Financeiro, Materiais e Gestão.",
+    "Submenus expansíveis em accordion, modo compacto com ícones/tooltips e breadcrumbs.",
+    "Configurações e logout permanecem na área fixa inferior; IDs de página e baixas financeiras preservados."
   ]
 }

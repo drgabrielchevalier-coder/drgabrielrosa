@@ -39,9 +39,12 @@
   }
   .sidebar-nav::-webkit-scrollbar{width:6px}
   .sidebar-nav::-webkit-scrollbar-thumb{background:#3a3c37;border-radius:999px}
-  .brand{padding:10px 8px 18px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:10px;flex-shrink:0}
+  .brand{
+    padding:10px 8px 14px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:10px;flex-shrink:0;
+    display:flex;align-items:flex-start;gap:6px;position:relative
+  }
   .brand-link{
-    display:flex;align-items:center;gap:12px;width:100%;border:0;background:transparent;
+    display:flex;align-items:center;gap:12px;flex:1;min-width:0;border:0;background:transparent;
     padding:8px 6px;border-radius:12px;text-align:left;color:inherit;cursor:pointer
   }
   .brand-link:hover{background:rgba(255,255,255,.04)}
@@ -59,7 +62,13 @@
     line-height:1.3
   }
   .brand-logo{display:block;width:100%;max-width:100%;height:auto;margin:0;object-fit:contain}
-  .nav-group{margin:0 0 6px;border-radius:12px}
+  .sidebar-compact-btn{
+    flex:0 0 auto;width:28px;height:28px;margin-top:14px;border:1px solid rgba(255,255,255,.08);
+    background:#222320;color:#c4b086;border-radius:8px;display:inline-flex;align-items:center;
+    justify-content:center;padding:0;font-size:16px;line-height:1
+  }
+  .sidebar-compact-btn:hover{background:#2a2b28;color:#f3efe6}
+  .nav-group{margin:0 0 6px;border-radius:12px;position:relative}
   .nav-group.is-collapsed .nav-items,
   .nav-group:has(> .nav-label[aria-expanded="false"]) .nav-items{display:none}
   .nav-group.is-collapsed .nav-chevron,
@@ -67,31 +76,83 @@
   .nav-label{
     width:100%;border:0;background:transparent;color:#7a8078;text-transform:uppercase;
     font-size:10px;letter-spacing:.12em;padding:8px 10px 6px;display:flex;align-items:center;
-    justify-content:space-between;gap:8px;cursor:pointer;border-radius:10px
+    gap:8px;cursor:pointer;border-radius:10px
   }
-  .nav-label:hover{color:#c4b086;background:rgba(255,255,255,.03)}
+  .nav-label:hover,.nav-label:focus-visible{color:#c4b086;background:rgba(255,255,255,.03);outline:0}
+  .nav-group-icon{width:18px;text-align:center;font-size:13px;opacity:.85;flex-shrink:0;text-transform:none;letter-spacing:0}
+  .nav-group-title{flex:1;text-align:left;min-width:0}
   .nav-chevron{
     width:8px;height:8px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;
-    transform:rotate(45deg);transition:transform .18s ease;opacity:.7;margin-right:2px
+    transform:rotate(45deg);transition:transform .18s ease;opacity:.7;margin-right:2px;flex-shrink:0
   }
   .nav-items{padding:0 0 4px}
   .nav-btn{
     width:100%;border:0;background:transparent;color:#aeb2aa;border-radius:11px;
     display:flex;align-items:center;gap:11px;padding:9px 11px;text-align:left;margin:1px 0;
-    transition:.18s ease;font-size:13px
+    transition:background .16s ease,color .16s ease,box-shadow .16s ease;font-size:13px
   }
-  .nav-btn:hover{background:#222421;color:#f1f1ea}
+  .nav-btn:hover,.nav-btn:focus-visible{background:#222421;color:#f1f1ea;outline:0}
   .nav-btn.active{background:#2a2b28;color:#fff;box-shadow:inset 2px 0 0 #c4b086}
   .nav-icon{width:20px;text-align:center;opacity:.9;flex-shrink:0}
+  .nav-btn-label{flex:1;min-width:0}
   .nav-badge{margin-left:auto;background:#383a35;color:#bbbfb6;border-radius:999px;padding:2px 7px;font-size:10px}
+  .nav-badge[hidden]{display:none!important}
   .sidebar-foot{
-    margin-top:0;background:#222320;border:1px solid #2d2f2a;border-radius:14px;padding:12px;
-    flex:0 0 auto;position:relative;z-index:2
+    margin-top:0;background:#222320;border:1px solid #2d2f2a;border-radius:14px;padding:10px;
+    flex:0 0 auto;position:relative;z-index:2;display:grid;gap:8px
   }
-  .sidebar-foot strong{display:block;font-size:12px;line-height:1.3}
-  .sidebar-foot p{font-size:11px;color:#8f948b;line-height:1.45;margin:6px 0 0}
+  .sidebar-foot-btn{margin:0!important;padding:8px 10px!important}
+  .sidebar-foot-meta strong{display:block;font-size:12px;line-height:1.3;padding:0 4px}
+  .sidebar-foot-meta p{font-size:11px;color:#8f948b;line-height:1.45;margin:6px 0 0;padding:0 4px}
   .sidebar-logout{color:#c4b086;text-decoration:none}
   .sidebar-logout:hover{text-decoration:underline}
+  .breadcrumb{margin:0 0 18px}
+  .breadcrumb-list{
+    list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px;
+    font-size:12px;color:var(--muted)
+  }
+  .breadcrumb-list li{display:inline-flex;align-items:center;gap:6px}
+  .breadcrumb-link{
+    border:0;background:transparent;padding:0;color:var(--muted);font-size:12px;cursor:pointer
+  }
+  .breadcrumb-link:hover,.breadcrumb-link:focus-visible{color:var(--brand);outline:0}
+  .breadcrumb-sep{opacity:.45}
+  .breadcrumb-module{color:var(--muted)}
+  .breadcrumb-current{color:var(--text);font-weight:600}
+
+  /* —— Modo compacto do sidebar —— */
+  html.sidebar-compact{--sidebar-w:84px}
+  html.sidebar-compact .brand{justify-content:center;padding:10px 4px 12px}
+  html.sidebar-compact .brand-link{justify-content:center;padding:6px;flex:0 0 auto}
+  html.sidebar-compact .brand-text,
+  html.sidebar-compact .nav-group-title,
+  html.sidebar-compact .nav-chevron,
+  html.sidebar-compact .nav-btn-label,
+  html.sidebar-compact .sidebar-foot-meta,
+  html.sidebar-compact .nav-badge{display:none!important}
+  html.sidebar-compact .sidebar-compact-btn{position:absolute;right:6px;top:8px;margin:0;width:22px;height:22px;font-size:14px}
+  html.sidebar-compact .brand-mark-img{width:40px;height:40px}
+  html.sidebar-compact .nav-label{
+    justify-content:center;padding:10px 0;text-transform:none;letter-spacing:0
+  }
+  html.sidebar-compact .nav-group-icon{width:22px;font-size:15px}
+  html.sidebar-compact .nav-group.is-collapsed .nav-items{display:none}
+  html.sidebar-compact .nav-btn{justify-content:center;padding:10px 0;gap:0}
+  html.sidebar-compact .nav-icon{width:22px}
+  html.sidebar-compact .sidebar-foot{padding:8px 6px}
+  html.sidebar-compact .sidebar-foot-btn{justify-content:center}
+  html.sidebar-compact .nav-group.is-flyout-open{z-index:5}
+  html.sidebar-compact .nav-group.is-flyout-open .nav-items{
+    display:flex!important;flex-direction:column;position:absolute;left:calc(100% + 8px);top:0;
+    min-width:220px;padding:8px;background:#1c1d1b;border:1px solid #2d2f2a;border-radius:14px;
+    box-shadow:0 16px 40px rgba(0,0,0,.35)
+  }
+  html.sidebar-compact .nav-group.is-flyout-open .nav-btn{
+    justify-content:flex-start;padding:9px 11px;gap:11px
+  }
+  html.sidebar-compact .nav-group.is-flyout-open .nav-btn-label,
+  html.sidebar-compact .nav-group.is-flyout-open .nav-badge{display:inline-flex!important}
+  html.sidebar-compact .nav-group.is-flyout-open .nav-badge{display:inline-flex!important;margin-left:auto}
   .main{min-width:0}
   .topbar{
     height:76px;background:rgba(246,244,239,.88);backdrop-filter:blur(15px);
@@ -571,12 +632,28 @@
   }
   @media(max-width:900px){
     .app{grid-template-columns:1fr}
+    /* No mobile o drawer sempre mostra rótulos (ignora modo compacto) */
+    html.sidebar-compact{--sidebar-w:min(86vw,300px)}
+    html.sidebar-compact .brand-text,
+    html.sidebar-compact .nav-group-title,
+    html.sidebar-compact .nav-chevron,
+    html.sidebar-compact .nav-btn-label,
+    html.sidebar-compact .sidebar-foot-meta,
+    html.sidebar-compact .nav-badge{display:initial!important}
+    html.sidebar-compact .nav-badge[hidden]{display:none!important}
+    html.sidebar-compact .nav-label{justify-content:flex-start;padding:8px 10px 6px;text-transform:uppercase;letter-spacing:.12em}
+    html.sidebar-compact .nav-btn{justify-content:flex-start;padding:9px 11px;gap:11px}
+    html.sidebar-compact .nav-group.is-flyout-open .nav-items{
+      position:static;min-width:0;box-shadow:none;border:0;background:transparent;padding:0 0 4px
+    }
+    html.sidebar-compact .sidebar-compact-btn{display:none}
     .sidebar{
       position:fixed;left:0;top:0;z-index:90;width:min(86vw,300px);height:100dvh;
       transform:translateX(-105%);transition:transform .22s ease;padding-top:max(18px,env(safe-area-inset-top));
       overflow:hidden
     }
     .sidebar.open{transform:translateX(0)}
+    .breadcrumb{margin-bottom:12px}
     .mobile-overlay{display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:80;opacity:0;pointer-events:none;transition:.2s}
     .mobile-overlay.open{opacity:1;pointer-events:auto}
     .mobile-menu{display:inline-flex}
