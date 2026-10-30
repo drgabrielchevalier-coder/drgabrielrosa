@@ -283,8 +283,11 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
       <!-- PACIENTES -->
       <section class="page" id="page-pacientes">
         <div class="page-head">
-          <div><h2>Pacientes</h2><p>Cadastro único, origem, clínica, tratamento e resultado de cada caso.</p></div>
-          <div class="page-actions"><button class="btn primary" onclick="openPatientModal()">＋ Novo paciente</button></div>
+          <div><h2>Pacientes</h2><p>Cadastro único progressivo, ficha integrada e tratamentos vinculados — sem misturar pessoas por nome.</p></div>
+          <div class="page-actions">
+            <button class="btn" onclick="openPatientModal()">＋ Novo tratamento</button>
+            <button class="btn primary" onclick="openPersonModal()">＋ Novo paciente</button>
+          </div>
         </div>
         <div class="toolbar patients-toolbar">
           <input class="input" id="patientSearch" placeholder="Buscar paciente..." oninput="renderPatients()">

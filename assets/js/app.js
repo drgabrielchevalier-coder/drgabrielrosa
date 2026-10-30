@@ -89,7 +89,8 @@ const seed = {
     {id:'pr7',code:'GR0007',flow:'cirurgico',patientId:'pt1',type:'Implante unitário (plantio)',tooth:'26',lab:'',cost:0,stage:5,labStatus:'Liberado para moldagem',entry:pastDays(40),due:pastDays(5),urgent:false,shade:'',notes:'Alta cirúrgica — liberado para prótese.',events:[{date:pastDays(40),stage:0,note:'Planejado'},{date:pastDays(30),stage:3,note:'Cirurgia'},{date:pastDays(10),stage:4,note:'Cicatrização ok'},{date:pastDays(5),stage:5,note:'Liberado para moldagem'}]}
   ],
   reminders:[],
-  plans:[]
+  plans:[],
+  people:[]
 };
 
 let state = JSON.parse(localStorage.getItem('chevalier_gestao_v1')||'null') || structuredClone(seed);
@@ -1002,6 +1003,309 @@ function migratePatientLines(){
   });
   return n;
 }
+
+/** Pessoa (cadastro) ≠ caso/tratamento (lançamento financeiro/clínico). Nunca mescla por nome. */
+function emptyPerson(partial={}){
+  return {
+    id:partial.id||uid(),
+    name:String(partial.name||'').trim(),
+    phone:String(partial.phone||'').trim(),
+    clinicId:partial.clinicId||'',
+    vinculo:partial.vinculo==='Particular'?'Particular':'Parceira',
+    cpf:String(partial.cpf||'').trim(),
+    birthDate:partial.birthDate||'',
+    email:String(partial.email||'').trim(),
+    address:String(partial.address||'').trim(),
+    anamnese:String(partial.anamnese||'').trim(),
+    notes:String(partial.notes||'').trim(),
+    docs:Array.isArray(partial.docs)?partial.docs:[],
+    createdAt:partial.createdAt||todayISO()
+  };
+}
+function personById(id){
+  return (state.people||[]).find(x=>x.id===id)||null;
+}
+function casesForPerson(personId){
+  if(!personId) return [];
+  return (state.patients||[]).filter(p=>p.personId===personId);
+}
+function personVinculoFromOrigin(origin){
+  return origin==='Particular'?'Particular':'Parceira';
+}
+function originFromVinculo(vinculo){
+  return vinculo==='Particular'?'Particular':'Prestação';
+}
+function personOptionsHtml(selected=''){
+  const list=(state.people||[]).slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'pt-BR'));
+  return `<option value="">— selecionar cadastro —</option>`+list.map(pe=>`<option value="${esc(pe.id)}" ${pe.id===selected?'selected':''}>${esc(pe.name)}${pe.phone?` · ${esc(pe.phone)}`:''}</option>`).join('')+`<option value="__new__">＋ Novo cadastro rápido…</option>`;
+}
+/** Migração idempotente: 1 caso → 1 pessoa (não agrupa homônimos). */
+function ensurePeople(){
+  if(!Array.isArray(state.people)) state.people=[];
+  let n=0;
+  const byId=Object.fromEntries(state.people.map(p=>[p.id,p]));
+  (state.patients||[]).forEach(p=>{
+    if(p.personId && byId[p.personId]) return;
+    const pe=emptyPerson({
+      name:p.name||'Sem nome',
+      phone:p.phone||'',
+      clinicId:p.clinicId||'',
+      vinculo:personVinculoFromOrigin(p.origin),
+      notes:p.notes||p.observation||'',
+      createdAt:p.date||todayISO()
+    });
+    state.people.push(pe);
+    byId[pe.id]=pe;
+    p.personId=pe.id;
+    n++;
+  });
+  return n;
+}
+function createPersonFromForm(){
+  const name=getv('peName').trim();
+  if(!name){ toast('Informe o nome completo.'); return null; }
+  const phone=getv('pePhone').trim();
+  if(!phone){ toast('Informe telefone ou WhatsApp.'); return null; }
+  const clinicId=getv('peClinic');
+  if(!clinicId){ toast('Selecione a clínica de origem.'); return null; }
+  const vinculo=getv('peVinculo')==='Particular'?'Particular':'Parceira';
+  return emptyPerson({
+    name, phone, clinicId, vinculo,
+    cpf:getv('peCpf'),
+    birthDate:getv('peBirth'),
+    email:getv('peEmail'),
+    address:getv('peAddress'),
+    anamnese:getv('peAnamnese'),
+    notes:getv('peNotes')
+  });
+}
+function personFormHtml(pe={}, opts={}){
+  const clinicId=pe.clinicId||(pe.vinculo==='Particular'?'particular':(state.clinics[0]?.id||''));
+  return `<div class="form-grid person-form">
+    <div class="field full form-section-label"><span>Essenciais</span><small>Obrigatórios para o cadastro rápido</small></div>
+    <div class="field full"><label>Nome completo</label><input id="peName" class="input" value="${esc(pe.name||'')}" placeholder="Nome do paciente" autocomplete="name"></div>
+    <div class="field"><label>Telefone / WhatsApp</label><input id="pePhone" class="input" value="${esc(pe.phone||'')}" placeholder="(11) 90000-0000" inputmode="tel"></div>
+    <div class="field"><label>Vínculo</label>
+      <select id="peVinculo" class="select" onchange="onPersonVinculoChange()">
+        <option value="Parceira" ${(pe.vinculo||'Parceira')!=='Particular'?'selected':''}>Clínica parceira</option>
+        <option value="Particular" ${pe.vinculo==='Particular'?'selected':''}>Particular</option>
+      </select>
+    </div>
+    <div class="field full"><label>Clínica de origem</label><select id="peClinic" class="select">${clinicOptions(clinicId)}</select></div>
+    <details class="field full progressive-block" ${opts.openOptional?'open':''}>
+      <summary>Dados opcionais <span class="cell-sub">não bloqueiam o cadastro</span></summary>
+      <div class="form-grid" style="margin-top:12px">
+        <div class="field"><label>CPF</label><input id="peCpf" class="input" value="${esc(pe.cpf||'')}" placeholder="000.000.000-00" inputmode="numeric"></div>
+        <div class="field"><label>Nascimento</label><input id="peBirth" type="date" class="input" value="${esc(pe.birthDate||'')}"></div>
+        <div class="field"><label>E-mail</label><input id="peEmail" class="input" type="email" value="${esc(pe.email||'')}" placeholder="opcional"></div>
+        <div class="field full"><label>Endereço</label><input id="peAddress" class="input" value="${esc(pe.address||'')}" placeholder="opcional"></div>
+        <div class="field full"><label>Anamnese / alertas clínicos</label><textarea id="peAnamnese" class="textarea" rows="3" placeholder="Alergias, comorbidades, alertas…">${esc(pe.anamnese||'')}</textarea></div>
+        <div class="field full"><label>Observações</label><textarea id="peNotes" class="textarea" rows="2" placeholder="Notas gerais">${esc(pe.notes||'')}</textarea></div>
+        <div class="field full"><label>Documentos / exames (referências)</label>
+          <textarea id="peDocs" class="textarea" rows="2" placeholder="Uma referência por linha (link, pasta, laudo… )">${esc((pe.docs||[]).map(d=>typeof d==='string'?d:(d?.label||d?.url||'')).join('\n'))}</textarea>
+          <p class="field-hint">Texto livre por enquanto — armazenamento de arquivos fica para evolução posterior.</p>
+        </div>
+      </div>
+    </details>
+  </div>`;
+}
+function onPersonVinculoChange(){
+  const v=getv('peVinculo');
+  const sel=document.getElementById('peClinic');
+  if(!sel) return;
+  if(v==='Particular' && [...sel.options].some(o=>o.value==='particular')) sel.value='particular';
+}
+window.onPersonVinculoChange=onPersonVinculoChange;
+
+function openPersonModal(editId='', opts={}){
+  ensurePeople();
+  const pe=editId?personById(editId):null;
+  const startTreatment=!!opts.startTreatment;
+  openModal(editId?'Editar cadastro do paciente':'Novo paciente', personFormHtml(pe||{},{openOptional:!!editId && !!(pe?.cpf||pe?.email||pe?.anamnese)}), ()=>{
+    const next=createPersonFromForm();
+    if(!next) return;
+    next.docs=getv('peDocs').split('\n').map(s=>s.trim()).filter(Boolean).map(label=>({id:uid(),label,at:todayISO()}));
+    if(editId){
+      const prev=personById(editId);
+      if(!prev) return toast('Cadastro não encontrado.');
+      next.id=editId;
+      next.createdAt=prev.createdAt||next.createdAt;
+      next.docs=next.docs.length?next.docs:(prev.docs||[]);
+      state.people=state.people.map(x=>x.id===editId?next:x);
+      // Espelha nome/origem nos casos vinculados (sem fundir IDs)
+      casesForPerson(editId).forEach(c=>{
+        c.name=next.name;
+        c.origin=originFromVinculo(next.vinculo);
+        if(next.clinicId) c.clinicId=next.clinicId;
+      });
+      save();closeModal();renderAll();
+      toast('Cadastro atualizado.');
+      if(opts.reopenSheet) openPatientSheet(editId);
+    }else{
+      state.people.unshift(next);
+      save();closeModal();renderAll();
+      toast('Paciente cadastrado.');
+      if(startTreatment) openPatientModal(originFromVinculo(next.vinculo),'',next.id);
+      else openPatientSheet(next.id);
+    }
+  });
+  const saveBtn=document.getElementById('modalSave');
+  if(saveBtn && !editId){
+    saveBtn.textContent='Salvar cadastro';
+  }
+}
+window.openPersonModal=openPersonModal;
+
+function openPatientSheet(personId){
+  ensurePeople();
+  const pe=personById(personId);
+  if(!pe) return toast('Cadastro não encontrado.');
+  const cases=casesForPerson(personId);
+  const treatments=cases.filter(p=>p.progress!=='Orçamento');
+  const budgets=cases.filter(p=>p.progress==='Orçamento');
+  const caseIds=new Set(cases.map(c=>c.id));
+  const works=(state.prostheses||[]).filter(w=>caseIds.has(w.patientId));
+  const previsto=treatments.reduce((s,p)=>s+Number(p.value||0),0);
+  const recebido=treatments.reduce((s,p)=>s+Number(p.received||0),0);
+  const aberto=treatments.reduce((s,p)=>s+balance(p),0);
+  const tab=window.__patientSheetTab||'geral';
+  const tabs=[
+    ['geral','Visão geral'],['cadastro','Cadastro'],['tratamentos','Tratamentos'],
+    ['orcamentos','Orçamentos'],['financeiro','Financeiro'],['proteses','Próteses / lab'],
+    ['prontuario','Prontuário'],['docs','Documentos'],['historico','Histórico']
+  ];
+  const tabBar=`<div class="bill-tabs sheet-tabs" role="tablist">${tabs.map(([id,label])=>`
+    <button type="button" class="bill-tab ${tab===id?'active':''}" data-sheet-tab="${id}" onclick="setPatientSheetTab('${personId}','${id}')">${label}</button>`).join('')}</div>`;
+
+  let body='';
+  if(tab==='geral'){
+    body=`
+      <div class="detail-grid">
+        <div><span>Telefone</span><strong>${esc(pe.phone||'—')}</strong></div>
+        <div><span>Vínculo</span><strong>${esc(pe.vinculo||'—')}</strong></div>
+        <div><span>Clínica</span><strong>${esc(clinic(pe.clinicId).name)}</strong></div>
+        <div><span>Tratamentos</span><strong>${treatments.length}</strong></div>
+        <div><span>Orçamentos</span><strong>${budgets.length}</strong></div>
+        <div><span>Trabalhos</span><strong>${works.length}</strong></div>
+        <div><span>Honorários</span><strong>${brl.format(previsto)}</strong></div>
+        <div><span>Em aberto</span><strong class="${aberto>0?'warn':''}">${brl.format(aberto)}</strong></div>
+      </div>
+      <div class="form-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+        <button type="button" class="btn primary" onclick="closeModal();openPatientModal('${esc(originFromVinculo(pe.vinculo))}','','${pe.id}')">＋ Novo tratamento</button>
+        <button type="button" class="btn" onclick="closeModal();openPersonModal('${pe.id}',{reopenSheet:true})">Editar cadastro</button>
+        ${aberto>0&&treatments[0]?`<button type="button" class="btn" onclick="closeModal();markReceived('${treatments.find(t=>balance(t)>0)?.id||''}')">Baixar recebimento</button>`:''}
+      </div>`;
+  }else if(tab==='cadastro'){
+    body=`<div class="detail-grid">
+      <div><span>Nome</span><strong>${esc(pe.name)}</strong></div>
+      <div><span>Telefone</span><strong>${esc(pe.phone||'—')}</strong></div>
+      <div><span>CPF</span><strong>${esc(pe.cpf||'—')}</strong></div>
+      <div><span>Nascimento</span><strong>${pe.birthDate?fmtDate(pe.birthDate):'—'}</strong></div>
+      <div><span>E-mail</span><strong>${esc(pe.email||'—')}</strong></div>
+      <div><span>Endereço</span><strong>${esc(pe.address||'—')}</strong></div>
+      <div class="full"><span>Observações</span><strong>${esc(pe.notes||'—')}</strong></div>
+    </div>
+    <div class="form-actions" style="margin-top:14px"><button type="button" class="btn" onclick="closeModal();openPersonModal('${pe.id}',{reopenSheet:true})">Editar cadastro</button></div>`;
+  }else if(tab==='tratamentos'){
+    body=treatments.length?`<div class="table-wrap"><table><thead><tr><th>Data</th><th>Tratamento</th><th>Valor</th><th>Saldo</th><th>Progresso</th><th></th></tr></thead><tbody>
+      ${treatments.map(p=>`<tr>
+        ${td('Data',fmtDate(p.date))}${td('Tratamento',esc(patientProcedureLabel(p)))}
+        ${td('Valor',brl.format(p.value))}${td('Saldo',brl.format(balance(p)))}
+        ${td('Progresso',badge(p.progress||'—'))}
+        <td class="actions-cell"><div class="row-actions">
+          <button type="button" class="btn small" onclick="closeModal();editPatient('${p.id}')">Editar</button>
+          <button type="button" class="btn small" onclick="closeModal();openChargeSheet('${p.id}')">Cobrança</button>
+        </div></td></tr>`).join('')}
+    </tbody></table></div>`:`<div class="empty">Nenhum tratamento ainda.</div>
+      <div class="form-actions" style="margin-top:12px"><button type="button" class="btn primary" onclick="closeModal();openPatientModal('${esc(originFromVinculo(pe.vinculo))}','','${pe.id}')">Iniciar tratamento</button></div>`;
+  }else if(tab==='orcamentos'){
+    body=budgets.length?`<div class="table-wrap"><table><thead><tr><th>Data</th><th>Plano</th><th>Valor</th><th></th></tr></thead><tbody>
+      ${budgets.map(p=>`<tr>
+        ${td('Data',fmtDate(p.date))}${td('Plano',esc(patientProcedureLabel(p)))}${td('Valor',brl.format(p.value))}
+        <td class="actions-cell"><div class="row-actions"><button type="button" class="btn small" onclick="closeModal();editPatient('${p.id}')">Abrir</button></div></td>
+      </tr>`).join('')}
+    </tbody></table></div>`:`<div class="empty">Nenhum orçamento vinculado.</div>`;
+  }else if(tab==='financeiro'){
+    body=`
+      <div class="detail-grid">
+        <div><span>Previsto</span><strong>${brl.format(previsto)}</strong></div>
+        <div><span>Recebido</span><strong>${brl.format(recebido)}</strong></div>
+        <div><span>Em aberto</span><strong>${brl.format(aberto)}</strong></div>
+      </div>
+      ${treatments.length?`<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Caso</th><th>Status</th><th>Saldo</th><th></th></tr></thead><tbody>
+        ${treatments.map(p=>`<tr>
+          ${td('Caso',esc(patientProcedureLabel(p)))}${td('Status',badge(paymentStatusOf(p)))}${td('Saldo',brl.format(balance(p)))}
+          <td class="actions-cell"><div class="row-actions">
+            <button type="button" class="btn small" onclick="closeModal();openChargeSheet('${p.id}')">Ficha</button>
+            ${balance(p)>0?`<button type="button" class="btn small" onclick="closeModal();markReceived('${p.id}')">Baixar</button>`:''}
+          </div></td></tr>`).join('')}
+      </tbody></table></div>`:'<div class="empty">Sem lançamentos financeiros.</div>'}`;
+  }else if(tab==='proteses'){
+    body=works.length?`<div class="table-wrap"><table><thead><tr><th>Código</th><th>Tipo</th><th>Status</th><th></th></tr></thead><tbody>
+      ${works.map(w=>`<tr>
+        ${td('Código',`<span class="code">${esc(w.code)}</span>`)}${td('Tipo',esc(w.type))}
+        ${td('Status',esc(w.labStatus||workStageLabel(w)))}
+        <td class="actions-cell"><div class="row-actions"><button type="button" class="btn small" onclick="closeModal();openProsthesisDetail('${w.id}')">Abrir</button></div></td>
+      </tr>`).join('')}
+    </tbody></table></div>`:`<div class="empty">Nenhum trabalho protético/cirúrgico vinculado.</div>`;
+  }else if(tab==='prontuario'){
+    body=`<div class="note-text" style="white-space:pre-wrap">${esc(pe.anamnese||'Sem anamnese registrada.')}</div>
+      <div class="form-actions" style="margin-top:12px"><button type="button" class="btn" onclick="closeModal();openPersonModal('${pe.id}',{reopenSheet:true})">Atualizar prontuário</button></div>`;
+  }else if(tab==='docs'){
+    const docs=pe.docs||[];
+    body=docs.length?`<ul class="sheet-doc-list">${docs.map(d=>`<li>${esc(typeof d==='string'?d:(d.label||d.url||'—'))}</li>`).join('')}</ul>`
+      :`<div class="empty">Nenhuma referência de documento.</div>`;
+  }else{
+    // histórico cronológico: baixas + eventos de prótese
+    const events=[];
+    treatments.forEach(p=>{
+      patientPayments(p).forEach(pay=>{
+        events.push({date:pay.date||'', label:`${paymentModeLabel(pay.mode,pay.balanceAfter)} · ${brl.format(pay.amount||0)}`, sub:`${patientProcedureLabel(p)}${pay.note?' · '+pay.note:''}`});
+      });
+      if(p.date) events.push({date:p.date, label:'Tratamento lançado', sub:patientProcedureLabel(p)});
+    });
+    works.forEach(w=>{
+      (w.events||[]).forEach(e=>{
+        events.push({date:e.date||'', label:workStageLabel(w,e.stage)||'Movimentação', sub:`${w.code} · ${w.type}${e.note?' · '+e.note:''}`});
+      });
+    });
+    events.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+    body=events.length?`<div class="detail-timeline">${events.slice(0,40).map(ev=>`
+      <div class="detail-event"><span class="event-dot"></span><div><strong>${esc(ev.label)}</strong><p>${fmtDate(ev.date)}${ev.sub?' · '+esc(ev.sub):''}</p></div></div>`).join('')}</div>`
+      :`<div class="empty">Sem histórico ainda.</div>`;
+  }
+
+  openModal('Ficha do paciente', `
+    <div class="detail-top">
+      <div>
+        <h3 style="margin:0 0 4px">${esc(pe.name)}</h3>
+        <span class="cell-sub">${esc(clinic(pe.clinicId).name)} · ${esc(pe.vinculo||'—')}${pe.phone?' · '+esc(pe.phone):''}</span>
+      </div>
+    </div>
+    ${tabBar}
+    <div class="sheet-pane">${body}</div>
+  `, ()=>closeModal());
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  const saveBtn=document.getElementById('modalSave');
+  if(saveBtn) saveBtn.style.display='none';
+}
+function setPatientSheetTab(personId, tab){
+  window.__patientSheetTab=tab;
+  openPatientSheet(personId);
+}
+window.openPatientSheet=openPatientSheet;
+window.setPatientSheetTab=setPatientSheetTab;
+function openPatientSheetForCase(caseId){
+  ensurePeople();
+  const p=state.patients.find(x=>x.id===caseId);
+  if(!p) return toast('Caso não encontrado.');
+  if(!p.personId || !personById(p.personId)){
+    ensurePeople();
+  }
+  if(p.personId) openPatientSheet(p.personId);
+  else editPatient(caseId);
+}
+window.openPatientSheetForCase=openPatientSheetForCase;
 function recalcTreatmentTotals(){
   const clinicId=getv('fClinic')||getv('rClinic')||'';
   const lines=collectTreatmentLines();
@@ -1692,7 +1996,7 @@ function patientKanbanCardClick(e,id){
     e.stopPropagation();
     return;
   }
-  editPatient(id);
+  openPatientSheetForCase(id);
 }
 function patientKanbanDragStart(e,id){
   __patientKanbanDrag={id, from:patientAxisValue(state.patients.find(x=>x.id===id)||{})};
@@ -1892,11 +2196,16 @@ function renderPatients(){
   document.getElementById('patientsTable').innerHTML=rows.map(p=>{
     const axisVal=patientAxisValue(p);
     const secondary=patientAxisMode==='tratamento'?paymentStatusOf(p):(p.progress||'—');
+    const pePhone=p.personId?personById(p.personId)?.phone:'';
     return `<tr>
-      ${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${esc(p.origin)}${p.progress==='Orçamento'?' · Orçamento':''}</span>`)}
+      ${td('Paciente',`<strong>${esc(p.name)}</strong><span class="cell-sub">${esc(p.origin)}${p.progress==='Orçamento'?' · Orçamento':''}${pePhone?' · '+esc(pePhone):''}</span>`)}
       ${td('Clínica',esc(clinic(p.clinicId).name))}${td('Tratamento',`<strong>${esc(patientProcedureLabel(p))}</strong><span class="cell-sub">${patientLines(p).length} item(ns) · ${esc(secondary)}</span>`)}${td('Data',fmtDate(p.date))}
       ${td('Valor',brl.format(p.value))}${td('Custos',brl.format(patientCost(p)))}${td('Lucro',`<strong>${brl.format(patientProfit(p))}</strong>`)}
-      ${td(statusCol,badge(axisVal))}<td class="actions-cell">${acts(`editPatient('${p.id}')`,`deletePatient('${p.id}')`)}</td>
+      ${td(statusCol,badge(axisVal))}<td class="actions-cell"><div class="row-actions">
+        <button class="btn small" onclick="openPatientSheetForCase('${p.id}')">Ficha</button>
+        <button class="btn small" onclick="editPatient('${p.id}')">Editar</button>
+        <button class="btn small danger" onclick="deletePatient('${p.id}')">Excluir</button>
+      </div></td>
     </tr>`;
   }).join('')||'<tr><td colspan="9"><div class="empty">Nenhum paciente encontrado.</div></td></tr>';
 }
@@ -2192,6 +2501,7 @@ function loadOrcamento(id){
   toast('Orçamento carregado para edição.');
 }
 function saveOrcamentoAsPatient(){
+  ensurePeople();
   const name=(document.getElementById('oName')?.value||'').trim();
   if(!name) return toast('Informe o nome do paciente.');
   const clinicId=document.getElementById('oClinic')?.value||'';
@@ -2204,8 +2514,15 @@ function saveOrcamentoAsPatient(){
   const notes=(document.getElementById('oNotes')?.value||'').trim();
   const editId=document.getElementById('oEditId')?.value||'';
   const prev=editId?state.patients.find(x=>x.id===editId):null;
+  let personId=prev?.personId||'';
+  if(!personId || !personById(personId)){
+    const pe=emptyPerson({name, clinicId, vinculo:personVinculoFromOrigin(origin), notes});
+    state.people.unshift(pe);
+    personId=pe.id;
+  }
   const obj={
     id:editId||uid(),
+    personId,
     name,
     origin,
     clinicId,
@@ -2949,6 +3266,7 @@ function onWorkPatientChange(){
   if(btn) btn.style.display=isNew?'none':'';
 }
 function resolveWorkPatientId(){
+  ensurePeople();
   const selected=getv('wPatient');
   if(selected && selected!=='__new__') return selected;
   const name=getv('wNewName').trim();
@@ -2957,8 +3275,16 @@ function resolveWorkPatientId(){
   const clinicId=getv('wNewClinic')||(origin==='Particular'?'particular':(state.clinics[0]?.id||''));
   const flow=getv('wFlow')||'protetico';
   const progress=flow==='cirurgico'?'Planejar caso':'Em tratamento';
+  const pe=emptyPerson({
+    name,
+    phone:getv('wNewPhone')||'',
+    clinicId,
+    vinculo:personVinculoFromOrigin(origin)
+  });
+  state.people.unshift(pe);
   const patient={
     id:uid(),
+    personId:pe.id,
     name,
     origin,
     clinicId,
@@ -3630,7 +3956,7 @@ function runNavAction(action){
       openNotifications();
       return;
     case 'novo-paciente':
-      openPatientModal();
+      openPersonModal();
       return;
     case 'novo-lembrete':
       go('planejamento');
@@ -3719,7 +4045,7 @@ function confirmDelete(msg,fn){
 }
 function deletePatient(id){
   const linked=(state.prostheses||[]).filter(w=>w.patientId===id).length;
-  confirmDelete(`Excluir este paciente${linked?` e ${linked} trabalho(s) protético(s) vinculado(s)`:''}?`,()=>{
+  confirmDelete(`Excluir este tratamento/caso${linked?` e ${linked} trabalho(s) protético(s) vinculado(s)`:''}? O cadastro da pessoa é preservado.`,()=>{
     state.patients=state.patients.filter(x=>x.id!==id);
     state.prostheses=(state.prostheses||[]).filter(w=>w.patientId!==id);
   });
@@ -3819,9 +4145,13 @@ function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t
 function clinicOptions(selected=''){return state.clinics.map(c=>`<option value="${c.id}" ${c.id===selected?'selected':''}>${esc(c.name)}</option>`).join('')}
 function procOptions(selected=''){return state.procedures.map(p=>`<option value="${p.id}" ${p.id===selected?'selected':''}>${esc(p.name)}</option>`).join('')}
 function statusOptions(selected='À receber'){return PATIENT_FINANCIAL_STATUSES.map(s=>`<option ${s===selected?'selected':''}>${s}</option>`).join('')}
-function openPatientModal(origin='',editId=''){
+function openPatientModal(origin='',editId='',personId=''){
+  ensurePeople();
   const p=state.patients.find(x=>x.id===editId)||{};
-  const initialClinic=p.clinicId||(origin==='Particular'?'particular':'allon');
+  const linkedPersonId=editId?(p.personId||''):(personId||'');
+  const pe=linkedPersonId?personById(linkedPersonId):null;
+  const initialOrigin=p.origin||origin||(pe?originFromVinculo(pe.vinculo):'Prestação');
+  const initialClinic=p.clinicId||pe?.clinicId||(initialOrigin==='Particular'?'particular':'allon');
   const lines=patientLines(p);
   const seedLines=lines.length?lines:[{procedureId:state.procedures[0]?.id||'p1',qty:1}];
   const bom=combinedProcedureMaterials(seedLines);
@@ -3831,11 +4161,25 @@ function openPatientModal(origin='',editId=''){
   const seedCost=editId?(p.cost??0):settled.costs.materials;
   const seedLab=editId?(p.lab??0):settled.costs.lab;
   const seedComp=editId?(p.components??0):settled.costs.components;
-  openModal(editId?'Editar paciente / tratamento':'Novo paciente / tratamento',`
+  const nameLocked=!!pe && !editId;
+  openModal(editId?'Editar tratamento':'Novo tratamento',`
     <div class="form-grid">
-      <div class="field full"><label>Nome do paciente</label><input id="fName" class="input" value="${esc(p.name||'')}" placeholder="Nome completo"></div>
-      <div class="field"><label>Origem</label><select id="fOrigin" class="select"><option ${((p.origin||origin)==='Prestação')?'selected':''}>Prestação</option><option ${((p.origin||origin)==='Particular')?'selected':''}>Particular</option></select></div>
+      ${editId?`<input type="hidden" id="fPersonId" value="${esc(p.personId||'')}">`
+        :`<div class="field full"><label>Paciente (cadastro)</label>
+            <select id="fPersonId" class="select" onchange="onTreatmentPersonChange()">${personOptionsHtml(linkedPersonId)}</select>
+            <p class="field-hint">Vincule a um cadastro existente. Homônimos não são mesclados automaticamente.</p>
+          </div>
+          <div class="field full" id="fNewPersonMini" hidden>
+            <p class="field-hint">Cadastro rápido inline — ou use “Novo paciente” na lista.</p>
+            <div class="form-grid">
+              <div class="field"><label>Telefone</label><input id="fNewPhone" class="input" placeholder="WhatsApp"></div>
+              <div class="field"><label>Vínculo</label><select id="fNewVinculo" class="select"><option>Parceira</option><option>Particular</option></select></div>
+            </div>
+          </div>`}
+      <div class="field full"><label>Nome do paciente</label><input id="fName" class="input" value="${esc(p.name||pe?.name||'')}" placeholder="Nome completo" ${nameLocked?'readonly':''}></div>
+      <div class="field"><label>Origem</label><select id="fOrigin" class="select"><option ${initialOrigin!=='Particular'?'selected':''}>Prestação</option><option ${initialOrigin==='Particular'?'selected':''}>Particular</option></select></div>
       <div class="field"><label>Clínica / centro de resultado</label><select id="fClinic" class="select" onchange="recalcTreatmentTotals()">${clinicOptions(initialClinic)}</select></div>
+      <div class="field full form-section-label"><span>Tratamento</span><small>Essencial para o lançamento</small></div>
       <div class="field full"><label>Composição do tratamento</label>
         <p class="field-hint">Monte o caso somando procedimentos (ex.: plantio + enxerto + coroa). Os custos e o honorário são recalculados.</p>
         <div id="fTreatLines" class="treat-list">${seedLines.map(treatmentLineRow).join('')}</div>
@@ -3849,17 +4193,21 @@ function openPatientModal(origin='',editId=''){
       <div class="field"><label>Recebido</label><input id="fReceived" type="number" step="0.01" class="input" value="${p.received??0}"></div>
       <div class="field"><label>Vencimento</label><input id="fDue" type="date" class="input" value="${p.due||addDays(10)}"></div>
       <div class="field"><label>Status financeiro</label><select id="fStatus" class="select">${statusOptions(p.status)}</select></div>
-      <div class="field full"><label>Consumo de materiais (calculado da composição)</label>
-        <p class="field-hint">Soma das fichas dos procedimentos. Edite quantidades livremente.</p>
-        <div id="fConsumeList" class="consume-list">${(seedConsume.length?seedConsume:[{}]).map(consumeRow).join('')}</div>
-        <div class="row-actions" style="margin-top:8px"><button type="button" class="btn small" onclick="document.getElementById('fConsumeList').insertAdjacentHTML('beforeend', consumeRow())">＋ Item</button><button type="button" class="btn small" onclick="recalcTreatmentTotals()">Recalcular da composição</button></div>
-        <div class="consume-total" id="fConsumeTotal"></div>
-      </div>
-      <div class="field"><label>Custo materiais</label><input id="fCost" type="number" step="0.01" class="input" value="${seedCost}"></div>
-      <div class="field"><label>Laboratório</label><input id="fLab" type="number" step="0.01" class="input" value="${seedLab}"></div>
-      <div class="field"><label>Componentes</label><input id="fComponents" type="number" step="0.01" class="input" value="${seedComp}"></div>
-      <div class="field"><label>Custo clínico / sala</label><input id="fClinical" type="number" step="0.01" class="input" value="${p.clinical??0}"></div>
       <div class="field full"><label>Progresso clínico</label><select id="fProgress" class="select">${['Orçamento','Em tratamento','Planejar caso','Solicitar material','Em fila / agendado','Aguardo pós Cirúrgico','Aguardando cicatrização','Aguardando moldagem','Moldagem','Enviado para Laboratório','Aguardando Prova','Aguardando Cimentação','Alta'].map(s=>`<option ${s===(p.progress||'Em tratamento')?'selected':''}>${s}</option>`).join('')}</select></div>
+      <details class="field full progressive-block" ${editId?'open':''}>
+        <summary>Custos e materiais <span class="cell-sub">opcional na entrada — recalculados da composição</span></summary>
+        <div class="form-grid" style="margin-top:12px">
+          <div class="field full"><label>Consumo de materiais</label>
+            <div id="fConsumeList" class="consume-list">${(seedConsume.length?seedConsume:[{}]).map(consumeRow).join('')}</div>
+            <div class="row-actions" style="margin-top:8px"><button type="button" class="btn small" onclick="document.getElementById('fConsumeList').insertAdjacentHTML('beforeend', consumeRow())">＋ Item</button><button type="button" class="btn small" onclick="recalcTreatmentTotals()">Recalcular da composição</button></div>
+            <div class="consume-total" id="fConsumeTotal"></div>
+          </div>
+          <div class="field"><label>Custo materiais</label><input id="fCost" type="number" step="0.01" class="input" value="${seedCost}"></div>
+          <div class="field"><label>Laboratório</label><input id="fLab" type="number" step="0.01" class="input" value="${seedLab}"></div>
+          <div class="field"><label>Componentes</label><input id="fComponents" type="number" step="0.01" class="input" value="${seedComp}"></div>
+          <div class="field"><label>Custo clínico / sala</label><input id="fClinical" type="number" step="0.01" class="input" value="${p.clinical??0}"></div>
+        </div>
+      </details>
     </div>`,()=>{
       if(!getv('fName')) return toast('Informe o nome do paciente.');
       const lines=collectTreatmentLines();
@@ -3867,8 +4215,32 @@ function openPatientModal(origin='',editId=''){
       refreshConsumeTotals();
       const consumed=collectConsumeItems();
       const prev=editId?state.patients.find(x=>x.id===editId):null;
+      let personRef=getv('fPersonId');
+      if(!editId && personRef==='__new__'){
+        const phone=getv('fNewPhone').trim();
+        if(!phone) return toast('Informe o telefone do novo cadastro.');
+        const peNew=emptyPerson({
+          name:getv('fName').trim(),
+          phone,
+          clinicId:getv('fClinic'),
+          vinculo:getv('fNewVinculo')==='Particular'?'Particular':'Parceira'
+        });
+        state.people.unshift(peNew);
+        personRef=peNew.id;
+      }else if(!editId && !personRef){
+        // cria pessoa 1:1 sem fundir por nome
+        const peNew=emptyPerson({
+          name:getv('fName').trim(),
+          phone:'',
+          clinicId:getv('fClinic'),
+          vinculo:personVinculoFromOrigin(getv('fOrigin'))
+        });
+        state.people.unshift(peNew);
+        personRef=peNew.id;
+      }
       const obj={
         id:editId||uid(),
+        personId:personRef||prev?.personId||'',
         name:getv('fName'),
         origin:getv('fOrigin'),
         clinicId:getv('fClinic'),
@@ -3887,7 +4259,8 @@ function openPatientModal(origin='',editId=''){
         consumedItems:consumed,
         payments:Array.isArray(prev?.payments)?prev.payments:[],
         lastPaymentDate:prev?.lastPaymentDate||'',
-        nfse:Array.isArray(prev?.nfse)?prev.nfse:[]
+        nfse:Array.isArray(prev?.nfse)?prev.nfse:[],
+        billingSnap:prev?.billingSnap
       };
       if(editId){
         if(prev?.consumedItems?.length) applyStockConsumption(prev.consumedItems,true);
@@ -3900,8 +4273,30 @@ function openPatientModal(origin='',editId=''){
   document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
   document.getElementById('fConsumeList')?.addEventListener('change',e=>{if(e.target.classList.contains('ci-mat')) refreshConsumeTotals();});
   refreshConsumeTotals();
-  if(!editId) recalcTreatmentTotals();
+  if(!editId){
+    onTreatmentPersonChange();
+    recalcTreatmentTotals();
+  }
 }
+function onTreatmentPersonChange(){
+  const id=getv('fPersonId');
+  const mini=document.getElementById('fNewPersonMini');
+  if(mini) mini.hidden=id!=='__new__';
+  if(!id || id==='__new__'){
+    const nameEl=document.getElementById('fName');
+    if(nameEl && id==='__new__') nameEl.readOnly=false;
+    return;
+  }
+  const pe=personById(id);
+  if(!pe) return;
+  const nameEl=document.getElementById('fName');
+  const originEl=document.getElementById('fOrigin');
+  const clinicEl=document.getElementById('fClinic');
+  if(nameEl){ nameEl.value=pe.name; nameEl.readOnly=true; }
+  if(originEl) originEl.value=originFromVinculo(pe.vinculo);
+  if(clinicEl && pe.clinicId){ clinicEl.value=pe.clinicId; recalcTreatmentTotals(); }
+}
+window.onTreatmentPersonChange=onTreatmentPersonChange;
 function editPatient(id){openPatientModal('',id)}
 function openClinicModal(editId=''){
   const c=state.clinics.find(x=>x.id===editId)||{};
@@ -4503,10 +4898,14 @@ function openPayrollModal(editId=''){
   })
 }
 function openReceivableModal(type=''){
+  ensurePeople();
   const initialClinic=type==='prestacao'?(serviceClinicFilter||'allon'):'particular';
   const seedProc=state.procedures.find(p=>p.id==='p1')?.id||state.procedures[0]?.id||'';
   openModal(type==='prestacao'?'Lançar honorário (prestação)':'Novo recebível',`<div class="form-grid">
-    <div class="field full"><label>Paciente</label><input id="rName" class="input"></div>
+    <div class="field full"><label>Paciente (cadastro)</label>
+      <select id="rPerson" class="select" onchange="onReceivablePersonChange()">${personOptionsHtml('')}</select>
+    </div>
+    <div class="field full"><label>Nome no lançamento</label><input id="rName" class="input" placeholder="Preenchido pelo cadastro ou digitado"></div>
     <div class="field full"><label>Clínica</label><select id="rClinic" class="select" onchange="recalcReceivableTotals()">${clinicOptions(initialClinic)}</select></div>
     <div class="field full"><label>Composição do tratamento</label>
       <p class="field-hint">Ex.: plantio + enxerto. Adicione quantos procedimentos precisar.</p>
@@ -4528,8 +4927,19 @@ function openReceivableModal(type=''){
     const cl=getv('rClinic');
     const bom=combinedProcedureMaterials(lines);
     const settled=settleLines(lines,cl);
+    let personRef=getv('rPerson');
+    if(personRef==='__new__' || !personRef){
+      const pe=emptyPerson({
+        name:getv('rName').trim(),
+        phone:'',
+        clinicId:cl,
+        vinculo:cl==='particular'?'Particular':'Parceira'
+      });
+      state.people.unshift(pe);
+      personRef=pe.id;
+    }
     state.patients.unshift({
-      id:uid(),name:getv('rName'),origin:cl==='particular'?'Particular':'Prestação',clinicId:cl,
+      id:uid(),personId:personRef,name:getv('rName'),origin:cl==='particular'?'Particular':'Prestação',clinicId:cl,
       procedureId:lines[0].procedureId,lines,date:todayISO(),value:num('rValue'),received:num('rReceived'),due:getv('rDue'),status:getv('rStatus'),
       cost:settled.costs.materials,lab:settled.costs.lab,components:settled.costs.components,clinical:0,progress:getv('rProgress')||'Em tratamento',consumedItems:bom.items,
       billingSnap:window.ChevalierBilling?.snapshotSettlement
@@ -4543,6 +4953,17 @@ function openReceivableModal(type=''){
   document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
   recalcReceivableTotals();
 }
+function onReceivablePersonChange(){
+  const id=getv('rPerson');
+  if(!id || id==='__new__') return;
+  const pe=personById(id);
+  if(!pe) return;
+  const nameEl=document.getElementById('rName');
+  const clinicEl=document.getElementById('rClinic');
+  if(nameEl) nameEl.value=pe.name;
+  if(clinicEl && pe.clinicId){ clinicEl.value=pe.clinicId; recalcReceivableTotals(); }
+}
+window.onReceivablePersonChange=onReceivablePersonChange;
 function recalcReceivableTotals(){
   const clinicId=getv('rClinic')||'';
   const lines=collectTreatmentLines();
@@ -4971,21 +5392,64 @@ function openBarcodeScanModal(){
   setTimeout(()=>document.getElementById('bcCode')?.focus(),50);
 }
 
+function currentAppPage(){
+  return document.querySelector('.page.active')?.id?.replace(/^page-/,'')||'';
+}
+function openQuickReceivePicker(){
+  ensurePeople();
+  const open=(state.patients||[]).filter(p=>p.progress!=='Orçamento' && balance(p)>0)
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name),'pt-BR'));
+  if(!open.length) return toast('Nenhum saldo em aberto para baixar.');
+  openModal('Baixar recebimento',`<div class="form-grid">
+    <div class="field full"><label>Lançamento em aberto</label>
+      <select id="qRecvPick" class="select">${open.map(p=>`<option value="${esc(p.id)}">${esc(p.name)} · ${esc(patientProcedureLabel(p))} · saldo ${brl.format(balance(p))}</option>`).join('')}</select>
+    </div>
+    <p class="field-hint">Abre a baixa parcial/quitação sem navegar por várias telas.</p>
+  </div>`,()=>{
+    const id=getv('qRecvPick');
+    if(!id) return toast('Selecione um lançamento.');
+    closeModal();
+    markReceived(id);
+  });
+}
 function openQuickModal(){
-  openModal('Novo lançamento',`<div class="grid layout-3">
-    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openPatientModal()">Paciente</button>
+  const page=currentAppPage();
+  const ctx=[];
+  if(page==='pacientes'){
+    ctx.push(`<button type="button" class="btn primary" style="height:80px;justify-content:center" onclick="closeModal();openPersonModal()">Novo paciente</button>`);
+    ctx.push(`<button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openPatientModal()">Novo tratamento</button>`);
+  }else if(page==='custos'){
+    ctx.push(`<button type="button" class="btn primary" style="height:80px;justify-content:center" onclick="closeModal();openCostModal()">Nova despesa</button>`);
+    ctx.push(`<button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBoletoScanModal()">Escanear boleto</button>`);
+  }else if(page==='recebiveis' || page==='prestacao' || page==='particulares'){
+    ctx.push(`<button type="button" class="btn primary" style="height:80px;justify-content:center" onclick="closeModal();openQuickReceivePicker()">Baixar recebimento</button>`);
+    ctx.push(`<button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openReceivableModal(${page==='prestacao'?"'prestacao'":''})">Novo recebível</button>`);
+  }else if(page==='trabalhos' || page==='lab' || page==='entregas'){
+    ctx.push(`<button type="button" class="btn primary" style="height:80px;justify-content:center" onclick="closeModal();openProsthesisModal()">Trabalho protético</button>`);
+  }else if(page==='estoque' || page==='materiais'){
+    ctx.push(`<button type="button" class="btn primary" style="height:80px;justify-content:center" onclick="closeModal();openMaterialModal()">Material</button>`);
+    ctx.push(`<button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openStockModal()">Movimentar estoque</button>`);
+  }
+  const rest=`
+    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openPersonModal()">Paciente</button>
+    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openPatientModal()">Tratamento</button>
     <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();go('calendario');ChevalierPlan.openReminderModal()">Lembrete</button>
     <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();go('planejamento')">Planejamento</button>
     <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openProsthesisModal()">Trabalho protético</button>
     <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openReceivableModal()">Recebível</button>
-    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openCostModal()">Custo</button>
+    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openQuickReceivePicker()">Baixa</button>
+    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openCostModal()">Custo / despesa</button>
     <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBoletoScanModal()">Escanear boleto</button>
     <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBarcodeScanModal()">Código de barras</button>
-    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openMaterialModal()">Material</button>
-  </div>`,()=>closeModal());
+    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openMaterialModal()">Material</button>`;
+  openModal('Novo lançamento',`
+    ${ctx.length?`<p class="field-hint" style="margin:0 0 10px">Atalhos desta tela</p><div class="grid layout-3" style="margin-bottom:14px">${ctx.join('')}</div><p class="field-hint" style="margin:0 0 10px">Todos os atalhos</p>`:''}
+    <div class="grid layout-3">${rest}</div>
+  `,()=>closeModal());
   const s=document.getElementById('modalSave');
   if(s) s.style.display='none';
 }
+window.openQuickReceivePicker=openQuickReceivePicker;
 function parseMoneyInput(raw){
   if(typeof raw==='number') return Number.isFinite(raw)?raw:0;
   let s=String(raw??'').trim();
@@ -5239,6 +5703,7 @@ async function boot(){
   ensureProstheses();
   ensureClinicPrices();
   const billingMigrated=ensureClinicBilling()||0;
+  const peopleMigrated=ensurePeople()||0;
   let seeded=false;
   try{
     if(window.ChevalierPlan){
@@ -5246,13 +5711,18 @@ async function boot(){
       seeded=!!ChevalierPlan.seedDefaults();
     }
   }catch(e){ console.warn('ChevalierPlan boot', e); }
-  if(seeded||catalogAdded||procAdded||linesMigrated||billingMigrated||fracN) save();
+  if(seeded||catalogAdded||procAdded||linesMigrated||billingMigrated||fracN||peopleMigrated) save();
   renderAll();
   setBancoTab(bancoTab);
   // Importação dos CSVs já convertidos — roda sozinha, sem botão por clínica
   applyBundledHistoricos().then(sum=>{
     const n=(sum?.patients||0)+(sum?.costs||0);
-    if(n>0){ renderAll(); toast(`Importados ${sum.patients||0} casos e ${sum.costs||0} custos dos históricos.`); }
+    if(n>0){
+      const linked=ensurePeople()||0;
+      if(linked) save();
+      renderAll();
+      toast(`Importados ${sum.patients||0} casos e ${sum.costs||0} custos dos históricos.`);
+    }
   }).catch(e=>console.warn('import historicos', e));
 }
 boot();
