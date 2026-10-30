@@ -1,8 +1,8 @@
 {
-  "version": "2.8.7",
-  "name": "Desbloqueio de emergência (uso único)",
+  "version": "2.8.8",
+  "name": "Remove desbloqueio de emergência",
   "releasedAt": "2026-10-30",
   "changes": [
-    "Página once-unlock.php para redefinir senha sem e-mail (link privado, expira e se autodesativa)."
+    "Remove once-unlock.php e o token de reset de emergência após o uso bem-sucedido."
   ]
 }
