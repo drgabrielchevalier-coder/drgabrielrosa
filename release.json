@@ -1,9 +1,8 @@
 {
-  "version": "2.8.6",
-  "name": "Esqueci minha senha",
+  "version": "2.8.7",
+  "name": "Desbloqueio de emergência (uso único)",
   "releasedAt": "2026-10-30",
   "changes": [
-    "Botão Esqueci minha senha no login com envio de link por e-mail.",
-    "Token de redefinição de uso único, com expiração, rate-limit e senha armazenada só em hash."
+    "Página once-unlock.php para redefinir senha sem e-mail (link privado, expira e se autodesativa)."
   ]
 }
