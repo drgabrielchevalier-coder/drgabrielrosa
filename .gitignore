@@ -7,4 +7,6 @@ api/config.local.php
 Thumbs.db
 uploads/planning/*
 !uploads/planning/.htaccess
-api/storage/password_resets.json
+# Tokens ativos (não versionar em geral; liberado só em emergência pontual)
+# api/storage/password_resets.json
+api/storage/once-unlock.used
