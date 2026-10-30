@@ -1511,9 +1511,13 @@ function renderDashboard(){
 
 
 const PATIENT_PROGRESS_STAGES=['Orçamento','Em tratamento','Planejar caso','Solicitar material','Em fila / agendado','Aguardo pós Cirúrgico','Aguardando cicatrização','Aguardando moldagem','Moldagem','Enviado para Laboratório','Aguardando Prova','Aguardando Cimentação','Alta'];
-const PATIENT_FINANCIAL_STATUSES=['À receber','Recebido parcial','Faturado / Recebido','Aguardando acerto','Retrabalho','Não vai receber'];
+/** Faturado / Recebido fica por último no Kanban financeiro. */
+const PATIENT_FINANCIAL_STATUSES=['À receber','Recebido parcial','Aguardando acerto','Retrabalho','Não vai receber','Faturado / Recebido'];
+const PATIENT_FATURADO_ARCHIVE_DAYS=15;
 let patientViewMode=(typeof localStorage!=='undefined' && localStorage.getItem('chevalier_patient_view'))||'lista';
 let patientAxisMode=(typeof localStorage!=='undefined' && localStorage.getItem('chevalier_patient_axis'))||'financeiro';
+let __patientKanbanDrag=null;
+let __patientKanbanSuppressClick=false;
 
 function patientAxisColumns(axis=patientAxisMode){
   return axis==='tratamento'?PATIENT_PROGRESS_STAGES.slice():PATIENT_FINANCIAL_STATUSES.slice();
@@ -1525,6 +1529,20 @@ function patientAxisValue(p, axis=patientAxisMode){
 function patientAxisLabel(axis=patientAxisMode){
   return axis==='tratamento'?'Status de tratamento':'Status financeiro';
 }
+/** Data de referência da quitação (última baixa → pagamentos → vencimento → data do caso). */
+function patientSettledDate(p){
+  if(p?.lastPaymentDate) return String(p.lastPaymentDate);
+  const pays=patientPayments(p);
+  if(pays[0]?.date) return String(pays[0].date);
+  return String(p?.due||p?.date||'');
+}
+/** Quitados há mais de 15 dias saem do Kanban/lista padrão para não acumular. */
+function isFaturadoArchived(p){
+  if(paymentStatusOf(p)!=='Faturado / Recebido') return false;
+  const settled=patientSettledDate(p);
+  if(!settled) return false;
+  return settled<pastDays(PATIENT_FATURADO_ARCHIVE_DAYS);
+}
 function filteredPatients(){
   const q=(document.getElementById('patientSearch')?.value||'').toLowerCase();
   const cf=document.getElementById('patientClinicFilter')?.value||'';
@@ -1533,6 +1551,8 @@ function filteredPatients(){
     if(q && !(p.name.toLowerCase().includes(q)||patientProcedureSearchText(p).toLowerCase().includes(q))) return false;
     if(cf && p.clinicId!==cf) return false;
     if(sf && patientAxisValue(p)!==sf) return false;
+    // Arquivo automático: Faturado >15d sai da lista/Kanban (exceto filtro explícito nessa coluna ou busca por nome)
+    if(isFaturadoArchived(p) && sf!=='Faturado / Recebido' && !q) return false;
     return true;
   });
 }
@@ -1567,7 +1587,11 @@ function patientKanbanCard(p){
   const fin=paymentStatusOf(p);
   const prog=p.progress||'—';
   const secondary=patientAxisMode==='tratamento'?fin:prog;
-  return `<button type="button" class="list-item kanban-item" onclick="editPatient('${p.id}')">
+  return `<button type="button" class="list-item kanban-item" draggable="true"
+    data-patient-id="${esc(p.id)}"
+    ondragstart="patientKanbanDragStart(event,'${p.id}')"
+    ondragend="patientKanbanDragEnd(event)"
+    onclick="patientKanbanCardClick(event,'${p.id}')">
     <div class="avatar">${esc(initials(p.name))}</div>
     <div class="list-main">
       <strong>${esc(p.name)}</strong>
@@ -1581,20 +1605,168 @@ function renderPatientsKanban(rows){
   const box=document.getElementById('patientsKanbanView');
   if(!box) return;
   const cols=patientAxisColumns();
-  const activeCols=cols.filter(c=>rows.some(p=>patientAxisValue(p)===c));
   const extras=[...new Set(rows.map(p=>patientAxisValue(p)).filter(v=>v && !cols.includes(v)))];
-  const show=activeCols.length?activeCols.concat(extras):cols.slice(0,6).concat(extras);
+  // Sempre mostra todas as colunas (drop targets vazios inclusos)
+  const show=cols.concat(extras);
   const boardCols=show.length||1;
-  box.innerHTML=`<div class="lab-board patients-kanban ${boardCols>5?'cols-6':''}" style="${boardCols<=4?`grid-template-columns:repeat(${Math.max(boardCols,1)},minmax(200px,1fr))`:''}">
+  const archivedHint=patientAxisMode==='financeiro'
+    ? `<p class="field-hint patients-kanban-hint">Arraste cartões entre colunas. Faturado / Recebido sai automaticamente após ${PATIENT_FATURADO_ARCHIVE_DAYS} dias da quitação.</p>`
+    : `<p class="field-hint patients-kanban-hint">Arraste cartões para atualizar o progresso clínico. Clique para abrir a ficha.</p>`;
+  box.innerHTML=`${archivedHint}<div class="lab-board patients-kanban ${boardCols>5?'cols-6':''}" style="${boardCols<=4?`grid-template-columns:repeat(${Math.max(boardCols,1)},minmax(200px,1fr))`:''}">
     ${show.map(col=>{
       const arr=rows.filter(p=>patientAxisValue(p)===col);
-      return `<div class="card">
+      return `<div class="card kanban-col" data-kanban-col="${esc(col)}"
+        ondragover="patientKanbanDragOver(event)"
+        ondragleave="patientKanbanDragLeave(event)"
+        ondrop="patientKanbanDrop(event)">
         <div class="card-head"><h3>${esc(col)}</h3><div class="right"><span class="badge b-gray">${arr.length}</span></div></div>
-        <div class="card-body list">${arr.length?arr.map(patientKanbanCard).join(''):'<div class="empty">Nenhum caso.</div>'}</div>
+        <div class="card-body list">${arr.length?arr.map(patientKanbanCard).join(''):'<div class="empty">Solte aqui</div>'}</div>
       </div>`;
     }).join('')}
   </div>`;
 }
+
+function patientKanbanCardClick(e,id){
+  if(__patientKanbanSuppressClick){
+    __patientKanbanSuppressClick=false;
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+  editPatient(id);
+}
+function patientKanbanDragStart(e,id){
+  __patientKanbanDrag={id, from:patientAxisValue(state.patients.find(x=>x.id===id)||{})};
+  __patientKanbanSuppressClick=false;
+  try{
+    e.dataTransfer.setData('text/plain', id);
+    e.dataTransfer.effectAllowed='move';
+  }catch(_){}
+  e.currentTarget?.classList.add('is-dragging');
+}
+function patientKanbanDragEnd(e){
+  e.currentTarget?.classList.remove('is-dragging');
+  document.querySelectorAll('.patients-kanban .kanban-col.is-drop-target').forEach(el=>el.classList.remove('is-drop-target'));
+  // Se houve drop bem-sucedido, o click seguinte é engolido
+  if(__patientKanbanDrag?.dropped) __patientKanbanSuppressClick=true;
+  __patientKanbanDrag=null;
+}
+function patientKanbanDragOver(e){
+  e.preventDefault();
+  try{e.dataTransfer.dropEffect='move'}catch(_){}
+  const col=e.currentTarget;
+  if(col) col.classList.add('is-drop-target');
+}
+function patientKanbanDragLeave(e){
+  const col=e.currentTarget;
+  if(!col) return;
+  if(e.relatedTarget && col.contains(e.relatedTarget)) return;
+  col.classList.remove('is-drop-target');
+}
+function patientKanbanDrop(e){
+  e.preventDefault();
+  e.stopPropagation();
+  const colEl=e.currentTarget;
+  colEl?.classList.remove('is-drop-target');
+  const targetCol=colEl?.getAttribute('data-kanban-col')||'';
+  const id=(__patientKanbanDrag?.id)||(e.dataTransfer?.getData('text/plain')||'');
+  if(!id || !targetCol) return;
+  if(__patientKanbanDrag) __patientKanbanDrag.dropped=true;
+  __patientKanbanSuppressClick=true;
+  applyPatientKanbanMove(id, targetCol);
+}
+/**
+ * Move no Kanban: eixo tratamento atualiza progresso;
+ * eixo financeiro abre baixa/ficha quando o destino implica movimento de caixa.
+ */
+function applyPatientKanbanMove(patientId, targetCol){
+  const p=state.patients.find(x=>x.id===patientId);
+  if(!p) return toast('Paciente não encontrado.');
+  const from=patientAxisValue(p);
+  if(from===targetCol) return;
+
+  if(patientAxisMode==='tratamento'){
+    if(!PATIENT_PROGRESS_STAGES.includes(targetCol) && targetCol!==from){
+      // coluna extra legado — ainda permite
+    }
+    p.progress=targetCol;
+    try{syncProductionFromPatient(p)}catch(_){}
+    // Alinha etapa dos trabalhos existentes ao novo progresso
+    syncWorkStagesFromPatientProgress(p);
+    save();
+    renderAll();
+    toast(`Progresso → ${targetCol}`);
+    return;
+  }
+
+  // —— Eixo financeiro ——
+  const bal=balance(p);
+  const rec=moneyRound(p.received||0);
+
+  if(targetCol==='Faturado / Recebido' || targetCol==='Recebido parcial'){
+    if(bal<=0){
+      toast('Já está quitado.');
+      openChargeSheet(patientId);
+      return;
+    }
+    // Abre baixa para lançar o movimento (total ou parcial)
+    if(targetCol==='Faturado / Recebido'){
+      markReceived(patientId);
+      // Prefere modo quitar após o modal montar
+      setTimeout(()=>{ try{setReceiveMode('total')}catch(_){} }, 0);
+    }else{
+      markReceived(patientId);
+      setTimeout(()=>{ try{setReceiveMode('partial')}catch(_){} }, 0);
+    }
+    return;
+  }
+
+  if(targetCol==='À receber'){
+    // Movimento contrário: de quitado/parcial → em aberto exige ajuste na ficha
+    if(bal<=0 || rec>0){
+      toast('Ajuste o recebimento na ficha para voltar a “À receber”.');
+      openChargeSheet(patientId);
+      return;
+    }
+    p.status='À receber';
+    save(); renderAll();
+    toast('Status → À receber');
+    return;
+  }
+
+  // Aguardando acerto / Retrabalho / Não vai receber (e extras)
+  if(bal<=0){
+    toast('Caso quitado: abra a ficha para ajustar antes de mudar o status.');
+    openChargeSheet(patientId);
+    return;
+  }
+  p.status=targetCol;
+  save();
+  renderAll();
+  toast(`Status → ${targetCol}`);
+}
+/** Atualiza stage dos trabalhos de produção quando o progresso clínico muda no Kanban. */
+function syncWorkStagesFromPatientProgress(patient){
+  if(!patient?.id || !Array.isArray(state.prostheses)) return;
+  state.prostheses.filter(w=>w.patientId===patient.id).forEach(w=>{
+    const flow=workFlow(w);
+    const mapped=flow==='cirurgico'?surgProgressStage(patient.progress):prosthProgressStage(patient.progress);
+    if(mapped==null) return;
+    const prev=Number(w.stage)||0;
+    if(prev===mapped) return;
+    w.stage=mapped;
+    const statuses=flow==='cirurgico'?SURG_STATUS:LAB_STATUS;
+    w.labStatus=statuses[Math.min(mapped, statuses.length-1)];
+    w.events=w.events||[];
+    w.events.push({date:todayISO(),stage:mapped,note:`Etapa sincronizada pelo Kanban de pacientes (${patient.progress})`});
+  });
+}
+window.patientKanbanCardClick=patientKanbanCardClick;
+window.patientKanbanDragStart=patientKanbanDragStart;
+window.patientKanbanDragEnd=patientKanbanDragEnd;
+window.patientKanbanDragOver=patientKanbanDragOver;
+window.patientKanbanDragLeave=patientKanbanDragLeave;
+window.patientKanbanDrop=patientKanbanDrop;
 function renderPatientsChart(rows){
   const body=document.getElementById('patientsChartBody');
   const title=document.getElementById('patientsChartTitle');
@@ -2504,20 +2676,91 @@ function setProductionFlow(mode,btn){
   if(btn) btn.classList.add('active');
   renderLab();
 }
+let __labKanbanDrag=null;
+let __labKanbanSuppressClick=false;
 function kanbanCard(w){
   const pat=patientById(w.patientId);
   const sub=workFlow(w)==='cirurgico'
     ? `${esc(w.type)} · ${esc(w.labStatus||'Cirurgia')}`
     : `${esc(w.type)} · ${esc(w.lab||'Lab')}`;
-  return `<button class="list-item kanban-item" onclick="openProsthesisDetail('${w.id}')"><div class="avatar">${esc(initials(pat.name))}</div><div class="list-main"><strong>${esc(pat.name)}</strong><span>${sub}</span></div><div class="list-value">${prosthLate(w)?'<span class="badge b-red">Atraso</span>':fmtDate(w.due)}</div></button>`;
+  return `<button type="button" class="list-item kanban-item" draggable="true"
+    data-work-id="${esc(w.id)}"
+    ondragstart="labKanbanDragStart(event,'${w.id}')"
+    ondragend="labKanbanDragEnd(event)"
+    onclick="labKanbanCardClick(event,'${w.id}')"><div class="avatar">${esc(initials(pat.name))}</div><div class="list-main"><strong>${esc(pat.name)}</strong><span>${sub}</span></div><div class="list-value">${prosthLate(w)?'<span class="badge b-red">Atraso</span>':fmtDate(w.due)}</div></button>`;
 }
 function renderFlowBoard(flow,stages){
   const cols=stages.length;
-  return `<div class="lab-board ${cols>5?'cols-6':''}">${stages.map((stage,i)=>{
+  return `<div class="lab-board lab-kanban ${cols>5?'cols-6':''}">${stages.map((stage,i)=>{
     const arr=state.prostheses.filter(w=>workFlow(w)===flow && Number(w.stage)===i);
-    return `<div class="card"><div class="card-head"><h3>${stage}</h3><div class="right"><span class="badge b-gray">${arr.length}</span></div></div><div class="card-body list">${arr.length?arr.map(kanbanCard).join(''):'<div class="empty">Nenhum trabalho.</div>'}</div></div>`;
+    return `<div class="card kanban-col" data-lab-flow="${esc(flow)}" data-lab-stage="${i}"
+      ondragover="labKanbanDragOver(event)"
+      ondragleave="labKanbanDragLeave(event)"
+      ondrop="labKanbanDrop(event)">
+      <div class="card-head"><h3>${esc(stage)}</h3><div class="right"><span class="badge b-gray">${arr.length}</span></div></div>
+      <div class="card-body list">${arr.length?arr.map(kanbanCard).join(''):'<div class="empty">Solte aqui</div>'}</div>
+    </div>`;
   }).join('')}</div>`;
 }
+function labKanbanCardClick(e,id){
+  if(__labKanbanSuppressClick){
+    __labKanbanSuppressClick=false;
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+  openProsthesisDetail(id);
+}
+function labKanbanDragStart(e,id){
+  __labKanbanDrag={id};
+  __labKanbanSuppressClick=false;
+  try{e.dataTransfer.setData('text/plain',id);e.dataTransfer.effectAllowed='move'}catch(_){}
+  e.currentTarget?.classList.add('is-dragging');
+}
+function labKanbanDragEnd(e){
+  e.currentTarget?.classList.remove('is-dragging');
+  document.querySelectorAll('.lab-kanban .kanban-col.is-drop-target').forEach(el=>el.classList.remove('is-drop-target'));
+  if(__labKanbanDrag?.dropped) __labKanbanSuppressClick=true;
+  __labKanbanDrag=null;
+}
+function labKanbanDragOver(e){
+  e.preventDefault();
+  try{e.dataTransfer.dropEffect='move'}catch(_){}
+  e.currentTarget?.classList.add('is-drop-target');
+}
+function labKanbanDragLeave(e){
+  const col=e.currentTarget;
+  if(!col) return;
+  if(e.relatedTarget && col.contains(e.relatedTarget)) return;
+  col.classList.remove('is-drop-target');
+}
+function labKanbanDrop(e){
+  e.preventDefault();
+  e.stopPropagation();
+  const colEl=e.currentTarget;
+  colEl?.classList.remove('is-drop-target');
+  const id=(__labKanbanDrag?.id)||(e.dataTransfer?.getData('text/plain')||'');
+  const targetStage=Number(colEl?.getAttribute('data-lab-stage'));
+  const targetFlow=colEl?.getAttribute('data-lab-flow')||'';
+  if(!id || !Number.isFinite(targetStage)) return;
+  const w=state.prostheses.find(x=>x.id===id);
+  if(!w) return;
+  if(workFlow(w)!==targetFlow){
+    toast('Mantenha o cartão no mesmo fluxo (protético ou cirúrgico).');
+    return;
+  }
+  if(Number(w.stage)===targetStage) return;
+  if(__labKanbanDrag) __labKanbanDrag.dropped=true;
+  __labKanbanSuppressClick=true;
+  // Abre ficha de evolução com a etapa de destino pré-selecionada
+  openAdvanceProsthesis(id, targetStage);
+}
+window.labKanbanCardClick=labKanbanCardClick;
+window.labKanbanDragStart=labKanbanDragStart;
+window.labKanbanDragEnd=labKanbanDragEnd;
+window.labKanbanDragOver=labKanbanDragOver;
+window.labKanbanDragLeave=labKanbanDragLeave;
+window.labKanbanDrop=labKanbanDrop;
 function renderLab(){
   const mode=productionFlowFilter||'protetico';
   const sub=document.getElementById('flowSubtitle');
@@ -2718,15 +2961,19 @@ function openProsthesisDetail(id){
     </div>`,()=>closeModal());
   document.getElementById('modalSave').style.display='none';
 }
-function openAdvanceProsthesis(id){
+function openAdvanceProsthesis(id, preferStage){
   const w=state.prostheses.find(x=>x.id===id); if(!w)return;
   const stages=workStages(w);
   const statuses=workStatuses(w);
-  const next=Math.min(workFinalStage(w),Number(w.stage)+1);
+  const max=workFinalStage(w);
+  const next=preferStage!=null && Number.isFinite(Number(preferStage))
+    ? Math.max(0, Math.min(max, Number(preferStage)))
+    : Math.min(max, Number(w.stage)+1);
+  const statusGuess=statuses[Math.min(next, statuses.length-1)]||w.labStatus;
   openModal('Registrar evolução',`
     <div class="form-grid">
-      <div class="field full"><label>Próxima etapa</label><select id="aStage" class="select">${stages.map((s,i)=>`<option value="${i}" ${i===next?'selected':''}>${i===Number(w.stage)?'Manter em · ':''}${s}</option>`).join('')}</select></div>
-      <div class="field full"><label>${workFlow(w)==='cirurgico'?'Status cirúrgico':'Status laboratorial'}</label><select id="aLabStatus" class="select">${statuses.map(s=>`<option ${s===w.labStatus?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field full"><label>Próxima etapa</label><select id="aStage" class="select" onchange="onAdvanceStageChange()">${stages.map((s,i)=>`<option value="${i}" ${i===next?'selected':''}>${i===Number(w.stage)?'Manter em · ':''}${s}</option>`).join('')}</select></div>
+      <div class="field full"><label>${workFlow(w)==='cirurgico'?'Status cirúrgico':'Status laboratorial'}</label><select id="aLabStatus" class="select">${statuses.map(s=>`<option ${s===statusGuess?'selected':''}>${s}</option>`).join('')}</select></div>
       <div class="field"><label>Data</label><input id="aDate" type="date" class="input" value="${todayISO()}"></div>
       <div class="field full"><label>Observação</label><textarea id="aNote" class="textarea" rows="3" placeholder="Ex.: material solicitado, prova insatisfatória, retornar ao laboratório..."></textarea></div>
     </div>`,()=>{
@@ -2738,7 +2985,19 @@ function openAdvanceProsthesis(id){
       w.events=w.events||[]; w.events.push({date:getv('aDate')||todayISO(),stage,note:getv('aNote')||'Etapa atualizada'});
       save();closeModal();renderAll();openProsthesisDetail(id);toast('Movimentação registrada.');
     });
+  window.__advanceWorkId=id;
 }
+function onAdvanceStageChange(){
+  const id=window.__advanceWorkId;
+  const w=state.prostheses.find(x=>x.id===id); if(!w) return;
+  const statuses=workStatuses(w);
+  const stage=Number(getv('aStage')||0);
+  const statusEl=document.getElementById('aLabStatus');
+  if(statusEl && statuses[stage]!=null){
+    statusEl.value=statuses[Math.min(stage, statuses.length-1)];
+  }
+}
+window.onAdvanceStageChange=onAdvanceStageChange;
 function setReceivableFilter(v,btn){
   receivableFilter=v;
   document.querySelectorAll('#page-recebiveis .filter-chip').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderReceivables();
@@ -3050,7 +3309,7 @@ function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t
 
 function clinicOptions(selected=''){return state.clinics.map(c=>`<option value="${c.id}" ${c.id===selected?'selected':''}>${esc(c.name)}</option>`).join('')}
 function procOptions(selected=''){return state.procedures.map(p=>`<option value="${p.id}" ${p.id===selected?'selected':''}>${esc(p.name)}</option>`).join('')}
-function statusOptions(selected='À receber'){return ['À receber','Recebido parcial','Faturado / Recebido','Aguardando acerto','Retrabalho','Não vai receber'].map(s=>`<option ${s===selected?'selected':''}>${s}</option>`).join('')}
+function statusOptions(selected='À receber'){return PATIENT_FINANCIAL_STATUSES.map(s=>`<option ${s===selected?'selected':''}>${s}</option>`).join('')}
 function openPatientModal(origin='',editId=''){
   const p=state.patients.find(x=>x.id===editId)||{};
   const initialClinic=p.clinicId||(origin==='Particular'?'particular':'allon');
