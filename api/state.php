@@ -66,6 +66,47 @@ if ($method === 'POST') {
     // Não persistir token CSRF dentro do blob do app
     unset($data['csrf']);
 
+    // Evolução controlada: recusa wipe acidental (estado parcial/vazio sobre dados reais).
+    // Não cria segunda fonte de verdade — continua um único app_state, com guarda.
+    $forceWipe = !empty($data['__forceWipe']);
+    unset($data['__forceWipe']);
+    $existingRow = $pdo->query('SELECT payload FROM app_state WHERE id = 1')->fetch();
+    $existing = $existingRow ? json_decode((string) ($existingRow['payload'] ?? ''), true) : null;
+    if (is_array($existing) && !$forceWipe) {
+        $exPatients = isset($existing['patients']) && is_array($existing['patients']) ? $existing['patients'] : [];
+        $exClinics = isset($existing['clinics']) && is_array($existing['clinics']) ? $existing['clinics'] : [];
+        $inPatients = array_key_exists('patients', $data) && is_array($data['patients']) ? $data['patients'] : null;
+        $inClinics = array_key_exists('clinics', $data) && is_array($data['clinics']) ? $data['clinics'] : null;
+        $exCount = count($exPatients);
+        $suspiciousEmptyPatients = $exCount >= 3 && is_array($inPatients) && count($inPatients) === 0;
+        $missingCore = $exCount >= 1 && ($inPatients === null || $inClinics === null);
+        $wipeClinics = count($exClinics) >= 1 && is_array($inClinics) && count($inClinics) === 0;
+        if ($suspiciousEmptyPatients || $missingCore || $wipeClinics) {
+            http_response_code(409);
+            echo json_encode([
+                'ok' => false,
+                'error' => 'Gravação recusada: payload incompleto ou vazio sobre estado existente. Evita apagar histórico.',
+                'code' => 'STATE_WIPE_GUARD',
+                'existingPatients' => $exCount,
+                'csrf' => chevalier_csrf_token(),
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        // Preserva lotes de importação se o cliente omitir a chave
+        if (!array_key_exists('importBatches', $data) && isset($existing['importBatches'])) {
+            $data['importBatches'] = $existing['importBatches'];
+        }
+        if (!array_key_exists('people', $data) && isset($existing['people'])) {
+            $data['people'] = $existing['people'];
+        }
+        if (!isset($data['schemaVersion']) && isset($existing['schemaVersion'])) {
+            $data['schemaVersion'] = $existing['schemaVersion'];
+        }
+    }
+    if (!isset($data['schemaVersion'])) {
+        $data['schemaVersion'] = 5;
+    }
+
     $json = json_encode($data, JSON_UNESCAPED_UNICODE);
     if ($json === false || strlen($json) > 8_000_000) {
         http_response_code(413);

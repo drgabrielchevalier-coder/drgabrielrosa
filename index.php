@@ -919,15 +919,18 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <div class="card">
             <div class="card-head"><h3>Integrações</h3></div>
             <div class="card-body">
-              <div class="settings-row"><div class="desc"><strong>Importar planilha</strong><span>Padrão CSV (ou HTML com tabela). Honorários por clínica ou Controle de Custos — detecta colunas e não duplica.</span></div>
-                <button type="button" class="btn small" onclick="openImportSpreadsheetModal()">Escolher arquivo</button>
+              <div class="settings-row"><div class="desc"><strong>Importação assistida</strong><span>CSV, HTML ou XLSX com prévia, mapeamento de colunas, validação, duplicatas e registro de lote — sem sobrescrever existentes.</span></div>
+                <button type="button" class="btn small primary" onclick="openImportSpreadsheetModal()">Importar arquivo</button>
+              </div>
+              <div class="settings-row"><div class="desc"><strong>Conciliação e vínculos</strong><span>Saúde dos relacionamentos paciente ↔ tratamentos ↔ financeiro ↔ prótese; reparo de personId e divergências.</span></div>
+                <button type="button" class="btn small" onclick="openModuleHealthModal()">Abrir painel</button>
               </div>
               <div class="settings-row"><div class="desc"><strong>Históricos já carregados</strong><span>Allon, Daniele, Gerlúcia, Particular e Custos entram sozinhos na abertura do sistema (sem vínculo a uma clínica só).</span></div><span class="badge b-green">Automático</span></div>
               <div class="settings-row"><div class="desc"><strong>Banco de preços</strong><span>Assistente busca Dental Cremer, Dental Speed e Surya Dental e calcula custo fracionado.</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>Consumo automático</strong><span>Ao lançar procedimento, materiais da ficha preenchem o custo (editável).</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>Leitor de boletos</strong><span>Escaneia boleto (câmera/arquivo/linha digitável), lança em Custos e alerta duplicatas.</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>Código de barras</strong><span>Lê EAN/código do material para localizar e movimentar estoque.</span></div><span class="badge b-green">Ativo</span></div>
-              <div class="settings-row"><div class="desc"><strong>IA gerencial</strong><span>Consultas como “qual clínica me deu maior lucro nos últimos 90 dias?”.</span></div><span class="badge b-blue">Fase 5</span></div>
+              <div class="settings-row"><div class="desc"><strong>IA gerencial</strong><span>Consultas em linguagem natural sobre lucro e clínicas — evolução futura sobre os dados já conciliados.</span></div><span class="badge b-gray">Próximo</span></div>
               <div class="settings-row"><div class="desc"><strong>Backup local</strong><span>Baixe os dados do protótipo em JSON.</span></div><button class="btn small" onclick="exportData()">Exportar JSON</button></div>
             </div>
           </div>
@@ -960,6 +963,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
 <script src="<?= chevalier_asset_url('assets/js/clinic-billing.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/planning-calendar.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/app.js') ?>"></script>
+<script src="<?= chevalier_asset_url('assets/js/import-assist.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/update-manager.js') ?>" defer></script>
 </body>
 </html>
