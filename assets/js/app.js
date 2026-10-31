@@ -90,7 +90,9 @@ const seed = {
   ],
   reminders:[],
   plans:[],
-  people:[]
+  people:[],
+  importBatches:[],
+  schemaVersion:5
 };
 
 let state = JSON.parse(localStorage.getItem('chevalier_gestao_v1')||'null') || structuredClone(seed);
@@ -338,6 +340,8 @@ function exportReportCsv(){
   toast(patients.length?`CSV com ${patients.length} lançamento(s).`:'CSV exportado (sem lançamentos no período).');
 }
 function save(){
+  if(!Array.isArray(state.importBatches)) state.importBatches=[];
+  if(!state.schemaVersion) state.schemaVersion=5;
   localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
   if(!persistReady) return;
   const payload={...state,csrf:csrfToken()};
@@ -347,8 +351,13 @@ function save(){
     credentials:'same-origin',
     body:JSON.stringify(payload)
   }).then(async r=>{
-    try{applyCsrfFromResponse(await r.json());}catch(_){}
+    let data={};
+    try{data=await r.json(); applyCsrfFromResponse(data);}catch(_){}
     if(r.status===401) location.href='login.php';
+    if(r.status===409 && data?.code==='STATE_WIPE_GUARD'){
+      console.warn('state wipe guard', data);
+      toast('Gravação bloqueada: payload incompleto (proteção do histórico).');
+    }
   }).catch(()=>{});
 }
 function clinic(id){return state.clinics.find(x=>x.id===id)||{name:'—',color:'??'};}
@@ -1306,6 +1315,97 @@ function openPatientSheetForCase(caseId){
   else editPatient(caseId);
 }
 window.openPatientSheetForCase=openPatientSheetForCase;
+
+/** Saúde dos vínculos entre módulos + conciliação (Fase 5). */
+function moduleLinkHealth(){
+  ensurePeople();
+  if(!Array.isArray(state.importBatches)) state.importBatches=[];
+  const cases=state.patients||[];
+  const people=state.people||[];
+  const works=state.prostheses||[];
+  const peopleIds=new Set(people.map(p=>p.id));
+  const caseIds=new Set(cases.map(c=>c.id));
+  const orphanCases=cases.filter(c=>!c.personId || !peopleIds.has(c.personId));
+  const orphanWorks=works.filter(w=>w.patientId && !caseIds.has(w.patientId));
+  const diverg=cases.filter(hasReceivableDivergence);
+  const noSnap=cases.filter(c=>c.progress!=='Orçamento' && !(c.billingSnap&&typeof c.billingSnap==='object'));
+  return {
+    people:people.length,
+    cases:cases.length,
+    works:works.length,
+    orphanCases:orphanCases.length,
+    orphanWorks:orphanWorks.length,
+    divergences:diverg.length,
+    withoutSnap:noSnap.length,
+    batches:(state.importBatches||[]).length,
+    schemaVersion:Number(state.schemaVersion||0)
+  };
+}
+function repairModuleLinks(){
+  const before=moduleLinkHealth();
+  const linked=ensurePeople()||0;
+  // Remove personId quebrado → recreate
+  let fixed=0;
+  (state.patients||[]).forEach(p=>{
+    if(p.personId && !personById(p.personId)){
+      p.personId='';
+      fixed++;
+    }
+  });
+  const linked2=ensurePeople()||0;
+  // Próteses órfãs: só reporta (não apaga)
+  state.schemaVersion=Math.max(5, Number(state.schemaVersion||0));
+  if(!Array.isArray(state.importBatches)) state.importBatches=[];
+  save();
+  renderAll();
+  const after=moduleLinkHealth();
+  toast(`Vínculos: +${linked+linked2} pessoas · ${fixed} personId reparado(s) · divergências ${after.divergences} · órfãos prótese ${after.orphanWorks}.`);
+  return {before, after, linked:linked+linked2, fixed};
+}
+function openModuleHealthModal(){
+  const h=moduleLinkHealth();
+  const batchesHtml=window.ChevalierImport?.recentBatchesHtml?.()||'<div class="empty">—</div>';
+  openModal('Conciliação e vínculos', `
+    <p class="field-hint">Relacionamentos estáveis entre cadastro, tratamentos, financeiro e produção. Sem mesclar homônimos e sem sobrescrever importações.</p>
+    <div class="grid kpi-grid" style="grid-template-columns:repeat(4,minmax(100px,1fr));margin-bottom:14px">
+      <div class="kpi"><div class="label">Cadastros</div><div class="value">${h.people}</div></div>
+      <div class="kpi"><div class="label">Casos</div><div class="value">${h.cases}</div></div>
+      <div class="kpi"><div class="label">Divergências</div><div class="value">${h.divergences}</div></div>
+      <div class="kpi"><div class="label">Schema</div><div class="value">v${h.schemaVersion||5}</div></div>
+    </div>
+    <div class="detail-grid">
+      <div><span>Casos sem pessoa</span><strong>${h.orphanCases}</strong></div>
+      <div><span>Trabalhos órfãos</span><strong>${h.orphanWorks}</strong></div>
+      <div><span>Casos sem billingSnap</span><strong>${h.withoutSnap}</strong></div>
+      <div><span>Lotes de importação</span><strong>${h.batches}</strong></div>
+    </div>
+    <h3 class="section-title">Lotes recentes</h3>
+    ${batchesHtml}
+    <div class="form-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+      <button type="button" class="btn primary" onclick="repairModuleLinks();closeModal();openModuleHealthModal()">Reparar vínculos</button>
+      <button type="button" class="btn" onclick="closeModal();showReceivableDivergences()">Ver divergências</button>
+      <button type="button" class="btn" onclick="ChevalierImport?.downloadLastReport?.()">Baixar último relatório</button>
+      <button type="button" class="btn" onclick="closeModal()">Fechar</button>
+    </div>
+  `, ()=>closeModal());
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  const saveBtn=document.getElementById('modalSave');
+  if(saveBtn) saveBtn.style.display='none';
+}
+function showReceivableDivergences(){
+  go('recebiveis');
+  setReceivablesTab('lista');
+  receivableFilter='';
+  document.querySelectorAll('#page-recebiveis .filter-chip').forEach(b=>b.classList.toggle('active',(b.dataset.recvStatus||'')===''));
+  const due=document.getElementById('recvDueFilter');
+  if(due) due.value='diverg';
+  renderReceivables();
+  toast('Filtro: só divergências de conciliação.');
+}
+window.showReceivableDivergences=showReceivableDivergences;
+window.moduleLinkHealth=moduleLinkHealth;
+window.repairModuleLinks=repairModuleLinks;
+window.openModuleHealthModal=openModuleHealthModal;
 function recalcTreatmentTotals(){
   const clinicId=getv('fClinic')||getv('rClinic')||'';
   const lines=collectTreatmentLines();
@@ -5704,6 +5804,9 @@ async function boot(){
   ensureClinicPrices();
   const billingMigrated=ensureClinicBilling()||0;
   const peopleMigrated=ensurePeople()||0;
+  if(!Array.isArray(state.importBatches)) state.importBatches=[];
+  const schemaBefore=Number(state.schemaVersion||0);
+  if(schemaBefore<5) state.schemaVersion=5;
   let seeded=false;
   try{
     if(window.ChevalierPlan){
@@ -5711,7 +5814,7 @@ async function boot(){
       seeded=!!ChevalierPlan.seedDefaults();
     }
   }catch(e){ console.warn('ChevalierPlan boot', e); }
-  if(seeded||catalogAdded||procAdded||linesMigrated||billingMigrated||fracN||peopleMigrated) save();
+  if(seeded||catalogAdded||procAdded||linesMigrated||billingMigrated||fracN||peopleMigrated||schemaBefore<5) save();
   renderAll();
   setBancoTab(bancoTab);
   // Importação dos CSVs já convertidos — roda sozinha, sem botão por clínica
@@ -5913,6 +6016,7 @@ async function fetchHistoricoJson(file){
 function importHistoricoPatients(data, meta){
   if(!data?.records?.length) return 0;
   if(!Array.isArray(state.patients)) state.patients=[];
+  if(!Array.isArray(state.people)) state.people=[];
   const existing=new Set(state.patients.map(p=>p.importId).filter(Boolean));
   const clinicId=data.clinicId||meta.clinicId||'particular';
   const origin=data.origin||meta.origin||(clinicId==='particular'?'Particular':'Prestação');
@@ -5922,8 +6026,18 @@ function importHistoricoPatients(data, meta){
     if(!rec?.importId || existing.has(rec.importId)) return;
     let procId=rec.procedureId||'proc-historico-livre';
     if(!state.procedures.some(p=>p.id===procId)) procId='proc-historico-livre';
+    // 1 pessoa por caso importado — nunca funde por nome
+    const pe=emptyPerson({
+      name:rec.name,
+      clinicId,
+      vinculo:personVinculoFromOrigin(origin),
+      notes:rec.notes||rec.observation||'',
+      createdAt:rec.date||todayISO()
+    });
+    state.people.push(pe);
     const patient={
       id:uid(),
+      personId:pe.id,
       importId:rec.importId,
       importSource:sourceTag,
       name:rec.name,
@@ -6028,12 +6142,16 @@ window.applyBundledHistoricos=applyBundledHistoricos;
 window.importAllHistoricos=applyBundledHistoricos;
 
 function openImportSpreadsheetModal(){
+  if(window.ChevalierImport?.openWizard){
+    ChevalierImport.openWizard();
+    return;
+  }
+  // Fallback legado (CSV/HTML) se o wizard não carregou
   const clinics=(state.clinics||[]).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
   openModal('Importar planilha (CSV / HTML)', `
     <div class="form-grid">
       <div class="field full"><label>Arquivo</label>
         <input id="importFile" type="file" class="input" accept=".csv,.html,.htm,text/csv,text/html">
-        <p class="cell-sub" style="margin-top:6px">Padrão: export Notion/Excel em CSV, ou tabela HTML. Honorários (coluna Nome) ou Custos (coluna Descrição).</p>
       </div>
       <div class="field"><label>Tipo</label>
         <select id="importKind" class="input">
@@ -6049,18 +6167,17 @@ function openImportSpreadsheetModal(){
     </div>
   `, ()=>commitImportSpreadsheet());
   const saveBtn=document.getElementById('modalSave');
-  saveBtn.textContent='Importar';
-  const fileEl=document.getElementById('importFile');
-  fileEl?.addEventListener('change', async ()=>{
-    const f=fileEl.files?.[0];
+  if(saveBtn) saveBtn.textContent='Importar';
+  document.getElementById('importFile')?.addEventListener('change', async ()=>{
+    const f=document.getElementById('importFile')?.files?.[0];
     const box=document.getElementById('importPreview');
-    if(!f){ box.textContent='Nenhum arquivo ainda.'; window.__importParsed=null; return; }
+    if(!f){ if(box) box.textContent='Nenhum arquivo ainda.'; window.__importParsed=null; return; }
     const text=await f.text();
     const parsed=parseImportFileContent(text, f.name);
     let kind=document.getElementById('importKind').value;
     if(kind==='auto') kind=parsed.kind;
     window.__importParsed={...parsed, kind, filename:f.name, text};
-    box.innerHTML=`<strong>${esc(f.name)}</strong> · ${parsed.rows.length} linha(s) · tipo: <strong>${esc(kind)}</strong><br>Colunas: ${esc(parsed.headers.slice(0,12).join(' · '))}`;
+    if(box) box.innerHTML=`<strong>${esc(f.name)}</strong> · ${parsed.rows.length} linha(s) · tipo: <strong>${esc(kind)}</strong>`;
   });
 }
 
@@ -6077,14 +6194,28 @@ async function commitImportSpreadsheet(){
   }else{
     const clinicId=document.getElementById('importClinic').value;
     if(!clinicId){ toast('Selecione a clínica dos honorários.'); return; }
-    const clinic=clinic(clinicId);
-    const origin=/particular/i.test(clinic.name||'')||clinicId==='particular'?'Particular':'Prestação';
+    const cl=clinic(clinicId);
+    const origin=/particular/i.test(cl.name||'')||clinicId==='particular'?'Particular':'Prestação';
     const data=mapHonorarioRows(parsed.rows,{clinicId, origin, prefix:clinicId.slice(0,3), source:parsed.filename});
     patients=importHistoricoPatients(data,{clinicId, origin, sourceTag:'csv-upload:'+clinicId});
   }
-  if(patients||costs) save();
+  const linked=ensurePeople()||0;
+  if(patients||costs||linked) save();
   closeModal();
   renderAll();
   toast(patients||costs?`Importação: +${patients} casos, +${costs} custos.`:'Nada novo (IDs já existiam).');
 }
 window.openImportSpreadsheetModal=openImportSpreadsheetModal;
+window.mapHonorarioRows=mapHonorarioRows;
+window.mapCustoRows=mapCustoRows;
+window.parseImportFileContent=parseImportFileContent;
+window.detectImportKind=detectImportKind;
+window.importHistoricoPatients=importHistoricoPatients;
+window.importHistoricoCosts=importHistoricoCosts;
+window.ensurePeople=ensurePeople;
+window.clinic=clinic;
+window.save=save;
+window.closeModal=closeModal;
+window.openModal=openModal;
+window.renderAll=renderAll;
+window.toast=toast;

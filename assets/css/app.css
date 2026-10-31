@@ -426,6 +426,14 @@
   .progressive-block[open]>summary::before{content:'▾'}
   .detail-grid .full,.detail-grid div.full{grid-column:1/-1}
   .person-form .progressive-block{margin-top:4px}
+  .import-stepper{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+  .import-step{
+    font-size:11px;letter-spacing:.04em;padding:6px 10px;border-radius:999px;
+    border:1px solid #efebe4;color:var(--muted);background:var(--panel-2);
+  }
+  .import-step.active{border-color:#262724;color:#262724;font-weight:650;background:#fff}
+  .import-step.done{border-color:#c8e0c4;color:#2f6b3a;background:#f3faf2}
+  .import-map-table select.select{width:100%;min-width:160px}
   .svc-filter-row{
     display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;
   }

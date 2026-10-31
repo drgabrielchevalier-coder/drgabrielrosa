@@ -1,10 +1,10 @@
 {
-  "version": "2.13.0",
-  "name": "Fase 4 — Pacientes e entrada de dados",
+  "version": "2.14.0",
+  "name": "Fase 5 — Integrações e refinamentos",
   "releasedAt": "2026-10-30",
   "changes": [
-    "Cadastro único progressivo: essenciais (nome, telefone, clínica, vínculo) e opcionais sem bloquear.",
-    "Ficha integrada do paciente: visão geral, tratamentos, orçamentos, financeiro, próteses, prontuário e histórico.",
-    "Formulários contextuais e atalhos no ＋ Novo (despesa, recebimento/baixa, paciente) conforme a tela atual."
+    "Importação assistida CSV/HTML/XLSX: prévia, mapeamento, validação, duplicatas, confirmação e registro de lote.",
+    "Painel de conciliação e vínculos entre cadastro, tratamentos, financeiro e prótese; reparo de personId.",
+    "Guarda anti-wipe no app_state e schemaVersion — evolução controlada sem apagar histórico."
   ]
 }
