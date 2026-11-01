@@ -1872,6 +1872,12 @@ function monthlySeries(count=6){
     return {key:k,label:monthLabel(k),revenue,billed,cost,overhead,profit:revenue-cost,cases:pts.length};
   });
 }
+function dashTimeGreeting(){
+  const hour=Number(new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',hour:'numeric',hour12:false}).format(new Date()));
+  if(hour<12) return 'Bom dia';
+  if(hour<18) return 'Boa tarde';
+  return 'Boa noite';
+}
 function renderDashboard(){
   const patients=state.patients.filter(p=>inPeriod(p.date));
   const costsPeriod=state.costs.filter(c=>inPeriod(c.date));
@@ -1882,6 +1888,10 @@ function renderDashboard(){
   const lucro=rec-custos;
   const margem=pct(lucro,rec);
   const overdue=state.patients.filter(isOverdue);
+  const greetEl=document.getElementById('dashGreeting');
+  const guideEl=document.getElementById('dashGuide');
+  if(greetEl) greetEl.textContent=`${dashTimeGreeting()}, Gabriel`;
+  if(guideEl) guideEl.textContent='O que precisa da sua atenção — depois o panorama financeiro do período.';
 
   document.getElementById('kpiFaturamento').textContent=brl.format(fat);
   document.getElementById('kpiRecebido').textContent=brl.format(rec);
@@ -1936,12 +1946,54 @@ function renderDashboard(){
   }
 
   const attention=[];
-  if(getSetting('alertOverdue')) overdue.slice(0,3).forEach(p=>attention.push({kind:'red',title:`Cobrança vencida · ${p.name}`,sub:`${clinic(p.clinicId).name} · venceu ${fmtDate(p.due)}`,value:brl.format(balance(p))}));
-  if(getSetting('alertStock')) state.materials.filter(m=>Number(m.stock)<=Number(m.min)).slice(0,3).forEach(m=>attention.push({kind:'amber',title:`Estoque mínimo · ${m.name}`,sub:`Saldo ${m.stock} · mínimo ${m.min}`,value:m.brand}));
-  (state.reminders||[]).filter(r=>!r.done && r.date && r.date<=todayISO()).slice(0,3).forEach(r=>attention.push({kind:'blue',title:`Lembrete · ${r.title}`,sub:`${fmtDate(r.date)}${r.time?' · '+r.time:''}`,value:r.type||'Agenda'}));
-  document.getElementById('attentionCount').textContent=`${attention.length} itens`;
+  if(getSetting('alertOverdue') && overdue.length){
+    const openSum=overdue.reduce((s,p)=>s+balance(p),0);
+    attention.push({
+      kind:'red',
+      title:`${overdue.length} cobrança${overdue.length===1?'':'s'} vencida${overdue.length===1?'':'s'}`,
+      sub:`${brl.format(openSum)} em aberto`,
+      action:'Recebíveis',
+      go:'recebiveis',
+      primary:true
+    });
+  }
+  const lateWorks=(state.prostheses||[]).filter(w=>w.due && w.due<todayISO() && Number(w.stage)<workFinalStage(w));
+  if(lateWorks.length){
+    attention.push({
+      kind:'amber',
+      title:`${lateWorks.length} trabalho${lateWorks.length===1?'':'s'} atrasado${lateWorks.length===1?'':'s'}`,
+      sub:'Prazo de lab / produção ultrapassado',
+      action:'Produção',
+      go:'trabalhos'
+    });
+  }
+  const lowStock=getSetting('alertStock')?state.materials.filter(m=>Number(m.stock)<=Number(m.min)):[];
+  if(lowStock.length){
+    attention.push({
+      kind:'amber',
+      title:`${lowStock.length} materia${lowStock.length===1?'l':'is'} no mínimo`,
+      sub:lowStock.slice(0,2).map(m=>m.name).join(' · ')+(lowStock.length>2?'…':''),
+      action:'Estoque',
+      go:'estoque'
+    });
+  }
+  const dueReminders=(state.reminders||[]).filter(r=>!r.done && r.date && r.date<=todayISO());
+  if(dueReminders.length){
+    attention.push({
+      kind:'blue',
+      title:`${dueReminders.length} lembrete${dueReminders.length===1?'':'s'} pendente${dueReminders.length===1?'':'s'}`,
+      sub:dueReminders[0].title+(dueReminders.length>1?` · +${dueReminders.length-1}`:''),
+      action:'Agenda',
+      go:'calendario'
+    });
+  }
+  document.getElementById('attentionCount').textContent=`${attention.length} ite${attention.length===1?'m':'ns'}`;
   document.getElementById('attentionList').innerHTML=attention.length?attention.map(a=>`
-    <div class="list-item"><span class="dot ${a.kind}"></span><div class="list-main"><strong>${esc(a.title)}</strong><span>${esc(a.sub)}</span></div><div class="list-value">${esc(a.value)}</div></div>`).join(''):'<div class="empty">Nenhuma pendência crítica.</div>';
+    <div class="attn-row">
+      <span class="dot ${a.kind}"></span>
+      <div class="list-main"><strong>${esc(a.title)}</strong><span>${esc(a.sub)}</span></div>
+      <button type="button" class="btn small ${a.primary?'primary':''} attn-action" onclick="go('${esc(a.go)}')">${esc(a.action)}</button>
+    </div>`).join(''):'<div class="empty">Nenhuma pendência crítica — bom sinal.</div>';
 
   const clinicSummary=state.clinics.map(c=>{
     const arr=patients.filter(p=>p.clinicId===c.id);
