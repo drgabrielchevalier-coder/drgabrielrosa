@@ -21,6 +21,9 @@ header('Expires: 0');
 <meta name="description" content="Dr Gabriel Rosa — reabilitação oral e estética. Gestão clínica, financeira, pacientes, custos e próteses.">
 <meta name="robots" content="noindex,nofollow">
 <link rel="icon" type="image/svg+xml" href="<?= chevalier_asset_url('assets/img/favicon.svg') ?>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;500;600;650&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?= chevalier_asset_url('assets/css/app.css') ?>">
 <link rel="stylesheet" href="<?= chevalier_asset_url('assets/css/update.css') ?>">
 <script>
@@ -194,8 +197,8 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
       <section class="page active" id="page-dashboard">
         <div class="page-head">
           <div>
-            <h2>Dashboard</h2>
-            <p>Visão consolidada da sua produção, custos e rentabilidade.</p>
+            <h2 id="dashGreeting">Dashboard</h2>
+            <p id="dashGuide">O que precisa da sua atenção — depois o panorama financeiro do período.</p>
           </div>
           <div class="page-actions">
             <select class="select" id="periodSelect" onchange="renderAll()">
@@ -209,61 +212,95 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           </div>
         </div>
 
-        <div class="hero-note">
-          <div>
-            <h3>Resultado operacional</h3>
-            <p>Receita recebida menos custos diretamente atribuíveis aos casos lançados no período.</p>
-          </div>
-          <div class="hero-kpi">
-            <strong id="heroResult">R$ 0,00</strong>
-            <small id="heroMargin">Margem 0%</small>
-          </div>
-        </div>
+        <div class="flow">
+          <section class="block">
+            <div class="block-head">
+              <div class="step" aria-hidden="true">1</div>
+              <div>
+                <h3>Prioridades de hoje</h3>
+                <p>Itens que bloqueiam caixa ou produção se não forem tratados.</p>
+              </div>
+              <div class="right"><span class="badge b-red" id="attentionCount">0 itens</span></div>
+            </div>
+            <div class="block-body list" id="attentionList"></div>
+          </section>
 
-        <div class="grid kpi-grid">
-          <div class="kpi"><div class="label">Faturamento</div><div class="value" id="kpiFaturamento">R$ 0</div><div class="meta up">↑ Produção contratada</div></div>
-          <div class="kpi"><div class="label">Recebido</div><div class="value" id="kpiRecebido">R$ 0</div><div class="meta">Caixa realizado</div></div>
-          <div class="kpi"><div class="label">A receber</div><div class="value" id="kpiReceber">R$ 0</div><div class="meta down" id="kpiVencidos">0 vencidos</div></div>
-          <div class="kpi"><div class="label">Custos diretos</div><div class="value" id="kpiCustos">R$ 0</div><div class="meta">Materiais + lab + clínica</div></div>
-          <div class="kpi"><div class="label">Lucro operacional</div><div class="value" id="kpiLucro">R$ 0</div><div class="meta up">Resultado dos casos</div></div>
-          <div class="kpi"><div class="label">Margem média</div><div class="value" id="kpiMargem">0%</div><div class="meta">Sobre receita recebida</div></div>
-        </div>
-
-        <div class="grid layout-2">
-          <div class="card">
-            <div class="card-head">
-              <div><h3>Lucro bruto × custos</h3><small>Evolução mensal dos casos lançados</small></div>
-              <div class="right legend chart-legend">
-                <span class="leg leg-profit">Lucro bruto</span>
-                <span class="leg leg-cost">Custos</span>
+          <section class="block">
+            <div class="block-head">
+              <div class="step" aria-hidden="true">2</div>
+              <div>
+                <h3>Panorama do período</h3>
+                <p>Leitura rápida — detalhe em Prestação e Recebíveis.</p>
               </div>
             </div>
-            <div class="card-body chart-wrap">
-              <div id="chartMonthly" class="chart-monthly" aria-label="Gráfico mensal de lucro e custos"></div>
-              <div class="chart-axis" id="chartMonthlyLabels"></div>
+            <div class="block-body">
+              <div class="hero-note" style="margin:0 0 14px">
+                <div>
+                  <h3>Resultado operacional</h3>
+                  <p>Receita recebida menos custos atribuíveis aos casos do período.</p>
+                </div>
+                <div class="hero-kpi">
+                  <strong id="heroResult">R$ 0,00</strong>
+                  <small id="heroMargin">Margem 0%</small>
+                </div>
+              </div>
+              <div class="grid kpi-grid">
+                <div class="kpi"><div class="label">Faturamento</div><div class="value" id="kpiFaturamento">R$ 0</div><div class="meta up">Produção contratada</div></div>
+                <div class="kpi kpi-ok"><div class="label">Recebido</div><div class="value" id="kpiRecebido">R$ 0</div><div class="meta">Caixa realizado</div></div>
+                <div class="kpi kpi-warn"><div class="label">A receber</div><div class="value" id="kpiReceber">R$ 0</div><div class="meta down" id="kpiVencidos">0 vencidos</div></div>
+                <div class="kpi"><div class="label">Custos diretos</div><div class="value" id="kpiCustos">R$ 0</div><div class="meta">Materiais + lab + clínica</div></div>
+                <div class="kpi kpi-ok"><div class="label">Lucro operacional</div><div class="value" id="kpiLucro">R$ 0</div><div class="meta up">Resultado dos casos</div></div>
+                <div class="kpi"><div class="label">Margem média</div><div class="value" id="kpiMargem">0%</div><div class="meta">Sobre receita recebida</div></div>
+              </div>
             </div>
-          </div>
-          <div class="card">
-            <div class="card-head"><h3>Atenção hoje</h3><div class="right"><span class="badge b-red" id="attentionCount">0 itens</span></div></div>
-            <div class="card-body list" id="attentionList"></div>
-          </div>
-        </div>
+          </section>
 
-        <div class="grid layout-2" style="margin-top:16px">
-          <div class="card">
-            <div class="card-head"><div><h3>Recebido × a receber</h3><small>Caixa do período selecionado</small></div></div>
-            <div class="card-body" id="chartCash"></div>
-          </div>
-          <div class="card">
-            <div class="card-head"><div><h3>Top procedimentos</h3><small>Lucro por tipo de procedimento</small></div></div>
-            <div class="card-body" id="chartTopProcs"></div>
-          </div>
+          <section class="block">
+            <div class="block-head">
+              <div class="step" aria-hidden="true">3</div>
+              <div>
+                <h3>Evolução e distribuição</h3>
+                <p>Lucro × custos, caixa e ranking de procedimentos.</p>
+              </div>
+            </div>
+            <div class="block-body">
+              <div class="grid layout-2">
+                <div class="card" style="box-shadow:none">
+                  <div class="card-head">
+                    <div><h3>Lucro bruto × custos</h3><small>Evolução mensal</small></div>
+                    <div class="right legend chart-legend">
+                      <span class="leg leg-profit">Lucro bruto</span>
+                      <span class="leg leg-cost">Custos</span>
+                    </div>
+                  </div>
+                  <div class="card-body chart-wrap">
+                    <div id="chartMonthly" class="chart-monthly" aria-label="Gráfico mensal de lucro e custos"></div>
+                    <div class="chart-axis" id="chartMonthlyLabels"></div>
+                  </div>
+                </div>
+                <div class="card" style="box-shadow:none">
+                  <div class="card-head"><div><h3>Recebido × a receber</h3><small>Caixa do período</small></div></div>
+                  <div class="card-body" id="chartCash"></div>
+                </div>
+              </div>
+              <div class="grid layout-2" style="margin-top:14px">
+                <div class="card" style="box-shadow:none">
+                  <div class="card-head"><div><h3>Top procedimentos</h3><small>Lucro por tipo</small></div></div>
+                  <div class="card-body" id="chartTopProcs"></div>
+                </div>
+                <div class="card" style="box-shadow:none">
+                  <div class="card-head"><h3>Distribuição de custos</h3></div>
+                  <div class="card-body" id="costDistribution"></div>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
 
         <div class="section-title">Resultado por centro</div>
         <div class="grid layout-3" id="clinicSummary"></div>
 
-        <div class="grid layout-2">
+        <div class="grid layout-2" style="margin-top:14px">
           <div class="card">
             <div class="card-head"><h3>Últimos pacientes / lançamentos</h3><div class="right"><button class="btn small" onclick="go('pacientes')">Ver todos</button></div></div>
             <div class="table-wrap">
@@ -274,8 +311,14 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
             </div>
           </div>
           <div class="card">
-            <div class="card-head"><h3>Distribuição de custos</h3></div>
-            <div class="card-body" id="costDistribution"></div>
+            <div class="card-head"><h3>Atalhos</h3></div>
+            <div class="card-body" style="display:flex;flex-wrap:wrap;gap:8px">
+              <button type="button" class="btn" onclick="go('recebiveis')">Recebíveis</button>
+              <button type="button" class="btn" onclick="go('prestacao')">Prestação</button>
+              <button type="button" class="btn" onclick="go('trabalhos')">Produção</button>
+              <button type="button" class="btn" onclick="go('estoque')">Estoque</button>
+              <button type="button" class="btn primary" onclick="openQuickModal()">＋ Novo</button>
+            </div>
           </div>
         </div>
       </section>
@@ -283,42 +326,70 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
       <!-- PACIENTES -->
       <section class="page" id="page-pacientes">
         <div class="page-head">
-          <div><h2>Pacientes</h2><p>Cadastro único progressivo, ficha integrada e tratamentos vinculados — sem misturar pessoas por nome.</p></div>
+          <div>
+            <h2>Pacientes</h2>
+            <p>Cada linha é um tratamento. A ficha reúne cadastro, financeiro e prótese da mesma pessoa — sem misturar homônimos.</p>
+          </div>
           <div class="page-actions">
             <button class="btn" onclick="openPatientModal()">＋ Novo tratamento</button>
             <button class="btn primary" onclick="openPersonModal()">＋ Novo paciente</button>
           </div>
         </div>
-        <div class="toolbar patients-toolbar">
-          <input class="input" id="patientSearch" placeholder="Buscar paciente..." oninput="renderPatients()">
-          <select class="select" id="patientClinicFilter" onchange="renderPatients()">
-            <option value="">Todas as clínicas</option>
-          </select>
-          <div class="view-toggle" role="tablist" aria-label="Visualização">
-            <button type="button" class="view-tab active" data-view="lista" onclick="setPatientView('lista',this)">Lista</button>
-            <button type="button" class="view-tab" data-view="kanban" onclick="setPatientView('kanban',this)">Kanban</button>
-            <button type="button" class="view-tab" data-view="grafico" onclick="setPatientView('grafico',this)">Gráfico</button>
-          </div>
-          <select class="select" id="patientAxisFilter" onchange="setPatientAxis(this.value)" title="Agrupar / filtrar por">
-            <option value="financeiro">Status financeiro</option>
-            <option value="tratamento">Status de tratamento</option>
-          </select>
-          <select class="select" id="patientStatusFilter" onchange="renderPatients()">
-            <option value="">Todos os status</option>
-          </select>
-        </div>
-        <div id="patientsListView" class="card">
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Paciente</th><th>Origem / Clínica</th><th>Tratamento</th><th>Data</th><th>Valor</th><th>Custos</th><th>Lucro</th><th>Status</th><th></th></tr></thead>
-              <tbody id="patientsTable"></tbody>
-            </table>
-          </div>
-        </div>
-        <div id="patientsKanbanView" class="patients-kanban-wrap" hidden></div>
-        <div id="patientsChartView" class="card" hidden>
-          <div class="card-head"><h3 id="patientsChartTitle">Distribuição</h3><div class="right"><span class="badge b-gray" id="patientsChartCount">0</span></div></div>
-          <div class="card-body" id="patientsChartBody"></div>
+        <div class="flow">
+          <section class="block">
+            <div class="block-head">
+              <div class="step" aria-hidden="true">1</div>
+              <div>
+                <h3>Como visualizar</h3>
+                <p>Lista para o dia a dia · Kanban para status · Gráfico para distribuição.</p>
+              </div>
+            </div>
+            <div class="block-body">
+              <div class="toolbar patients-toolbar" style="margin:0">
+                <input class="input" id="patientSearch" placeholder="Nome, telefone ou tratamento…" oninput="renderPatients()">
+                <select class="select" id="patientClinicFilter" onchange="renderPatients()">
+                  <option value="">Todas as clínicas</option>
+                </select>
+                <div class="view-toggle" role="tablist" aria-label="Visualização">
+                  <button type="button" class="view-tab active" data-view="lista" onclick="setPatientView('lista',this)">Lista</button>
+                  <button type="button" class="view-tab" data-view="kanban" onclick="setPatientView('kanban',this)">Kanban</button>
+                  <button type="button" class="view-tab" data-view="grafico" onclick="setPatientView('grafico',this)">Gráfico</button>
+                </div>
+                <select class="select" id="patientAxisFilter" onchange="setPatientAxis(this.value)" title="Agrupar / filtrar por">
+                  <option value="financeiro">Status financeiro</option>
+                  <option value="tratamento">Status de tratamento</option>
+                </select>
+                <select class="select" id="patientStatusFilter" onchange="renderPatients()">
+                  <option value="">Todos os status</option>
+                </select>
+              </div>
+            </div>
+          </section>
+          <section class="block">
+            <div class="block-head">
+              <div class="step" aria-hidden="true">2</div>
+              <div>
+                <h3>Casos em acompanhamento</h3>
+                <p>Abra a ficha integrada ou edite só o lançamento. Cadastro = pessoa · Tratamento = caso.</p>
+              </div>
+            </div>
+            <div class="block-body tight">
+              <div id="patientsListView">
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>Paciente</th><th>Origem / Clínica</th><th>Tratamento</th><th>Data</th><th>Valor</th><th>Custos</th><th>Lucro</th><th>Status</th><th></th></tr></thead>
+                    <tbody id="patientsTable"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div id="patientsKanbanView" class="patients-kanban-wrap" hidden></div>
+              <div id="patientsChartView" hidden>
+                <div class="card-head" style="padding-left:0;padding-right:0;border:0"><h3 id="patientsChartTitle">Distribuição</h3><div class="right"><span class="badge b-gray" id="patientsChartCount">0</span></div></div>
+                <div class="card-body" id="patientsChartBody" style="padding:0"></div>
+              </div>
+              <div class="flow-hint"><strong>Cadastro</strong> = pessoa · <strong>Tratamento</strong> = lançamento clínico/financeiro. Um paciente pode ter vários tratamentos.</div>
+            </div>
+          </section>
         </div>
       </section>
 
@@ -574,8 +645,14 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
       <!-- RECEBIVEIS -->
       <section class="page" id="page-recebiveis">
         <div class="page-head">
-          <div><h2>Recebíveis</h2><p>Valores contratados, baixas parciais/quitação, conciliação e fechamento por clínica.</p></div>
-          <div class="page-actions"><button class="btn primary" onclick="openReceivableModal()">＋ Novo recebível</button></div>
+          <div>
+            <h2>Recebíveis</h2>
+            <p>Acompanhe previsto, recebido e em aberto. Baixe parcial ou quite sem alterar o valor original do lançamento.</p>
+          </div>
+          <div class="page-actions">
+            <button type="button" class="btn" onclick="setReceivablesTab('fechamento')">Fechamento</button>
+            <button class="btn primary" onclick="openReceivableModal()">＋ Novo recebível</button>
+          </div>
         </div>
         <div class="bill-tabs recv-tabs" role="tablist" aria-label="Recebíveis">
           <button type="button" class="bill-tab active" data-recv-tab="lista" onclick="setReceivablesTab('lista')">Lista e baixas</button>
@@ -583,66 +660,125 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
         </div>
 
         <div id="recvPaneLista" data-recv-pane="lista">
-          <div class="grid kpi-grid recv-kpi" style="grid-template-columns:repeat(7,minmax(100px,1fr))">
-            <div class="kpi"><div class="label">Previsto</div><div class="value" id="recvKpiPrevisto">R$ 0</div></div>
-            <div class="kpi"><div class="label">Recebido</div><div class="value" id="recvKpiRecebido">R$ 0</div></div>
-            <div class="kpi"><div class="label">Em aberto</div><div class="value" id="recvKpiAberto">R$ 0</div></div>
-            <div class="kpi"><div class="label">Parciais</div><div class="value" id="recvKpiParcial">0</div></div>
-            <div class="kpi"><div class="label">Vencidos</div><div class="value" id="recvKpiVencido">0</div></div>
-            <div class="kpi"><div class="label">Quitados</div><div class="value" id="recvKpiQuitado">0</div></div>
-            <div class="kpi"><div class="label">Divergências</div><div class="value" id="recvKpiDiverg">0</div></div>
+          <div class="flow">
+            <section class="block">
+              <div class="block-head">
+                <div class="step" aria-hidden="true">1</div>
+                <div>
+                  <h3>Panorama do período</h3>
+                  <p>Totais da seleção atual — use os filtros abaixo para afunilar.</p>
+                </div>
+              </div>
+              <div class="block-body">
+                <div class="grid kpi-grid recv-kpi" style="grid-template-columns:repeat(7,minmax(100px,1fr))">
+                  <div class="kpi"><div class="label">Previsto</div><div class="value" id="recvKpiPrevisto">R$ 0</div></div>
+                  <div class="kpi kpi-ok"><div class="label">Recebido</div><div class="value" id="recvKpiRecebido">R$ 0</div></div>
+                  <div class="kpi kpi-warn"><div class="label">Em aberto</div><div class="value" id="recvKpiAberto">R$ 0</div></div>
+                  <div class="kpi"><div class="label">Parciais</div><div class="value" id="recvKpiParcial">0</div></div>
+                  <div class="kpi kpi-danger"><div class="label">Vencidos</div><div class="value" id="recvKpiVencido">0</div></div>
+                  <div class="kpi kpi-ok"><div class="label">Quitados</div><div class="value" id="recvKpiQuitado">0</div></div>
+                  <div class="kpi"><div class="label">Divergências</div><div class="value" id="recvKpiDiverg">0</div></div>
+                </div>
+              </div>
+            </section>
+            <section class="block">
+              <div class="block-head">
+                <div class="step" aria-hidden="true">2</div>
+                <div>
+                  <h3>Filtrar e localizar</h3>
+                  <p>Clínica, procedimento, período, vencimento, forma de pagamento e situação.</p>
+                </div>
+              </div>
+              <div class="block-body">
+                <div class="toolbar patients-toolbar recv-toolbar" style="margin:0 0 10px">
+                  <input class="input" id="recvSearch" placeholder="Buscar paciente…" oninput="renderReceivables()">
+                  <select class="select" id="recvClinicFilter" onchange="renderReceivables()"><option value="">Todas as clínicas</option></select>
+                  <select class="select" id="recvProcFilter" onchange="renderReceivables()"><option value="">Todos os procedimentos</option></select>
+                  <input class="input" id="recvFrom" type="date" title="Período (data do lançamento) de" onchange="renderReceivables()">
+                  <input class="input" id="recvTo" type="date" title="até" onchange="renderReceivables()">
+                  <select class="select" id="recvDueFilter" onchange="renderReceivables()">
+                    <option value="">Vencimento: todos</option>
+                    <option value="overdue">Vencidos</option>
+                    <option value="open">Em aberto</option>
+                    <option value="due7">Vence em 7 dias</option>
+                    <option value="diverg">Só divergências</option>
+                  </select>
+                  <select class="select" id="recvMethodFilter" onchange="renderReceivables()">
+                    <option value="">Forma de pgto: todas</option>
+                  </select>
+                  <input class="input" id="recvMinValue" type="number" min="0" step="0.01" placeholder="Valor mín." title="Valor mínimo do recebível" oninput="renderReceivables()">
+                  <input class="input" id="recvMaxValue" type="number" min="0" step="0.01" placeholder="Valor máx." title="Valor máximo do recebível" oninput="renderReceivables()">
+                </div>
+                <div class="toolbar" style="margin:0">
+                  <button type="button" class="filter-chip active" data-recv-status="" onclick="setReceivableFilter('',this)">Todos</button>
+                  <button type="button" class="filter-chip" data-recv-status="À receber" onclick="setReceivableFilter('À receber',this)">À receber</button>
+                  <button type="button" class="filter-chip" data-recv-status="Recebido parcial" onclick="setReceivableFilter('Recebido parcial',this)">Parcial</button>
+                  <button type="button" class="filter-chip" data-recv-status="Faturado / Recebido" onclick="setReceivableFilter('Faturado / Recebido',this)">Recebidos</button>
+                  <button type="button" class="filter-chip" data-recv-status="Aguardando acerto" onclick="setReceivableFilter('Aguardando acerto',this)">Aguardando acerto</button>
+                </div>
+              </div>
+            </section>
+            <section class="block">
+              <div class="block-head">
+                <div class="step" aria-hidden="true">3</div>
+                <div>
+                  <h3>Lançamentos</h3>
+                  <p>Abra a ficha ou registre a baixa. O honorário original nunca é substituído pela parcela.</p>
+                </div>
+              </div>
+              <div class="block-body tight">
+                <div class="table-wrap"><table>
+                  <thead><tr><th>Paciente</th><th>Clínica</th><th>Tratamento</th><th>Valor</th><th>Recebido</th><th>Saldo</th><th>Vencimento</th><th>Status</th><th></th></tr></thead>
+                  <tbody id="receivablesTable"></tbody>
+                </table></div>
+                <div class="flow-hint">Use <strong>Fechamento</strong> no topo para o demonstrativo por clínica com snapshot da regra — sem recalcular histórico.</div>
+                <h3 class="section-title">Extrato de baixas</h3>
+                <p class="page-subhint">Histórico individual — quitação, parcial ou estorno.</p>
+                <div id="receivablesPaymentExtrato"><div class="empty">Nenhuma baixa registrada ainda.</div></div>
+              </div>
+            </section>
           </div>
-          <div class="toolbar patients-toolbar recv-toolbar">
-            <input class="input" id="recvSearch" placeholder="Buscar paciente…" oninput="renderReceivables()">
-            <select class="select" id="recvClinicFilter" onchange="renderReceivables()"><option value="">Todas as clínicas</option></select>
-            <select class="select" id="recvProcFilter" onchange="renderReceivables()"><option value="">Todos os procedimentos</option></select>
-            <input class="input" id="recvFrom" type="date" title="Período (data do lançamento) de" onchange="renderReceivables()">
-            <input class="input" id="recvTo" type="date" title="até" onchange="renderReceivables()">
-            <select class="select" id="recvDueFilter" onchange="renderReceivables()">
-              <option value="">Vencimento: todos</option>
-              <option value="overdue">Vencidos</option>
-              <option value="open">Em aberto</option>
-              <option value="due7">Vence em 7 dias</option>
-              <option value="diverg">Só divergências</option>
-            </select>
-            <select class="select" id="recvMethodFilter" onchange="renderReceivables()">
-              <option value="">Forma de pgto: todas</option>
-            </select>
-            <input class="input" id="recvMinValue" type="number" min="0" step="0.01" placeholder="Valor mín." title="Valor mínimo do recebível" oninput="renderReceivables()">
-            <input class="input" id="recvMaxValue" type="number" min="0" step="0.01" placeholder="Valor máx." title="Valor máximo do recebível" oninput="renderReceivables()">
-          </div>
-          <div class="toolbar">
-            <button type="button" class="filter-chip active" data-recv-status="" onclick="setReceivableFilter('',this)">Todos</button>
-            <button type="button" class="filter-chip" data-recv-status="À receber" onclick="setReceivableFilter('À receber',this)">À receber</button>
-            <button type="button" class="filter-chip" data-recv-status="Recebido parcial" onclick="setReceivableFilter('Recebido parcial',this)">Parcial</button>
-            <button type="button" class="filter-chip" data-recv-status="Faturado / Recebido" onclick="setReceivableFilter('Faturado / Recebido',this)">Recebidos</button>
-            <button type="button" class="filter-chip" data-recv-status="Aguardando acerto" onclick="setReceivableFilter('Aguardando acerto',this)">Aguardando acerto</button>
-          </div>
-          <div class="card"><div class="table-wrap"><table>
-            <thead><tr><th>Paciente</th><th>Clínica</th><th>Tratamento</th><th>Valor</th><th>Recebido</th><th>Saldo</th><th>Vencimento</th><th>Status</th><th></th></tr></thead>
-            <tbody id="receivablesTable"></tbody>
-          </table></div></div>
-          <h3 class="section-title">Extrato de baixas</h3>
-          <p class="page-subhint">Histórico individual — quitação, parcial ou estorno. O valor original do recebível nunca é substituído pela parcela.</p>
-          <div class="card" id="receivablesPaymentExtrato"><div class="empty">Nenhuma baixa registrada ainda.</div></div>
         </div>
 
         <div id="recvPaneFechamento" data-recv-pane="fechamento" hidden>
-          <p class="page-subhint">Demonstrativo por clínica e período. Usa o snapshot da regra nos lançamentos novos; não recalcula histórico ao mudar o contrato.</p>
-          <div class="toolbar patients-toolbar">
-            <select class="select" id="closeClinic" onchange="onClosingClinicChange()"><option value="">Selecione a clínica</option></select>
-            <input class="input" id="closeFrom" type="date" onchange="renderClinicClosing()">
-            <input class="input" id="closeTo" type="date" onchange="renderClinicClosing()">
-            <button type="button" class="btn" id="closeSuggestBtn" onclick="suggestClosingPeriod()">Usar período do contrato</button>
+          <div class="flow">
+            <section class="block">
+              <div class="block-head">
+                <div class="step" aria-hidden="true">1</div>
+                <div>
+                  <h3>Período e clínica</h3>
+                  <p>Demonstrativo usa o snapshot da regra nos lançamentos; não recalcula ao mudar o contrato.</p>
+                </div>
+              </div>
+              <div class="block-body">
+                <div class="toolbar patients-toolbar" style="margin:0">
+                  <select class="select" id="closeClinic" onchange="onClosingClinicChange()"><option value="">Selecione a clínica</option></select>
+                  <input class="input" id="closeFrom" type="date" onchange="renderClinicClosing()">
+                  <input class="input" id="closeTo" type="date" onchange="renderClinicClosing()">
+                  <button type="button" class="btn" id="closeSuggestBtn" onclick="suggestClosingPeriod()">Usar período do contrato</button>
+                </div>
+              </div>
+            </section>
+            <section class="block">
+              <div class="block-head">
+                <div class="step" aria-hidden="true">2</div>
+                <div>
+                  <h3>Totais e demonstrativo</h3>
+                  <p>Honorários, taxas, reembolsos, recebido e saldo do período.</p>
+                </div>
+              </div>
+              <div class="block-body">
+                <div class="grid kpi-grid" style="grid-template-columns:repeat(5,minmax(120px,1fr));margin-bottom:14px">
+                  <div class="kpi"><div class="label">Honorários</div><div class="value" id="closeKpiHonor">R$ 0</div></div>
+                  <div class="kpi"><div class="label">Taxas</div><div class="value" id="closeKpiTaxa">R$ 0</div></div>
+                  <div class="kpi"><div class="label">Reembolsos</div><div class="value" id="closeKpiReemb">R$ 0</div></div>
+                  <div class="kpi kpi-ok"><div class="label">Recebido</div><div class="value" id="closeKpiRec">R$ 0</div></div>
+                  <div class="kpi kpi-warn"><div class="label">Saldo</div><div class="value" id="closeKpiSaldo">R$ 0</div></div>
+                </div>
+                <div id="clinicClosingBox"><div class="empty">Selecione clínica e período.</div></div>
+              </div>
+            </section>
           </div>
-          <div class="grid kpi-grid" style="grid-template-columns:repeat(5,minmax(120px,1fr));margin-bottom:14px">
-            <div class="kpi"><div class="label">Honorários</div><div class="value" id="closeKpiHonor">R$ 0</div></div>
-            <div class="kpi"><div class="label">Taxas</div><div class="value" id="closeKpiTaxa">R$ 0</div></div>
-            <div class="kpi"><div class="label">Reembolsos</div><div class="value" id="closeKpiReemb">R$ 0</div></div>
-            <div class="kpi"><div class="label">Recebido</div><div class="value" id="closeKpiRec">R$ 0</div></div>
-            <div class="kpi"><div class="label">Saldo</div><div class="value" id="closeKpiSaldo">R$ 0</div></div>
-          </div>
-          <div class="card" id="clinicClosingBox"><div class="empty">Selecione clínica e período.</div></div>
         </div>
       </section>
 

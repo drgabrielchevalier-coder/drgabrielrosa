@@ -1,10 +1,10 @@
 {
-  "version": "2.14.0",
-  "name": "Fase 5 — Integrações e refinamentos",
-  "releasedAt": "2026-10-30",
+  "version": "2.15.0",
+  "name": "Layout didático — hierarquia e fluxo",
+  "releasedAt": "2026-11-01",
   "changes": [
-    "Importação assistida CSV/HTML/XLSX: prévia, mapeamento, validação, duplicatas, confirmação e registro de lote.",
-    "Painel de conciliação e vínculos entre cadastro, tratamentos, financeiro e prótese; reparo de personId.",
-    "Guarda anti-wipe no app_state e schemaVersion — evolução controlada sem apagar histórico."
+    "Tipografia Fraunces + Source Sans 3; tokens de cor e ritmo visual mais clínicos.",
+    "Dashboard, Pacientes e Recebíveis em seções numeradas (entender → filtrar → agir).",
+    "Prioridades do dia com atalhos; saudação contextual no dashboard."
   ]
 }
