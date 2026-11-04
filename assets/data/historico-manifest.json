@@ -2,6 +2,8 @@
   "version": 1,
   "format": "csv",
   "importsDir": "assets/data/imports",
+  "syncedAt": "2026-11-04T16:22:04Z",
+  "source": "Notion MCP sync",
   "sources": [
     {
       "id": "allon",
