@@ -75,16 +75,64 @@ function hashId(prefix, parts) {
   return `${prefix}-${h}`;
 }
 
+const APP_PROGRESS = [
+  'Orçamento', 'Em tratamento', 'Planejar caso', 'Solicitar material', 'Em fila / agendado',
+  'Aguardo pós Cirúrgico', 'Aguardando cicatrização', 'Aguardando moldagem', 'Moldagem',
+  'Enviado para Laboratório', 'Aguardando Prova', 'Aguardando Cimentação', 'Alta'
+];
+
+function isLabStatus(labRaw) {
+  const s = String(labRaw || '').trim().toLowerCase();
+  if (!s) return false;
+  return /^(n[aã]o|moldagem|prova\s*ok)$/.test(s) || /ciment/.test(s);
+}
+
 function normStatus(fin, honor) {
-  const f = String(fin || '');
-  if (/faturado|recebido/i.test(f) && !/parcial|não recebeu|nao recebeu/i.test(f)) {
-    return { status: 'Faturado / Recebido', received: honor };
-  }
-  if (/parcial/i.test(f)) return { status: 'Recebido parcial', received: honor * 0.5 };
-  if (/acordo/i.test(f)) return { status: 'Acordo', received: honor };
-  if (/aguardando acerto/i.test(f)) return { status: 'Aguardando acerto', received: 0 };
-  if (/não recebeu|nao recebeu/i.test(f)) return { status: 'À receber', received: 0 };
+  const f = String(fin || '').trim();
+  const fl = f.toLowerCase();
+  if (/n[aã]o vai receber/.test(fl)) return { status: 'Não vai receber', received: 0 };
+  if (/retrabalho/.test(fl)) return { status: 'Retrabalho', received: 0 };
+  if (/aguardando acerto/.test(fl)) return { status: 'Aguardando acerto', received: 0 };
+  if (/parcial|recebido parte/.test(fl)) return { status: 'Recebido parcial', received: Math.round(honor * 50) / 100 };
+  if (/acordo/.test(fl)) return { status: 'Faturado / Recebido', received: honor };
+  if (/faturado|recebido/.test(fl) && !/n[aã]o recebeu/.test(fl)) return { status: 'Faturado / Recebido', received: honor };
   return { status: 'À receber', received: 0 };
+}
+
+function normProgress(rawProgress, labRaw, status, finRaw) {
+  let p = String(rawProgress || '').trim();
+  const lab = String(labRaw || '').trim();
+  if (/faturado|recebido\s*\(\$\)/i.test(p) || /^recebido/i.test(p)) {
+    p = status === 'Faturado / Recebido' ? 'Alta' : 'Em tratamento';
+  }
+  const aliases = {
+    're-moldagem': 'Moldagem', remoldagem: 'Moldagem',
+    'aguardando prova': 'Aguardando Prova',
+    'aguardando entrega': 'Enviado para Laboratório',
+    'aguardando liberação': 'Em tratamento', 'aguardando liberacao': 'Em tratamento',
+    'enviado para reembasamento': 'Enviado para Laboratório',
+    'enviado para acrilização': 'Enviado para Laboratório', 'enviado para acrilizacao': 'Enviado para Laboratório',
+    ajuste: 'Em tratamento', 'in progress': 'Em tratamento',
+    'não retornou': 'Em tratamento', 'nao retornou': 'Em tratamento'
+  };
+  const key = p.toLowerCase().replace(/\s+$/, '');
+  if (aliases[key]) p = aliases[key];
+  else {
+    const hit = APP_PROGRESS.find(s => s.toLowerCase() === key);
+    if (hit) p = hit;
+  }
+  if (isLabStatus(lab)) {
+    const ll = lab.toLowerCase();
+    if (ll === 'moldagem') p = 'Moldagem';
+    else if (/^prova/.test(ll)) p = 'Aguardando Prova';
+    else if (/ciment/.test(ll)) p = status === 'Faturado / Recebido' ? 'Alta' : 'Aguardando Cimentação';
+  }
+  if (/^moldagem$/i.test(String(finRaw || '').trim())) p = 'Moldagem';
+  if (status === 'Faturado / Recebido' && (!p || p === 'Em tratamento' || p === 'Orçamento') && (!lab || /^n[aã]o$/i.test(lab) || !isLabStatus(lab))) {
+    p = 'Alta';
+  }
+  if (!APP_PROGRESS.includes(p)) p = 'Em tratamento';
+  return p;
 }
 
 function toothFromObs(obs) {
@@ -109,8 +157,8 @@ function guessProcedure(obs, tipo) {
   return 'proc-historico-livre';
 }
 
-function syncFlowFromProgress(progress, obs) {
-  const t = `${progress || ''} ${obs || ''}`.toLowerCase();
+function syncFlowFromProgress(progress, obs, labFlag = '') {
+  const t = `${progress || ''} ${obs || ''} ${labFlag || ''}`.toLowerCase();
   return /prova|moldagem|laborat|ciment|protese|prótese|coroa/.test(t);
 }
 
@@ -145,13 +193,14 @@ function convertHonorarios(csvPath, meta) {
     const due = dateBR(pick(row, ['Data da Cobrança', 'Data da Cobranca'])) || date;
     const fin = pick(row, ['Financeiro']);
     const obs = String(pick(row, ['Observação', 'Observacao', 'Texto'])).trim();
-    const progress = String(pick(row, ['Progresso']) || 'Em tratamento').trim() || 'Em tratamento';
     const tipo = pick(row, ['Tipo']);
     const mref = monthRef(pick(row, ['Mês Referencia novo', 'Mes Referencia novo', 'Resumo Financeiro', '💲 Resumo Financeiro']));
     const { status, received } = normStatus(fin, honor);
+    const progress = normProgress(pick(row, ['Progresso']), labRaw, status, fin);
     const procedureId = guessProcedure(obs, tipo);
     const tooth = toothFromObs(obs);
     const importId = hashId(meta.prefix, [meta.clinicId, name, date, honor, obs, practiced]);
+    const labFlag = isLabStatus(labRaw) ? String(labRaw).trim() : '';
     out.push({
       importId,
       name,
@@ -160,7 +209,7 @@ function convertHonorarios(csvPath, meta) {
       status,
       progress,
       value: honor,
-      received: status === 'Faturado / Recebido' ? honor : received,
+      received,
       practicedValue: practiced,
       observation: obs,
       notes: mref ? `${obs} [${mref}]`.trim() : obs,
@@ -170,12 +219,12 @@ function convertHonorarios(csvPath, meta) {
       lab,
       components,
       clinical: cc || clinical,
-      syncFlow: syncFlowFromProgress(progress, obs),
-      labFlag: String(pick(row, ['Lab', 'Lab '])).trim() === 'Não' ? 'Não' : ''
+      syncFlow: syncFlowFromProgress(progress, obs, labFlag),
+      labFlag
     });
   }
   return {
-    version: 1,
+    version: 2,
     source: meta.source,
     clinicId: meta.clinicId,
     origin: meta.origin,
@@ -219,7 +268,7 @@ function convertCustos(csvPath) {
     });
   }
   return {
-    version: 1,
+    version: 2,
     source: 'Controle de Custos (Notion)',
     kind: 'costs',
     count: out.length,
@@ -261,15 +310,15 @@ fs.writeFileSync(path.join(OUT, 'custos-historico.json'), JSON.stringify(custos,
 summary.push({ file: 'custos-historico.json', count: custos.count });
 
 const manifest = {
-  version: 1,
+  version: 2,
   format: 'csv',
   importsDir: 'assets/data/imports',
   sources: [
-    { id: 'allon', file: 'allon-historico.json', csv: 'imports/allon-honorarios.csv', flag: 'allonHistoricoV1', label: 'Allon Roter (honorários)', kind: 'patients', clinicId: 'allon' },
-    { id: 'daniele', file: 'daniele-historico.json', csv: 'imports/daniele-honorarios.csv', flag: 'danieleHistoricoV1', label: 'Daniele Belmiro (honorários)', kind: 'patients', clinicId: 'daniele' },
-    { id: 'gerlucia', file: 'gerlucia-historico.json', csv: 'imports/gerlucia-honorarios.csv', flag: 'gerluciaHistoricoV1', label: 'Gerlúcia (honorários)', kind: 'patients', clinicId: 'gerlucia' },
-    { id: 'particular', file: 'particular-historico.json', csv: 'imports/particular-honorarios.csv', flag: 'particularHistoricoV1', label: 'Particular (honorários)', kind: 'patients', clinicId: 'particular' },
-    { id: 'custos', file: 'custos-historico.json', csv: 'imports/custos.csv', flag: 'custosHistoricoV1', label: 'Controle de custos', kind: 'costs' }
+    { id: 'allon', file: 'allon-historico.json', csv: 'imports/allon-honorarios.csv', flag: 'allonHistoricoV2', label: 'Allon Roter (honorários)', kind: 'patients', clinicId: 'allon' },
+    { id: 'daniele', file: 'daniele-historico.json', csv: 'imports/daniele-honorarios.csv', flag: 'danieleHistoricoV2', label: 'Daniele Belmiro (honorários)', kind: 'patients', clinicId: 'daniele' },
+    { id: 'gerlucia', file: 'gerlucia-historico.json', csv: 'imports/gerlucia-honorarios.csv', flag: 'gerluciaHistoricoV2', label: 'Gerlúcia (honorários)', kind: 'patients', clinicId: 'gerlucia' },
+    { id: 'particular', file: 'particular-historico.json', csv: 'imports/particular-honorarios.csv', flag: 'particularHistoricoV2', label: 'Particular (honorários)', kind: 'patients', clinicId: 'particular' },
+    { id: 'custos', file: 'custos-historico.json', csv: 'imports/custos.csv', flag: 'custosHistoricoV2', label: 'Controle de custos', kind: 'costs' }
   ]
 };
 fs.writeFileSync(path.join(OUT, 'historico-manifest.json'), JSON.stringify(manifest, null, 2) + '\n');

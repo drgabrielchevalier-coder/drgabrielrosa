@@ -1,15 +1,32 @@
 {
-  "version": 1,
+  "version": 2,
   "format": "csv",
   "importsDir": "assets/data/imports",
-  "syncedAt": "2026-11-04T16:22:04Z",
-  "source": "Notion MCP sync",
+  "syncedAt": "2026-11-05T03:51:34Z",
+  "source": "Notion MCP sync (financeiro/progresso/lab alinhados ao app)",
+  "mapping": {
+    "financeiro": {
+      "Faturado / Recebido ($)": "Faturado / Recebido",
+      "ACORDO": "Faturado / Recebido",
+      "Aguardando Acerto": "Aguardando acerto",
+      "NAO VAI RECEBER": "Não vai receber",
+      "Recebido Parte": "Recebido parcial",
+      "RETRABALHO": "Retrabalho",
+      "Moldagem|COBRAR|Finalizar Endo|-|Não recebeu": "À receber"
+    },
+    "labAllon": {
+      "Moldagem": "progresso Moldagem",
+      "Prova OK": "progresso Aguardando Prova",
+      "Cimentado": "progresso Aguardando Cimentação ou Alta se quitado",
+      "Não": "sem lab monetário"
+    }
+  },
   "sources": [
     {
       "id": "allon",
       "file": "allon-historico.json",
       "csv": "imports/allon-honorarios.csv",
-      "flag": "allonHistoricoV1",
+      "flag": "allonHistoricoV2",
       "label": "Allon Roter (honorários)",
       "kind": "patients",
       "clinicId": "allon"
@@ -18,7 +35,7 @@
       "id": "daniele",
       "file": "daniele-historico.json",
       "csv": "imports/daniele-honorarios.csv",
-      "flag": "danieleHistoricoV1",
+      "flag": "danieleHistoricoV2",
       "label": "Daniele Belmiro (honorários)",
       "kind": "patients",
       "clinicId": "daniele"
@@ -27,7 +44,7 @@
       "id": "gerlucia",
       "file": "gerlucia-historico.json",
       "csv": "imports/gerlucia-honorarios.csv",
-      "flag": "gerluciaHistoricoV1",
+      "flag": "gerluciaHistoricoV2",
       "label": "Gerlúcia (honorários)",
       "kind": "patients",
       "clinicId": "gerlucia"
@@ -36,7 +53,7 @@
       "id": "particular",
       "file": "particular-historico.json",
       "csv": "imports/particular-honorarios.csv",
-      "flag": "particularHistoricoV1",
+      "flag": "particularHistoricoV2",
       "label": "Particular (honorários)",
       "kind": "patients",
       "clinicId": "particular"
@@ -45,7 +62,7 @@
       "id": "custos",
       "file": "custos-historico.json",
       "csv": "imports/custos.csv",
-      "flag": "custosHistoricoV1",
+      "flag": "custosHistoricoV2",
       "label": "Controle de custos",
       "kind": "costs"
     }

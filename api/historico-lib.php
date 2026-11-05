@@ -4,15 +4,16 @@ declare(strict_types=1);
 /**
  * Mescla históricos empacotados (assets/data/*-historico.json) no payload app_state.
  * Idempotente via importId + flags em state.imports.
+ * V2: upsert por importId para corrigir status/progresso financeiros.
  */
 function chevalier_historico_sources(): array
 {
     return [
-        ['id' => 'allon', 'file' => 'allon-historico.json', 'flag' => 'allonHistoricoV1', 'kind' => 'patients', 'clinicId' => 'allon', 'origin' => 'Prestação', 'sourceTag' => 'allon-historico'],
-        ['id' => 'daniele', 'file' => 'daniele-historico.json', 'flag' => 'danieleHistoricoV1', 'kind' => 'patients', 'clinicId' => 'daniele', 'origin' => 'Prestação', 'sourceTag' => 'daniele-historico'],
-        ['id' => 'gerlucia', 'file' => 'gerlucia-historico.json', 'flag' => 'gerluciaHistoricoV1', 'kind' => 'patients', 'clinicId' => 'gerlucia', 'origin' => 'Prestação', 'sourceTag' => 'gerlucia-historico'],
-        ['id' => 'particular', 'file' => 'particular-historico.json', 'flag' => 'particularHistoricoV1', 'kind' => 'patients', 'clinicId' => 'particular', 'origin' => 'Particular', 'sourceTag' => 'particular-historico'],
-        ['id' => 'custos', 'file' => 'custos-historico.json', 'flag' => 'custosHistoricoV1', 'kind' => 'costs', 'sourceTag' => 'custos-historico'],
+        ['id' => 'allon', 'file' => 'allon-historico.json', 'flag' => 'allonHistoricoV2', 'kind' => 'patients', 'clinicId' => 'allon', 'origin' => 'Prestação', 'sourceTag' => 'allon-historico'],
+        ['id' => 'daniele', 'file' => 'daniele-historico.json', 'flag' => 'danieleHistoricoV2', 'kind' => 'patients', 'clinicId' => 'daniele', 'origin' => 'Prestação', 'sourceTag' => 'daniele-historico'],
+        ['id' => 'gerlucia', 'file' => 'gerlucia-historico.json', 'flag' => 'gerluciaHistoricoV2', 'kind' => 'patients', 'clinicId' => 'gerlucia', 'origin' => 'Prestação', 'sourceTag' => 'gerlucia-historico'],
+        ['id' => 'particular', 'file' => 'particular-historico.json', 'flag' => 'particularHistoricoV2', 'kind' => 'patients', 'clinicId' => 'particular', 'origin' => 'Particular', 'sourceTag' => 'particular-historico'],
+        ['id' => 'custos', 'file' => 'custos-historico.json', 'flag' => 'custosHistoricoV2', 'kind' => 'costs', 'sourceTag' => 'custos-historico'],
     ];
 }
 
@@ -31,6 +32,39 @@ function chevalier_historico_load_json(string $file): ?array
     return is_array($data) ? $data : null;
 }
 
+function chevalier_historico_patient_fields(array $rec): array
+{
+    $procId = (string) ($rec['procedureId'] ?? 'proc-historico-livre');
+    return [
+        'procedureId' => $procId,
+        'lines' => [[
+            'procedureId' => $procId,
+            'qty' => 1,
+            'tooth' => (string) ($rec['tooth'] ?? ''),
+            'honorarium' => (float) ($rec['value'] ?? 0),
+            'practicedValue' => (float) ($rec['practicedValue'] ?? 0),
+        ]],
+        'date' => (string) ($rec['date'] ?? date('Y-m-d')),
+        'value' => (float) ($rec['value'] ?? 0),
+        'received' => (float) ($rec['received'] ?? 0),
+        'due' => (string) ($rec['due'] ?? $rec['date'] ?? date('Y-m-d')),
+        'status' => (string) ($rec['status'] ?? 'À receber'),
+        'lab' => (float) ($rec['lab'] ?? 0),
+        'components' => (float) ($rec['components'] ?? 0),
+        'clinical' => (float) ($rec['clinical'] ?? 0),
+        'progress' => (string) ($rec['progress'] ?? 'Em tratamento'),
+        'observation' => (string) ($rec['observation'] ?? ''),
+        'notes' => (string) ($rec['notes'] ?? $rec['observation'] ?? ''),
+        'monthRef' => (string) ($rec['monthRef'] ?? ''),
+        'labFlag' => (string) ($rec['labFlag'] ?? ''),
+        'practicedValue' => (float) ($rec['practicedValue'] ?? 0),
+        'billingSnap' => [
+            'practiced' => (float) ($rec['practicedValue'] ?? 0),
+            'netShare' => (float) ($rec['value'] ?? 0),
+        ],
+    ];
+}
+
 function chevalier_historico_merge_patients(array &$state, array $data, array $src): int
 {
     $records = $data['records'] ?? [];
@@ -40,61 +74,45 @@ function chevalier_historico_merge_patients(array &$state, array $data, array $s
     if (!isset($state['patients']) || !is_array($state['patients'])) {
         $state['patients'] = [];
     }
-    $existing = [];
-    foreach ($state['patients'] as $p) {
+    $byImport = [];
+    foreach ($state['patients'] as $i => $p) {
         if (!empty($p['importId'])) {
-            $existing[(string) $p['importId']] = true;
+            $byImport[(string) $p['importId']] = $i;
         }
     }
     $clinicId = (string) ($data['clinicId'] ?? $src['clinicId'] ?? 'particular');
     $origin = (string) ($data['origin'] ?? $src['origin'] ?? 'Prestação');
     $sourceTag = (string) ($src['sourceTag'] ?? 'historico');
-    $added = 0;
+    $touched = 0;
     foreach ($records as $rec) {
-        if (!is_array($rec) || empty($rec['importId']) || isset($existing[(string) $rec['importId']])) {
+        if (!is_array($rec) || empty($rec['importId'])) {
             continue;
         }
-        $procId = (string) ($rec['procedureId'] ?? 'proc-historico-livre');
-        $patient = [
+        $importId = (string) $rec['importId'];
+        $fields = chevalier_historico_patient_fields($rec);
+        if (isset($byImport[$importId])) {
+            $i = $byImport[$importId];
+            $state['patients'][$i] = array_merge($state['patients'][$i], $fields, [
+                'importSource' => $sourceTag,
+                'name' => (string) ($rec['name'] ?? $state['patients'][$i]['name'] ?? ''),
+            ]);
+            $touched++;
+            continue;
+        }
+        $state['patients'][] = array_merge([
             'id' => chevalier_historico_uid(),
-            'importId' => (string) $rec['importId'],
+            'importId' => $importId,
             'importSource' => $sourceTag,
             'name' => (string) ($rec['name'] ?? ''),
             'origin' => $origin,
             'clinicId' => $clinicId,
-            'procedureId' => $procId,
-            'lines' => [[
-                'procedureId' => $procId,
-                'qty' => 1,
-                'tooth' => (string) ($rec['tooth'] ?? ''),
-                'honorarium' => (float) ($rec['value'] ?? 0),
-                'practicedValue' => (float) ($rec['practicedValue'] ?? 0),
-            ]],
-            'date' => (string) ($rec['date'] ?? date('Y-m-d')),
-            'value' => (float) ($rec['value'] ?? 0),
-            'received' => (float) ($rec['received'] ?? 0),
-            'due' => (string) ($rec['due'] ?? $rec['date'] ?? date('Y-m-d')),
-            'status' => (string) ($rec['status'] ?? 'À receber'),
             'cost' => 0,
-            'lab' => (float) ($rec['lab'] ?? 0),
-            'components' => (float) ($rec['components'] ?? 0),
-            'clinical' => (float) ($rec['clinical'] ?? 0),
-            'progress' => (string) ($rec['progress'] ?? 'Em tratamento'),
-            'observation' => (string) ($rec['observation'] ?? ''),
-            'notes' => (string) ($rec['notes'] ?? $rec['observation'] ?? ''),
-            'monthRef' => (string) ($rec['monthRef'] ?? ''),
-            'practicedValue' => (float) ($rec['practicedValue'] ?? 0),
             'consumedItems' => [],
-            'billingSnap' => [
-                'practiced' => (float) ($rec['practicedValue'] ?? 0),
-                'netShare' => (float) ($rec['value'] ?? 0),
-            ],
-        ];
-        $state['patients'][] = $patient;
-        $existing[(string) $rec['importId']] = true;
-        $added++;
+        ], $fields);
+        $byImport[$importId] = count($state['patients']) - 1;
+        $touched++;
     }
-    return $added;
+    return $touched;
 }
 
 function chevalier_historico_merge_costs(array &$state, array $data, array $src): int
@@ -106,21 +124,20 @@ function chevalier_historico_merge_costs(array &$state, array $data, array $src)
     if (!isset($state['costs']) || !is_array($state['costs'])) {
         $state['costs'] = [];
     }
-    $existing = [];
-    foreach ($state['costs'] as $c) {
+    $byImport = [];
+    foreach ($state['costs'] as $i => $c) {
         if (!empty($c['importId'])) {
-            $existing[(string) $c['importId']] = true;
+            $byImport[(string) $c['importId']] = $i;
         }
     }
     $sourceTag = (string) ($src['sourceTag'] ?? 'custos-historico');
-    $added = 0;
+    $touched = 0;
     foreach ($records as $rec) {
-        if (!is_array($rec) || empty($rec['importId']) || isset($existing[(string) $rec['importId']])) {
+        if (!is_array($rec) || empty($rec['importId'])) {
             continue;
         }
-        $state['costs'][] = [
-            'id' => chevalier_historico_uid(),
-            'importId' => (string) $rec['importId'],
+        $importId = (string) $rec['importId'];
+        $fields = [
             'importSource' => $sourceTag,
             'desc' => (string) ($rec['desc'] ?? 'Custo'),
             'type' => (string) ($rec['type'] ?? 'OUTROS'),
@@ -133,10 +150,20 @@ function chevalier_historico_merge_costs(array &$state, array $data, array $src)
             'notes' => (string) ($rec['notes'] ?? ''),
             'monthRef' => (string) ($rec['monthRef'] ?? ''),
         ];
-        $existing[(string) $rec['importId']] = true;
-        $added++;
+        if (isset($byImport[$importId])) {
+            $i = $byImport[$importId];
+            $state['costs'][$i] = array_merge($state['costs'][$i], $fields);
+            $touched++;
+            continue;
+        }
+        $state['costs'][] = array_merge([
+            'id' => chevalier_historico_uid(),
+            'importId' => $importId,
+        ], $fields);
+        $byImport[$importId] = count($state['costs']) - 1;
+        $touched++;
     }
-    return $added;
+    return $touched;
 }
 
 /**
