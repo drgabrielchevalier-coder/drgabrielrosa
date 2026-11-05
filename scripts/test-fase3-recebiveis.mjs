@@ -5,17 +5,25 @@
  */
 function moneyRound(n){ return Math.round((Number(n)||0)*100)/100; }
 function balance(p){ return Math.max(0, moneyRound(Number(p.value||0)-Number(p.received||0))); }
+function isSpecialFinancialStatus(st){
+  return /não vai receber|nao vai receber|retrabalho|aguardando acerto/i.test(String(st||''));
+}
 function paymentStatusOf(p){
   const bal=balance(p);
   const rec=moneyRound(p.received||0);
+  const st=String(p.status||'');
+  if(/não vai receber|nao vai receber/i.test(st)) return 'Não vai receber';
+  if(/retrabalho/i.test(st)) return 'Retrabalho';
+  if(/aguardando acerto/i.test(st) && rec<=0) return 'Aguardando acerto';
   if(bal<=0) return 'Faturado / Recebido';
   if(rec>0) return 'Recebido parcial';
-  return String(p.status||'À receber');
+  return st||'À receber';
 }
 function syncPatientPaymentStatus(p){
   const bal=balance(p);
   if(bal<=0){ p.received=moneyRound(p.value||0); p.status='Faturado / Recebido'; }
   else if(moneyRound(p.received||0)>0) p.status='Recebido parcial';
+  else if(isSpecialFinancialStatus(p.status)){ /* preserve */ }
   return p;
 }
 function sumActivePayments(p){
@@ -138,6 +146,16 @@ function assert(cond, msg){ if(!cond){ console.error('FAIL:', msg); process.exit
   const p={id:'t5', value:200, received:200, status:'Faturado / Recebido'};
   assert(balance(p)===0 && paymentStatusOf(p)==='Faturado / Recebido', 'legado quitado sem ledger');
   assert(sumActivePayments(p)===0, 'sem ledger → soma 0 (não força divergência no teste unitário)');
+}
+
+// 6) status especiais Notion (Não vai receber / Aguardando acerto)
+{
+  const p={id:'t6', value:500, received:0, status:'Não vai receber'};
+  assert(paymentStatusOf(p)==='Não vai receber', 'preserva Não vai receber');
+  syncPatientPaymentStatus(p);
+  assert(p.status==='Não vai receber' && p.received===0, 'sync não apaga Não vai receber');
+  const a={id:'t6b', value:500, received:0, status:'Aguardando acerto'};
+  assert(paymentStatusOf(a)==='Aguardando acerto', 'preserva Aguardando acerto');
 }
 
 if(process.exitCode){

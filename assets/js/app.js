@@ -489,16 +489,28 @@ function patientCost(p){return Number(p.cost||0)+Number(p.lab||0)+Number(p.compo
 function patientProfit(p){return Number(p.value||0)-patientCost(p);}
 function moneyRound(n){return Math.round((Number(n)||0)*100)/100}
 function balance(p){return Math.max(0, moneyRound(Number(p.value||0)-Number(p.received||0)));}
-function isOverdue(p){return p.progress!=='Orçamento' && balance(p)>0 && p.due && p.due<todayISO();}
+function isSpecialFinancialStatus(st){
+  return /não vai receber|nao vai receber|retrabalho|aguardando acerto/i.test(String(st||''));
+}
+function isOverdue(p){
+  if(p.progress==='Orçamento') return false;
+  if(isSpecialFinancialStatus(p.status)) return false;
+  return balance(p)>0 && p.due && p.due<todayISO();
+}
 function paymentStatusOf(p){
   const bal=balance(p);
   const rec=moneyRound(p.received||0);
+  const st=String(p.status||'');
+  // Status especiais do Notion/Kanban financeiro — não viram "À receber" por atraso
+  if(/não vai receber|nao vai receber/i.test(st)) return 'Não vai receber';
+  if(/retrabalho/i.test(st)) return 'Retrabalho';
+  if(/aguardando acerto/i.test(st) && rec<=0) return 'Aguardando acerto';
   if(bal<=0) return 'Faturado / Recebido';
   if(rec>0) return 'Recebido parcial';
   if(isOverdue(p)) return 'À receber';
-  const st=String(p.status||'');
   if(/parcial/i.test(st)) return 'Recebido parcial';
   if(/faturado/i.test(st)) return 'À receber'; // status antigo inconsistente com saldo
+  if(PATIENT_FINANCIAL_STATUSES.includes(st)) return st;
   return st||'À receber';
 }
 function syncPatientPaymentStatus(p){
@@ -509,6 +521,8 @@ function syncPatientPaymentStatus(p){
     p.status='Faturado / Recebido';
   }else if(moneyRound(p.received||0)>0){
     p.status='Recebido parcial';
+  }else if(isSpecialFinancialStatus(p.status)){
+    // preserva Não vai receber / Retrabalho / Aguardando acerto
   }else if(/faturado/i.test(String(p.status||''))){
     p.status='À receber';
   }
@@ -3139,8 +3153,11 @@ function makeProductionWork(patient, flow){
 function syncProductionFromPatient(patient){
   if(!patient?.id) return;
   if(!Array.isArray(state.prostheses)) state.prostheses=[];
-  const wantsP=patientHasProstheticLines(patient);
-  const wantsS=patientHasSurgicalLines(patient);
+  const progP=prosthProgressStage(patient.progress);
+  const progS=surgProgressStage(patient.progress);
+  // Alta sozinha não abre cartão de lab (casos históricos quitados)
+  const wantsP=patientHasProstheticLines(patient) || (progP!=null && patient.progress!=='Alta');
+  const wantsS=patientHasSurgicalLines(patient) || (progS!=null && progP==null && patient.progress!=='Alta');
   const existing=(state.prostheses||[]).filter(w=>w.patientId===patient.id);
   if(wantsP && !existing.some(w=>workFlow(w)==='protetico')){
     state.prostheses.unshift(makeProductionWork(patient,'protetico'));
@@ -3148,6 +3165,14 @@ function syncProductionFromPatient(patient){
   if(wantsS && !existing.some(w=>workFlow(w)==='cirurgico')){
     state.prostheses.unshift(makeProductionWork(patient,'cirurgico'));
   }
+  (state.prostheses||[]).filter(w=>w.patientId===patient.id).forEach(w=>{
+    const mapped=workFlow(w)==='cirurgico'?progS:progP;
+    if(mapped==null) return;
+    w.stage=mapped;
+    const statuses=workStatuses(w);
+    w.labStatus=statuses[Math.min(mapped, statuses.length-1)];
+    if(workFlow(w)==='protetico' && Number(patient.lab||0)>0) w.cost=Number(patient.lab||0);
+  });
 }
 function ensureProstheses(){
   if(!Array.isArray(state.prostheses)) state.prostheses=[];
@@ -5884,11 +5909,11 @@ boot();
 
 /* ===== Importação padrão: CSV / HTML (Notion, Excel, etc.) ===== */
 const HISTORICO_SOURCES=[
-  {id:'allon',file:'allon-historico.json',flag:'allonHistoricoV1',kind:'patients',clinicId:'allon',origin:'Prestação',sourceTag:'allon-historico'},
-  {id:'daniele',file:'daniele-historico.json',flag:'danieleHistoricoV1',kind:'patients',clinicId:'daniele',origin:'Prestação',sourceTag:'daniele-historico'},
-  {id:'gerlucia',file:'gerlucia-historico.json',flag:'gerluciaHistoricoV1',kind:'patients',clinicId:'gerlucia',origin:'Prestação',sourceTag:'gerlucia-historico'},
-  {id:'particular',file:'particular-historico.json',flag:'particularHistoricoV1',kind:'patients',clinicId:'particular',origin:'Particular',sourceTag:'particular-historico'},
-  {id:'custos',file:'custos-historico.json',flag:'custosHistoricoV1',kind:'costs',sourceTag:'custos-historico'}
+  {id:'allon',file:'allon-historico.json',flag:'allonHistoricoV2',kind:'patients',clinicId:'allon',origin:'Prestação',sourceTag:'allon-historico'},
+  {id:'daniele',file:'daniele-historico.json',flag:'danieleHistoricoV2',kind:'patients',clinicId:'daniele',origin:'Prestação',sourceTag:'daniele-historico'},
+  {id:'gerlucia',file:'gerlucia-historico.json',flag:'gerluciaHistoricoV2',kind:'patients',clinicId:'gerlucia',origin:'Prestação',sourceTag:'gerlucia-historico'},
+  {id:'particular',file:'particular-historico.json',flag:'particularHistoricoV2',kind:'patients',clinicId:'particular',origin:'Particular',sourceTag:'particular-historico'},
+  {id:'custos',file:'custos-historico.json',flag:'custosHistoricoV2',kind:'costs',sourceTag:'custos-historico'}
 ];
 
 function importMoney(v){
@@ -5986,6 +6011,65 @@ function guessImportProcedure(obs, tipo){
   if(/restaura/.test(t)) return 'p6';
   return 'proc-historico-livre';
 }
+/** Notion Financeiro → enums PATIENT_FINANCIAL_STATUSES (+ received). */
+function mapNotionFinanceiro(fin, honor){
+  const f=String(fin||'').trim();
+  const fl=f.toLowerCase();
+  const h=Number(honor)||0;
+  if(/n[aã]o vai receber/.test(fl)) return {status:'Não vai receber', received:0};
+  if(/retrabalho/.test(fl)) return {status:'Retrabalho', received:0};
+  if(/aguardando acerto/.test(fl)) return {status:'Aguardando acerto', received:0};
+  if(/parcial|recebido parte/.test(fl)) return {status:'Recebido parcial', received:Math.round(h*50)/100};
+  // Acordo = quitado por acordo no Notion → alimenta gráficos como recebido
+  if(/acordo/.test(fl)) return {status:'Faturado / Recebido', received:h};
+  if(/faturado|recebido/.test(fl) && !/n[aã]o recebeu/.test(fl)) return {status:'Faturado / Recebido', received:h};
+  // Moldagem / COBRAR / Finalizar Endo / - / Não recebeu / vazio → a receber
+  return {status:'À receber', received:0};
+}
+function isNotionLabStatus(labRaw){
+  const s=String(labRaw||'').trim().toLowerCase();
+  if(!s) return false;
+  return /^(n[aã]o|moldagem|prova\s*ok)$/.test(s) || /ciment/.test(s);
+}
+/** Notion Progresso + Lab (status Allon) → PATIENT_PROGRESS_STAGES. */
+function mapNotionProgresso(rawProgress, labRaw, status, finRaw){
+  let p=String(rawProgress||'').trim();
+  const lab=String(labRaw||'').trim();
+  // Progresso no Notion às vezes carrega status financeiro
+  if(/faturado|recebido\s*\(\$\)/i.test(p) || /^recebido/i.test(p)){
+    p=status==='Faturado / Recebido'?'Alta':'Em tratamento';
+  }
+  const aliases={
+    're-moldagem':'Moldagem','remoldagem':'Moldagem',
+    'aguardando prova':'Aguardando Prova',
+    'aguardando entrega':'Enviado para Laboratório',
+    'aguardando liberação':'Em tratamento','aguardando liberacao':'Em tratamento',
+    'enviado para reembasamento':'Enviado para Laboratório',
+    'enviado para acrilização':'Enviado para Laboratório','enviado para acrilizacao':'Enviado para Laboratório',
+    'ajuste':'Em tratamento','in progress':'Em tratamento',
+    'não retornou':'Em tratamento','nao retornou':'Em tratamento'
+  };
+  const key=p.toLowerCase().replace(/\s+$/,'');
+  if(aliases[key]) p=aliases[key];
+  else{
+    const hit=PATIENT_PROGRESS_STAGES.find(s=>s.toLowerCase()===key);
+    if(hit) p=hit;
+  }
+  // Lab status (Allon) molda prova/moldagem/cimentação
+  if(isNotionLabStatus(lab)){
+    const ll=lab.toLowerCase();
+    if(ll==='moldagem') p='Moldagem';
+    else if(/^prova/.test(ll)) p='Aguardando Prova';
+    else if(/ciment/.test(ll)) p=status==='Faturado / Recebido'?'Alta':'Aguardando Cimentação';
+  }
+  if(/^moldagem$/i.test(String(finRaw||'').trim())) p='Moldagem';
+  // Casos quitados sem etapa protética/cirúrgica → Alta (histórico funcional)
+  if(status==='Faturado / Recebido' && (!p || p==='Em tratamento' || p==='Orçamento') && (!lab || /^n[aã]o$/i.test(lab) || !isNotionLabStatus(lab))){
+    p='Alta';
+  }
+  if(!PATIENT_PROGRESS_STAGES.includes(p)) p='Em tratamento';
+  return p;
+}
 function mapHonorarioRows(rows, meta={}){
   const clinicId=meta.clinicId||'particular';
   const prefix=meta.prefix||clinicId.slice(0,3);
@@ -6004,25 +6088,22 @@ function mapHonorarioRows(rows, meta={}){
     const due=importDateBR(importPick(row,['Data da Cobrança','Data da Cobranca']))||date;
     const fin=String(importPick(row,['Financeiro'])||'');
     const obs=String(importPick(row,['Observação','Observacao','Texto'])||'').trim();
-    const progress=String(importPick(row,['Progresso'])||'Em tratamento').trim()||'Em tratamento';
     const tipo=importPick(row,['Tipo']);
     const mref=importMonthRef(importPick(row,['Mês Referencia novo','Mes Referencia novo','Resumo Financeiro','💲 Resumo Financeiro']));
-    let status='À receber', received=0;
-    if(/faturado|recebido/i.test(fin)&&!/parcial|não recebeu|nao recebeu/i.test(fin)){ status='Faturado / Recebido'; received=honor; }
-    else if(/parcial/i.test(fin)){ status='Recebido parcial'; received=honor*0.5; }
-    else if(/acordo/i.test(fin)){ status='Acordo'; received=honor; }
-    else if(/aguardando acerto/i.test(fin)) status='Aguardando acerto';
+    const {status, received}=mapNotionFinanceiro(fin, honor);
+    const progress=mapNotionProgresso(importPick(row,['Progresso']), labRaw, status, fin);
     const procedureId=guessImportProcedure(obs, tipo);
     const tooth=(obs.match(/\b([1-4]\d)\b/)||[])[1]||'';
+    const labFlag=isNotionLabStatus(labRaw)?String(labRaw).trim():'';
+    const syncFlow=/prova|moldagem|laborat|ciment|protese|prótese|coroa/i.test(`${progress} ${obs} ${labFlag}`);
     records.push({
       importId:importHash(prefix,[clinicId,name,date,honor,obs,practiced]),
       name, date, due, status, progress, value:honor, received, practicedValue:practiced,
       observation:obs, notes:mref?`${obs} [${mref}]`.trim():obs, monthRef:mref,
-      procedureId, tooth, lab, components, clinical,
-      syncFlow:/prova|moldagem|laborat|ciment|protese|prótese|coroa/i.test(`${progress} ${obs}`)
+      procedureId, tooth, lab, components, clinical, syncFlow, labFlag
     });
   });
-  return {version:1, kind:'patients', clinicId, origin, count:records.length, records, source:meta.source||'CSV/HTML'};
+  return {version:2, kind:'patients', clinicId, origin, count:records.length, records, source:meta.source||'CSV/HTML'};
 }
 function mapCustoRows(rows, meta={}){
   const records=[];
@@ -6065,17 +6146,56 @@ async function fetchHistoricoJson(file){
   return null;
 }
 
+function applyHistoricoPatientFields(patient, rec){
+  let procId=rec.procedureId||patient.procedureId||'proc-historico-livre';
+  if(Array.isArray(state.procedures) && !state.procedures.some(p=>p.id===procId)) procId='proc-historico-livre';
+  patient.procedureId=procId;
+  patient.lines=[{
+    procedureId:procId,
+    qty:1,
+    tooth:rec.tooth||'',
+    honorarium:Number(rec.value||0),
+    practicedValue:Number(rec.practicedValue||0)
+  }];
+  patient.date=rec.date||patient.date||todayISO();
+  patient.value=Number(rec.value||0);
+  patient.received=Number(rec.received||0);
+  patient.due=rec.due||rec.date||patient.due||todayISO();
+  patient.status=rec.status||'À receber';
+  patient.lab=Number(rec.lab||0);
+  patient.components=Number(rec.components||0);
+  patient.clinical=Number(rec.clinical||0);
+  patient.progress=rec.progress||'Em tratamento';
+  patient.observation=rec.observation||'';
+  patient.notes=rec.notes||rec.observation||'';
+  patient.monthRef=rec.monthRef||'';
+  patient.labFlag=rec.labFlag||'';
+  patient.practicedValue=Number(rec.practicedValue||0);
+  patient.billingSnap={practiced:Number(rec.practicedValue||0),netShare:Number(rec.value||0)};
+  return patient;
+}
 function importHistoricoPatients(data, meta){
   if(!data?.records?.length) return 0;
   if(!Array.isArray(state.patients)) state.patients=[];
   if(!Array.isArray(state.people)) state.people=[];
-  const existing=new Set(state.patients.map(p=>p.importId).filter(Boolean));
+  const byImport=new Map();
+  state.patients.forEach((p,i)=>{ if(p.importId) byImport.set(p.importId, i); });
   const clinicId=data.clinicId||meta.clinicId||'particular';
   const origin=data.origin||meta.origin||(clinicId==='particular'?'Particular':'Prestação');
   const sourceTag=meta.sourceTag||'historico-csv';
-  let added=0;
+  let touched=0;
   data.records.forEach(rec=>{
-    if(!rec?.importId || existing.has(rec.importId)) return;
+    if(!rec?.importId) return;
+    if(byImport.has(rec.importId)){
+      const patient=state.patients[byImport.get(rec.importId)];
+      applyHistoricoPatientFields(patient, rec);
+      patient.importSource=sourceTag;
+      touched++;
+      if(rec.syncFlow || prosthProgressStage(patient.progress)!=null || surgProgressStage(patient.progress)!=null){
+        try{ syncProductionFromPatient(patient); }catch(e){ /* ignore */ }
+      }
+      return;
+    }
     let procId=rec.procedureId||'proc-historico-livre';
     if(!state.procedures.some(p=>p.id===procId)) procId='proc-historico-livre';
     // 1 pessoa por caso importado — nunca funde por nome
@@ -6087,7 +6207,7 @@ function importHistoricoPatients(data, meta){
       createdAt:rec.date||todayISO()
     });
     state.people.push(pe);
-    const patient={
+    const patient=applyHistoricoPatientFields({
       id:uid(),
       personId:pe.id,
       importId:rec.importId,
@@ -6095,40 +6215,17 @@ function importHistoricoPatients(data, meta){
       name:rec.name,
       origin,
       clinicId,
-      procedureId:procId,
-      lines:[{
-        procedureId:procId,
-        qty:1,
-        tooth:rec.tooth||'',
-        honorarium:Number(rec.value||0),
-        practicedValue:Number(rec.practicedValue||0)
-      }],
-      date:rec.date||todayISO(),
-      value:Number(rec.value||0),
-      received:Number(rec.received||0),
-      due:rec.due||rec.date||todayISO(),
-      status:rec.status||'À receber',
       cost:0,
-      lab:Number(rec.lab||0),
-      components:Number(rec.components||0),
-      clinical:Number(rec.clinical||0),
-      progress:rec.progress||'Em tratamento',
-      observation:rec.observation||'',
-      notes:rec.notes||rec.observation||'',
-      monthRef:rec.monthRef||'',
-      labFlag:rec.labFlag||'',
-      practicedValue:Number(rec.practicedValue||0),
-      consumedItems:[],
-      billingSnap:{practiced:Number(rec.practicedValue||0),netShare:Number(rec.value||0)}
-    };
+      consumedItems:[]
+    }, rec);
     state.patients.push(patient);
-    existing.add(rec.importId);
-    added++;
-    if(rec.syncFlow){
+    byImport.set(rec.importId, state.patients.length-1);
+    touched++;
+    if(rec.syncFlow || prosthProgressStage(patient.progress)!=null || surgProgressStage(patient.progress)!=null){
       try{ syncProductionFromPatient(patient); }catch(e){ /* ignore */ }
     }
   });
-  return added;
+  return touched;
 }
 
 function importHistoricoCosts(data, meta){
