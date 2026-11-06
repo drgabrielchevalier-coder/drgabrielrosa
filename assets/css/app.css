@@ -297,11 +297,100 @@
     color:var(--muted);font-size:12px;font-weight:600;cursor:pointer
   }
   .view-tab.active{background:var(--sidebar);color:#fff}
-  .patients-kanban-wrap{margin-top:0}
-  .patients-kanban .list-item{align-items:flex-start}
-  .patients-kanban .list-main{min-width:0}
-  .patients-kanban .list-main .cell-sub{margin-top:4px}
-  .patients-kanban .list-value{font-size:11px;font-weight:650;white-space:nowrap}
+  .patients-kanban-wrap{margin-top:0;overflow:visible}
+  /* Campão: colunas com largura mínima + scroll — evita cortar R$ e nomes */
+  .lab-board.patients-kanban{
+    display:flex;
+    align-items:stretch;
+    gap:12px;
+    overflow-x:auto;
+    overflow-y:visible;
+    padding-bottom:10px;
+    scroll-snap-type:x proximity;
+    grid-template-columns:none;
+  }
+  .lab-board.patients-kanban.cols-6,
+  .lab-board.patients-kanban{
+    grid-template-columns:none;
+  }
+  .patients-kanban > .kanban-col{
+    flex:0 0 260px;
+    min-width:260px;
+    max-width:300px;
+    scroll-snap-align:start;
+    display:flex;
+    flex-direction:column;
+    min-height:220px;
+  }
+  .patients-kanban > .kanban-col > .card-head{
+    padding:12px 12px;
+    gap:8px;
+  }
+  .patients-kanban > .kanban-col > .card-head h3{
+    font-size:12px;
+    line-height:1.25;
+    white-space:normal;
+    overflow-wrap:anywhere;
+    min-width:0;
+  }
+  .patients-kanban > .kanban-col > .card-body.list{
+    padding:10px 10px 12px;
+    flex:1;
+    min-height:0;
+  }
+  .patients-kanban .list-item{
+    align-items:flex-start;
+    gap:8px;
+    padding:10px 8px;
+    border:1px solid #eeeae3;
+    border-radius:12px;
+    margin-bottom:8px;
+    background:var(--panel);
+  }
+  .patients-kanban .list-item:last-child{margin-bottom:0;border-bottom:1px solid #eeeae3}
+  .patients-kanban .avatar{flex:0 0 auto;width:28px;height:28px}
+  .patients-kanban .list-main{min-width:0;flex:1 1 auto}
+  .patients-kanban .kanban-card-top{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:8px;
+    width:100%;
+  }
+  .patients-kanban .kanban-card-top strong{
+    display:block;
+    font-size:12px;
+    line-height:1.3;
+    white-space:normal;
+    overflow:visible;
+    text-overflow:unset;
+    overflow-wrap:anywhere;
+    min-width:0;
+    flex:1 1 auto;
+  }
+  .patients-kanban .list-main > span{
+    display:block;
+    font-size:10px;
+    color:var(--muted);
+    line-height:1.35;
+    white-space:normal;
+    overflow-wrap:anywhere;
+    margin-top:3px;
+  }
+  .patients-kanban .list-main .cell-sub{
+    margin-top:6px;
+    white-space:normal;
+    overflow-wrap:anywhere;
+  }
+  .patients-kanban .list-main .cell-sub .badge{max-width:100%;white-space:normal;text-align:left;height:auto;line-height:1.2}
+  .patients-kanban .list-value{
+    flex:0 0 auto;
+    font-size:11px;
+    font-weight:650;
+    white-space:nowrap;
+    line-height:1.3;
+    color:var(--text);
+  }
   .patients-chart{display:grid;gap:14px}
   .patients-chart-row{display:grid;gap:6px}
   .patients-chart-label{display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap}
@@ -735,6 +824,10 @@
     .kpi-grid{grid-template-columns:repeat(3,1fr)}
     .layout-3,.lab-board{grid-template-columns:1fr 1fr}
     .lab-board.cols-6{grid-template-columns:1fr 1fr}
+    .lab-board.patients-kanban,
+    .lab-board.patients-kanban.cols-6{
+      display:flex;grid-template-columns:none
+    }
     .report-grid{grid-template-columns:1fr 1fr}
   }
   @media(max-width:900px){
