@@ -115,7 +115,8 @@ function chevalier_brand_icons_head(): void
     $icon32 = chevalier_asset_url('assets/img/icons/icon-32.png');
     $icon192 = chevalier_asset_url('assets/img/icons/icon-192.png');
     $apple = chevalier_asset_url('assets/img/icons/apple-touch-icon.png');
-    $manifest = chevalier_asset_url('assets/img/icons/site.webmanifest');
+    // Manifest na raiz: start_url/scope relativos resolvem para o app, não para assets/
+    $manifest = chevalier_asset_url('site.webmanifest');
     $svg = chevalier_asset_url('assets/img/favicon.svg');
     $ico = chevalier_asset_url('favicon.ico');
     echo '<link rel="icon" href="' . $ico . '" sizes="any">' . "\n";
