@@ -20,7 +20,7 @@ header('Expires: 0');
 <meta name="theme-color" content="#171816">
 <meta name="description" content="Dr Gabriel Rosa — reabilitação oral e estética. Gestão clínica, financeira, pacientes, custos e próteses.">
 <meta name="robots" content="noindex,nofollow">
-<link rel="icon" type="image/svg+xml" href="<?= chevalier_asset_url('assets/img/favicon.svg') ?>">
+<?php chevalier_brand_icons_head(); ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;500;600;650&display=swap" rel="stylesheet">

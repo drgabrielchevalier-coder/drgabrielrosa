@@ -58,7 +58,7 @@ $configured = chevalier_auth_email_configured();
 <title>Esqueci minha senha · Dr Gabriel Rosa</title>
 <meta name="theme-color" content="#0d0e0c">
 <meta name="robots" content="noindex,nofollow">
-<link rel="icon" type="image/png" href="<?= chevalier_asset_url('assets/img/brand/mark-gr-gold.png') ?>">
+<?php chevalier_brand_icons_head(); ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">

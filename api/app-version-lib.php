@@ -104,3 +104,25 @@ function chevalier_asset_url(string $path): string
     $version = is_file($file) ? (string) filemtime($file) : (string) time();
     return htmlspecialchars($path . '?v=' . $version, ENT_QUOTES, 'UTF-8');
 }
+
+/**
+ * Favicon + ícones de app (PWA / iOS) com o monograma GR.
+ * Imprimir dentro de <head>.
+ */
+function chevalier_brand_icons_head(): void
+{
+    $icon16 = chevalier_asset_url('assets/img/icons/icon-16.png');
+    $icon32 = chevalier_asset_url('assets/img/icons/icon-32.png');
+    $icon192 = chevalier_asset_url('assets/img/icons/icon-192.png');
+    $apple = chevalier_asset_url('assets/img/icons/apple-touch-icon.png');
+    $manifest = chevalier_asset_url('assets/img/icons/site.webmanifest');
+    $svg = chevalier_asset_url('assets/img/favicon.svg');
+    $ico = chevalier_asset_url('favicon.ico');
+    echo '<link rel="icon" href="' . $ico . '" sizes="any">' . "\n";
+    echo '<link rel="icon" type="image/svg+xml" href="' . $svg . '">' . "\n";
+    echo '<link rel="icon" type="image/png" sizes="32x32" href="' . $icon32 . '">' . "\n";
+    echo '<link rel="icon" type="image/png" sizes="16x16" href="' . $icon16 . '">' . "\n";
+    echo '<link rel="icon" type="image/png" sizes="192x192" href="' . $icon192 . '">' . "\n";
+    echo '<link rel="apple-touch-icon" sizes="180x180" href="' . $apple . '">' . "\n";
+    echo '<link rel="manifest" href="' . $manifest . '">' . "\n";
+}
