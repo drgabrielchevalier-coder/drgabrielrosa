@@ -2174,11 +2174,13 @@ function patientKanbanCard(p){
     onclick="patientKanbanCardClick(event,'${p.id}')">
     <div class="avatar">${esc(initials(p.name))}</div>
     <div class="list-main">
-      <strong>${esc(p.name)}</strong>
+      <div class="kanban-card-top">
+        <strong>${esc(p.name)}</strong>
+        <span class="list-value">${brl.format(patientProfit(p))}</span>
+      </div>
       <span>${esc(clinic(p.clinicId).name)} · ${esc(patientProcedureLabel(p))}</span>
-      <span class="cell-sub">${badge(secondary)} · ${brl.format(p.value||0)}</span>
+      <span class="cell-sub">${badge(secondary)} · honorário ${brl.format(p.value||0)}</span>
     </div>
-    <div class="list-value">${brl.format(patientProfit(p))}</div>
   </button>`;
 }
 function renderPatientsKanban(rows){
@@ -2192,7 +2194,7 @@ function renderPatientsKanban(rows){
   const archivedHint=patientAxisMode==='financeiro'
     ? `<p class="field-hint patients-kanban-hint">Arraste cartões entre colunas. Faturado / Recebido sai automaticamente após ${PATIENT_FATURADO_ARCHIVE_DAYS} dias da quitação.</p>`
     : `<p class="field-hint patients-kanban-hint">Arraste cartões para atualizar o progresso clínico. Clique para abrir a ficha.</p>`;
-  box.innerHTML=`${archivedHint}<div class="lab-board patients-kanban ${boardCols>5?'cols-6':''}" style="${boardCols<=4?`grid-template-columns:repeat(${Math.max(boardCols,1)},minmax(200px,1fr))`:''}">
+  box.innerHTML=`${archivedHint}<div class="lab-board patients-kanban ${boardCols>5?'cols-6':''}">
     ${show.map(col=>{
       const arr=rows.filter(p=>patientAxisValue(p)===col);
       return `<div class="card kanban-col" data-kanban-col="${esc(col)}"
