@@ -5839,13 +5839,65 @@ function toggleCost(id){const c=state.costs.find(x=>x.id===id);if(!c)return;c.st
 function exportData(){
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='chevalier-gestao-backup.json';a.click();URL.revokeObjectURL(a.href);
 }
+const APP_SEARCH_IDS=['globalSearch','patientSearch','prosthSearch','procSearch','oSearch','recvSearch','matDbSearch','procDbSearch','calSearch','planSearch'];
+function loggedInUserLabel(){
+  const u=window.CHEVALIER_USER;
+  if(u==null) return '';
+  if(typeof u==='string') return u.trim();
+  return String(u.name||u.user||u.username||'').trim();
+}
+/** Chrome costuma autofillar o usuário do login na barra de busca — limpa isso. */
+function clearAppSearches(opts={}){
+  const onlyAutofill=!!opts.onlyAutofill;
+  const user=loggedInUserLabel().toLowerCase();
+  let cleared=false;
+  APP_SEARCH_IDS.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    const v=String(el.value||'').trim();
+    if(!v) return;
+    if(onlyAutofill){
+      if(!user || v.toLowerCase()!==user) return;
+    }
+    el.value='';
+    cleared=true;
+  });
+  return cleared;
+}
+let __searchGuardStarted=false;
+function guardSearchAutofill(){
+  clearAppSearches({onlyAutofill:true});
+  if(__searchGuardStarted) return;
+  __searchGuardStarted=true;
+  // Autofill do Chrome costuma chegar depois do boot
+  [50,200,600,1500].forEach(ms=>setTimeout(()=>{
+    if(clearAppSearches({onlyAutofill:true})){
+      try{renderTrabalhos()}catch(_){}
+      try{renderPatients()}catch(_){}
+    }
+  }, ms));
+}
 document.getElementById('globalSearch').addEventListener('input',e=>{
-  const q=e.target.value.toLowerCase().trim();if(!q)return;
+  const raw=String(e.target.value||'').trim();
+  const q=raw.toLowerCase();
+  if(!q) return;
+  // Ignora o autofill do nome de usuário (ex.: "Gabriel")
+  const user=loggedInUserLabel().toLowerCase();
+  if(user && q===user && !e.isTrusted){ e.target.value=''; return; }
+  if(user && q===user){
+    // Digitação idêntica ao usuário ainda é válida, mas no primeiro paint tratamos como autofill
+    if(!window.__chevalierSearchTouched){ e.target.value=''; return; }
+  }
+  window.__chevalierSearchTouched=true;
   const work=state.prostheses.find(w=>String(w.code).toLowerCase().includes(q)||String(w.type).toLowerCase().includes(q)||patientById(w.patientId).name.toLowerCase().includes(q));
   if(work){go('trabalhos');const s=document.getElementById('prosthSearch');if(s)s.value=q;renderTrabalhos();return;}
   const p=state.patients.find(x=>x.name.toLowerCase().includes(q)||patientProcedureSearchText(x).toLowerCase().includes(q));
   if(p){go('pacientes');document.getElementById('patientSearch').value=q;renderPatients();}
 });
+document.getElementById('globalSearch').addEventListener('focus',()=>{ window.__chevalierSearchTouched=true; });
+// Limpa já no parse — autofill do Chrome pode preencher antes do boot async
+clearAppSearches();
+guardSearchAutofill();
 
 const now=new Date();
 document.getElementById('todayLabel').textContent=now.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'});
@@ -5892,8 +5944,10 @@ async function boot(){
     }
   }catch(e){ console.warn('ChevalierPlan boot', e); }
   if(seeded||catalogAdded||procAdded||linesMigrated||billingMigrated||fracN||peopleMigrated||schemaBefore<5) save();
+  clearAppSearches();
   renderAll();
   setBancoTab(bancoTab);
+  guardSearchAutofill();
   // Importação dos CSVs já convertidos — roda sozinha, sem botão por clínica
   applyBundledHistoricos().then(sum=>{
     const n=(sum?.patients||0)+(sum?.costs||0);

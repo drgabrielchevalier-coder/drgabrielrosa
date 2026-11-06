@@ -178,7 +178,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
       <button class="icon-btn mobile-menu" id="mobileMenu">☰</button>
       <div class="search">
         <span>⌕</span>
-        <input id="globalSearch" placeholder="Buscar paciente, clínica, procedimento...">
+        <input id="globalSearch" type="search" name="chevalier_q" placeholder="Buscar paciente, clínica, procedimento..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" role="searchbox" aria-label="Busca global">
       </div>
       <div class="spacer"></div>
       <div class="top-date" id="todayLabel"></div>
@@ -346,7 +346,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
             </div>
             <div class="block-body">
               <div class="toolbar patients-toolbar" style="margin:0">
-                <input class="input" id="patientSearch" placeholder="Nome, telefone ou tratamento…" oninput="renderPatients()">
+                <input class="input" id="patientSearch" type="search" name="chevalier_patient_q" placeholder="Nome, telefone ou tratamento…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="renderPatients()">
                 <select class="select" id="patientClinicFilter" onchange="renderPatients()">
                   <option value="">Todas as clínicas</option>
                 </select>
@@ -412,7 +412,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           </div>
         </div>
         <div class="toolbar">
-          <input class="input" id="procSearch" placeholder="Buscar procedimento..." oninput="renderProcedures()">
+          <input class="input" id="procSearch" type="search" name="chevalier_proc_q" placeholder="Buscar procedimento..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="renderProcedures()">
           <select class="select" id="procSpecialtyFilter" onchange="renderProcedures()">
             <option value="">Todas as especialidades</option>
           </select>
@@ -498,7 +498,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           </aside>
         </div>
         <div class="card" style="margin-top:16px">
-          <div class="card-head"><h3>Orçamentos salvos</h3><div class="right"><input class="input" id="oSearch" placeholder="Buscar paciente…" oninput="renderOrcamento()" style="min-width:200px"></div></div>
+          <div class="card-head"><h3>Orçamentos salvos</h3><div class="right"><input class="input" id="oSearch" type="search" name="chevalier_orc_q" placeholder="Buscar paciente…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="renderOrcamento()" style="min-width:200px"></div></div>
           <div class="table-wrap"><table>
             <thead><tr><th>Paciente</th><th>Clínica</th><th>Tratamento</th><th>Praticado</th><th>Você recebe</th><th>Custos</th><th>Margem</th><th>Data</th><th></th></tr></thead>
             <tbody id="orcamentoTable"></tbody>
@@ -560,7 +560,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <div class="kpi"><div class="label">Urgentes</div><div class="value" id="prosthUrgent">0</div></div>
         </div>
         <div class="toolbar">
-          <input class="input" id="prosthSearch" placeholder="Buscar paciente, código, lab..." oninput="renderTrabalhos()">
+          <input class="input" id="prosthSearch" type="search" name="chevalier_prosth_q" placeholder="Buscar paciente, código, lab..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="renderTrabalhos()">
           <select class="select" id="prosthFilter" onchange="renderTrabalhos()">
             <option value="all">Todos</option>
             <option value="protetico">Só protéticos</option>
@@ -691,7 +691,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
               </div>
               <div class="block-body">
                 <div class="toolbar patients-toolbar recv-toolbar" style="margin:0 0 10px">
-                  <input class="input" id="recvSearch" placeholder="Buscar paciente…" oninput="renderReceivables()">
+                  <input class="input" id="recvSearch" type="search" name="chevalier_recv_q" placeholder="Buscar paciente…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="renderReceivables()">
                   <select class="select" id="recvClinicFilter" onchange="renderReceivables()"><option value="">Todas as clínicas</option></select>
                   <select class="select" id="recvProcFilter" onchange="renderReceivables()"><option value="">Todos os procedimentos</option></select>
                   <input class="input" id="recvFrom" type="date" title="Período (data do lançamento) de" onchange="renderReceivables()">
@@ -904,7 +904,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
             <button class="btn primary" onclick="openPriceSyncModal()">↻ Sincronizar preços</button>
           </div>
           <div class="toolbar">
-            <input class="input" id="matDbSearch" placeholder="Buscar material, marca, tipo..." oninput="renderBanco()">
+            <input class="input" id="matDbSearch" type="search" name="chevalier_mat_q" placeholder="Buscar material, marca, tipo..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="renderBanco()">
             <select class="select" id="matDbType" onchange="renderBanco()"><option value="">Todas as categorias</option></select>
             <button class="btn" onclick="recalcAllUnitCosts()">Recalcular fracionados</button>
           </div>
@@ -922,7 +922,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
             <button class="btn primary" onclick="go('procedimentos')">Abrir procedimentos</button>
           </div>
           <div class="toolbar">
-            <input class="input" id="procDbSearch" placeholder="Buscar procedimento..." oninput="renderBanco()">
+            <input class="input" id="procDbSearch" type="search" name="chevalier_procdb_q" placeholder="Buscar procedimento..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="renderBanco()">
           </div>
           <div class="card"><div class="table-wrap"><table>
             <thead><tr><th>Procedimento</th><th>Preço</th><th>Materiais</th><th>Lab / extra</th><th>Custo total</th><th>Margem</th><th></th></tr></thead>
@@ -948,7 +948,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <div class="kpi"><div class="label">Próximos 7 dias</div><div class="value" id="calWeek">0</div></div>
         </div>
         <div class="toolbar">
-          <input class="input" id="calSearch" placeholder="Buscar lembrete, paciente, tipo…" oninput="ChevalierPlan.renderCalendario()">
+          <input class="input" id="calSearch" type="search" name="chevalier_cal_q" placeholder="Buscar lembrete, paciente, tipo…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="ChevalierPlan.renderCalendario()">
           <select class="select" id="calFilter" onchange="ChevalierPlan.renderCalendario()">
             <option value="open">Em aberto</option>
             <option value="today">Hoje</option>
@@ -997,7 +997,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <span>PNG, JPG, PDF, DICOM, STL, ZIP ou export ICON — até 40 MB</span>
         </div>
         <div class="toolbar">
-          <input class="input" id="planSearch" placeholder="Buscar planejamento…" oninput="ChevalierPlan.renderPlanejamento()">
+          <input class="input" id="planSearch" type="search" name="chevalier_plan_q" placeholder="Buscar planejamento…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="ChevalierPlan.renderPlanejamento()">
         </div>
         <div id="planList" class="plan-list"></div>
       </section>
