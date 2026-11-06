@@ -861,11 +861,19 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
       <!-- ESTOQUE -->
       <section class="page" id="page-estoque">
         <div class="page-head">
-          <div><h2>Estoque</h2><p>Saldo, estoque mínimo e valor financeiro imobilizado em materiais.</p></div>
+          <div><h2>Estoque</h2><p>Saldo, estoque mínimo e valor financeiro imobilizado em materiais. Importação de NF-e atualiza quantidade e custo médio.</p></div>
           <div class="page-actions">
             <button class="btn" onclick="openBarcodeScanModal()">▮▮ Escanear código</button>
-            <button class="btn primary" onclick="openStockModal()">＋ Movimentar estoque</button>
+            <button class="btn" onclick="openStockModal()">＋ Movimentar estoque</button>
+            <button class="btn primary" onclick="openNfeImportModal()">⇩ Importar NF-e</button>
           </div>
+        </div>
+        <div class="ai-banner scan-banner">
+          <div>
+            <strong>Importar nota fiscal (XML)</strong>
+            <p>Envie o XML da NF-e do fornecedor. O sistema lê quantidade e valor unitário, soma no estoque e recalcula o custo médio — procedimentos que usam o material passam a refletir o novo custo.</p>
+          </div>
+          <button class="btn primary" onclick="openNfeImportModal()">Importar NF-e</button>
         </div>
         <div class="ai-banner scan-banner">
           <div>
@@ -874,10 +882,18 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           </div>
           <button class="btn primary" onclick="openBarcodeScanModal()">Escanear material</button>
         </div>
-        <div class="grid kpi-grid" style="grid-template-columns:repeat(3,1fr)">
+        <div class="grid kpi-grid" style="grid-template-columns:repeat(4,1fr)">
           <div class="kpi"><div class="label">Valor em estoque</div><div class="value" id="stockValue">R$ 0</div></div>
           <div class="kpi"><div class="label">Itens abaixo do mínimo</div><div class="value" id="stockLow">0</div></div>
           <div class="kpi"><div class="label">Itens cadastrados</div><div class="value" id="stockItems">0</div></div>
+          <div class="kpi"><div class="label">NF-e importadas</div><div class="value" id="stockNfeCount">0</div></div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-head"><h3>Últimas NF-e</h3><div class="right"><button class="btn small" onclick="openNfeImportModal()">Importar</button></div></div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Data</th><th>NF</th><th>Fornecedor</th><th>Itens</th><th>Total NF</th></tr></thead>
+            <tbody id="nfeImportsTable"></tbody>
+          </table></div>
         </div>
         <div class="card"><div class="table-wrap"><table>
           <thead><tr><th>Item</th><th>Marca</th><th>Tipo</th><th>Atual</th><th>Mínimo</th><th>Custo unit.</th><th>Valor estoque</th><th>Status</th><th></th></tr></thead>
@@ -1098,6 +1114,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
 <script src="<?= chevalier_asset_url('assets/js/procedure-catalog.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/clinic-billing.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/planning-calendar.js') ?>"></script>
+<script src="<?= chevalier_asset_url('assets/js/nfe-stock.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/app.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/import-assist.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/update-manager.js') ?>" defer></script>

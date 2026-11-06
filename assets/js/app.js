@@ -92,6 +92,8 @@ const seed = {
   plans:[],
   people:[],
   importBatches:[],
+  nfImports:[],
+  stockLedger:[],
   schemaVersion:5
 };
 
@@ -1449,6 +1451,17 @@ function fillConsumeFromLines(lines,clinicId){
     list.innerHTML=(bom.items.length?bom.items:[{}]).map(consumeRow).join('');
     refreshConsumeTotals();
   }
+  const gate=treatmentNeedsStockGate(lines);
+  const hint=document.getElementById('fConsumeGateHint');
+  if(hint){
+    hint.textContent=gate
+      ? 'Selecione implante, enxerto e/ou componente com saldo em estoque. O sistema bloqueia quantidade acima do saldo.'
+      : 'Itens da ficha do procedimento. Implante, enxerto e componente exigem saldo.';
+  }
+  if(gate){
+    const block=list?.closest('details.progressive-block');
+    if(block) block.open=true;
+  }
   const costEl=document.getElementById('fCost');
   const labEl=document.getElementById('fLab');
   const compEl=document.getElementById('fComponents');
@@ -1732,8 +1745,46 @@ async function applySuggestedMaterialsToProcedureForm(){
 }
 const PROC_AI_RULES=[];
 function suggestMaterialsForProcedureName(){return []}
+function ensureStockCollections(){
+  if(!Array.isArray(state.nfImports)) state.nfImports=[];
+  if(!Array.isArray(state.stockLedger)) state.stockLedger=[];
+}
+function isGatedStockMaterial(m){
+  return !!(window.ChevalierNfe?.isGatedMaterial?.(m));
+}
+function treatmentNeedsStockGate(lines){
+  if(window.ChevalierNfe?.treatmentNeedsStockGate){
+    return ChevalierNfe.treatmentNeedsStockGate(lines, procedure);
+  }
+  return (lines||[]).some(l=>ChevalierNfe?.procedureNeedsStockGate?.(procedure(l.procedureId)));
+}
+function creditMapFromItems(items){
+  const map={};
+  (items||[]).forEach(it=>{
+    if(!it?.materialId) return;
+    map[it.materialId]=(map[it.materialId]||0)+Number(it.qty||0);
+  });
+  return map;
+}
+function validateStockForSave(items, opts={}){
+  ensureStockCollections();
+  if(!window.ChevalierNfe?.validateConsumption){
+    return {ok:true};
+  }
+  return ChevalierNfe.validateConsumption(state, items, opts);
+}
+function materialSelect(selected='', {stockAware=false}={}){
+  return state.materials.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).map(m=>{
+    const gate=isGatedStockMaterial(m);
+    const tag=gate?` · estoque ${Number(m.stock||0)}`:'';
+    const label=`${m.name} · ${brl.format(m.unitCost)}${stockAware||gate?tag:''}`;
+    return `<option value="${m.id}" ${m.id===selected?'selected':''}>${esc(label)}</option>`;
+  }).join('');
+}
 function consumeRow(item={}){
-  return `<div class="consume-row"><select class="select ci-mat">${materialSelect(item.materialId||'')}</select><input class="input ci-qty" type="number" min="0" step="0.01" value="${item.qty??1}" oninput="refreshConsumeTotals()"><input class="input ci-total" disabled value=""><button type="button" class="btn small icon-x" onclick="this.parentElement.remove();refreshConsumeTotals()">×</button></div>`;
+  const m=material(item.materialId||'');
+  const stockHint=item.materialId?` · saldo ${Number(m.stock||0)}`:'';
+  return `<div class="consume-row"><select class="select ci-mat" onchange="refreshConsumeTotals()">${materialSelect(item.materialId||'',{stockAware:true})}</select><input class="input ci-qty" type="number" min="0" step="0.01" value="${item.qty??1}" oninput="refreshConsumeTotals()" title="Quantidade${stockHint}"><input class="input ci-total" disabled value=""><button type="button" class="btn small icon-x" onclick="this.parentElement.remove();refreshConsumeTotals()">×</button></div>`;
 }
 function collectConsumeItems(){
   return [...document.querySelectorAll('.consume-row')].map(row=>({materialId:row.querySelector('.ci-mat')?.value,qty:Number(row.querySelector('.ci-qty')?.value||0)})).filter(x=>x.materialId&&x.qty>0);
@@ -3942,9 +3993,27 @@ function renderMaterials(){
   document.getElementById('materialsTable').innerHTML=state.materials.map(m=>`<tr>${td('Material',`<strong>${esc(m.name)}</strong>`)}${td('Código de barras',esc(m.barcode||'—'))}${td('Marca',esc(m.brand))}${td('Tipo',esc(m.type))}${td('Fornecedor',esc(m.supplier))}${td('Embalagem',esc(m.pack))}${td('Preço',brl.format(m.price))}${td('Custo unit.',`<strong>${brl.format(m.unitCost)}</strong>`)}${td('Atualizado',fmtDate(m.updated))}<td class="actions-cell">${acts(`openMaterialModal('${m.id}')`,`deleteMaterial('${m.id}')`)}</td></tr>`).join('');
 }
 function renderStock(){
+  ensureStockCollections();
   const val=state.materials.reduce((s,m)=>s+m.stock*m.unitCost,0), low=state.materials.filter(m=>m.stock<=m.min);
   document.getElementById('stockValue').textContent=brl.format(val);document.getElementById('stockLow').textContent=low.length;document.getElementById('stockItems').textContent=state.materials.length;
-  document.getElementById('stockTable').innerHTML=state.materials.map(m=>`<tr>${td('Item',`<strong>${esc(m.name)}</strong>`)}${td('Marca',esc(m.brand))}${td('Tipo',esc(m.type))}${td('Atual',String(m.stock))}${td('Mínimo',String(m.min))}${td('Custo unit.',brl.format(m.unitCost))}${td('Valor',brl.format(m.stock*m.unitCost))}${td('Status',m.stock<=m.min?'<span class="badge b-red">Reposição</span>':'<span class="badge b-green">OK</span>')}<td class="actions-cell">${acts(`openMaterialModal('${m.id}')`,`deleteMaterial('${m.id}')`)}</td></tr>`).join('');
+  const nfeCountEl=document.getElementById('stockNfeCount');
+  if(nfeCountEl) nfeCountEl.textContent=String((state.nfImports||[]).length);
+  const nfeBody=document.getElementById('nfeImportsTable');
+  if(nfeBody){
+    const rows=(state.nfImports||[]).slice(0,12);
+    nfeBody.innerHTML=rows.map(n=>`<tr>
+      ${td('Data',esc((n.date||String(n.at||'')).slice(0,10)))}
+      ${td('NF',esc(n.number||n.key||'—'))}
+      ${td('Fornecedor',esc(n.supplier||'—'))}
+      ${td('Itens',String(n.items||0))}
+      ${td('Total NF',brl.format(n.total||0))}
+    </tr>`).join('')||'<tr><td colspan="5"><div class="empty">Nenhuma NF-e importada ainda. Use “Importar NF-e” para dar entrada no estoque.</div></td></tr>';
+  }
+  document.getElementById('stockTable').innerHTML=state.materials.map(m=>{
+    const gate=isGatedStockMaterial(m);
+    const gateBadge=gate?` <span class="badge b-amber">${esc((window.ChevalierNfe&&ChevalierNfe.classifyMaterial(m))||'estoque')}</span>`:'';
+    return `<tr>${td('Item',`<strong>${esc(m.name)}</strong>${gateBadge}`)}${td('Marca',esc(m.brand))}${td('Tipo',esc(m.type))}${td('Atual',String(m.stock))}${td('Mínimo',String(m.min))}${td('Custo unit.',brl.format(m.unitCost))}${td('Valor',brl.format(m.stock*m.unitCost))}${td('Status',m.stock<=m.min?'<span class="badge b-red">Reposição</span>':'<span class="badge b-green">OK</span>')}<td class="actions-cell">${acts(`openMaterialModal('${m.id}')`,`deleteMaterial('${m.id}')`)}</td></tr>`;
+  }).join('');
 }
 function renderAll(){
   ensureSettings();
@@ -4249,14 +4318,11 @@ function deleteMaterial(id){
 }
 function deleteProsthesis(id){confirmDelete('Excluir este trabalho e o histórico?',()=>{state.prostheses=state.prostheses.filter(x=>x.id!==id);});}
 
-function materialSelect(selected=''){
-  return state.materials.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).map(m=>`<option value="${m.id}" ${m.id===selected?'selected':''}>${esc(m.name)} · ${brl.format(m.unitCost)}</option>`).join('');
-}
 function procItemRow(item={}){
   const m=material(item.materialId||'');
   const meta=parsePackMeta(m.pack,m.name);
   const unit=item.useUnit||m.packUnit||meta.unit||'un';
-  return `<div class="proc-item"><select class="select pi-mat" onchange="this.parentElement.querySelector('.pi-unit').textContent=parsePackMeta(material(this.value).pack,material(this.value).name).unit">${materialSelect(item.materialId||'')}</select><input class="input pi-qty" type="number" min="0" step="0.01" value="${item.qty??1}" title="Uso no procedimento"><span class="pi-unit cell-sub">${esc(unit)}</span><button type="button" class="btn small icon-x" onclick="this.parentElement.remove()">×</button></div>`;
+  return `<div class="proc-item"><select class="select pi-mat" onchange="this.parentElement.querySelector('.pi-unit').textContent=parsePackMeta(material(this.value).pack,material(this.value).name).unit">${materialSelect(item.materialId||'',{stockAware:true})}</select><input class="input pi-qty" type="number" min="0" step="0.01" value="${item.qty??1}" title="Uso no procedimento"><span class="pi-unit cell-sub">${esc(unit)}</span><button type="button" class="btn small icon-x" onclick="this.parentElement.remove()">×</button></div>`;
 }
 function collectProcItems(){
   return [...document.querySelectorAll('.proc-item')].map(row=>({materialId:row.querySelector('.pi-mat').value,qty:Number(row.querySelector('.pi-qty').value||0)})).filter(x=>x.materialId&&x.qty>0);
@@ -4339,6 +4405,7 @@ function openPatientModal(origin='',editId='',personId=''){
   const seedLab=editId?(p.lab??0):settled.costs.lab;
   const seedComp=editId?(p.components??0):settled.costs.components;
   const nameLocked=!!pe && !editId;
+  const needsGate=treatmentNeedsStockGate(seedLines);
   openModal(editId?'Editar tratamento':'Novo tratamento',`
     <div class="form-grid">
       ${editId?`<input type="hidden" id="fPersonId" value="${esc(p.personId||'')}">`
@@ -4371,10 +4438,11 @@ function openPatientModal(origin='',editId='',personId=''){
       <div class="field"><label>Vencimento</label><input id="fDue" type="date" class="input" value="${p.due||addDays(10)}"></div>
       <div class="field"><label>Status financeiro</label><select id="fStatus" class="select">${statusOptions(p.status)}</select></div>
       <div class="field full"><label>Progresso clínico</label><select id="fProgress" class="select">${['Orçamento','Em tratamento','Planejar caso','Solicitar material','Em fila / agendado','Aguardo pós Cirúrgico','Aguardando cicatrização','Aguardando moldagem','Moldagem','Enviado para Laboratório','Aguardando Prova','Aguardando Cimentação','Alta'].map(s=>`<option ${s===(p.progress||'Em tratamento')?'selected':''}>${s}</option>`).join('')}</select></div>
-      <details class="field full progressive-block" ${editId?'open':''}>
-        <summary>Custos e materiais <span class="cell-sub">opcional na entrada — recalculados da composição</span></summary>
+      <details class="field full progressive-block" ${(editId||needsGate)?'open':''}>
+        <summary>Materiais do estoque <span class="cell-sub">${needsGate?'obrigatório para implante / enxerto / componente':'da composição — baixa o saldo'}</span></summary>
         <div class="form-grid" style="margin-top:12px">
           <div class="field full"><label>Consumo de materiais</label>
+            <p class="field-hint" id="fConsumeGateHint">${needsGate?'Selecione implante, enxerto e/ou componente com saldo em estoque. O sistema bloqueia quantidade acima do saldo.':'Itens da ficha do procedimento. Implante, enxerto e componente exigem saldo.'}</p>
             <div id="fConsumeList" class="consume-list">${(seedConsume.length?seedConsume:[{}]).map(consumeRow).join('')}</div>
             <div class="row-actions" style="margin-top:8px"><button type="button" class="btn small" onclick="document.getElementById('fConsumeList').insertAdjacentHTML('beforeend', consumeRow())">＋ Item</button><button type="button" class="btn small" onclick="recalcTreatmentTotals()">Recalcular da composição</button></div>
             <div class="consume-total" id="fConsumeTotal"></div>
@@ -4392,6 +4460,12 @@ function openPatientModal(origin='',editId='',personId=''){
       refreshConsumeTotals();
       const consumed=collectConsumeItems();
       const prev=editId?state.patients.find(x=>x.id===editId):null;
+      const gate=treatmentNeedsStockGate(lines);
+      const stockCheck=validateStockForSave(consumed,{
+        requireGated:gate,
+        credit:creditMapFromItems(prev?.consumedItems)
+      });
+      if(!stockCheck.ok) return toast(stockCheck.error);
       let personRef=getv('fPersonId');
       if(!editId && personRef==='__new__'){
         const phone=getv('fNewPhone').trim();
@@ -5016,9 +5090,16 @@ function openProcedureModal(editId=''){
     <div class="field full"><label>Materiais utilizados (uso fracionado × custo unitário)</label><p class="field-hint">Informe o uso real (ex.: 0,3 g de cimento). “Sugerir com OpenAI” preenche consumo clínico fracionado.</p><div id="procItems">${rows}</div><div class="row-actions"><button type="button" class="btn small" onclick="document.getElementById('procItems').insertAdjacentHTML('beforeend', procItemRow())">＋ Material</button><button type="button" class="btn small primary" data-ai-busy="primary" onclick="applySuggestedMaterialsToProcedureForm()">✦ Sugerir com OpenAI</button></div></div>
   </div>`,()=>{
     if(!getv('pName'))return toast('Informe o nome do procedimento.');
-    const obj={id:editId||uid(),name:getv('pName'),specialty:getv('pSpecialty')||'clinica',kind:getv('pKind')||'clinico',price:num('pPrice'),extra:num('pExtra'),items:collectProcItems(),clinicPrices:collectClinicPrices()};
+    const items=collectProcItems();
+    const obj={id:editId||uid(),name:getv('pName'),specialty:getv('pSpecialty')||'clinica',kind:getv('pKind')||'clinico',price:num('pPrice'),extra:num('pExtra'),items,clinicPrices:collectClinicPrices()};
+    if(window.ChevalierNfe?.procedureNeedsStockGate?.(obj)){
+      const gated=items.filter(it=>isGatedStockMaterial(material(it.materialId)));
+      if(!gated.length){
+        return toast('Procedimento de implante/enxerto/componente precisa listar os materiais do estoque utilizados.');
+      }
+    }
     if(editId) state.procedures=state.procedures.map(x=>x.id===editId?obj:x); else state.procedures.push(obj);
-    save();closeModal();renderAll();if(editId) showCostSheet(editId);toast('Procedimento salvo.');
+    save();closeModal();renderAll();if(editId) showCostSheet(editId);toast('Procedimento salvo. Custo recalculado com os preços atuais do estoque.');
   });
   document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
 }
@@ -5078,6 +5159,9 @@ function openReceivableModal(type=''){
   ensurePeople();
   const initialClinic=type==='prestacao'?(serviceClinicFilter||'allon'):'particular';
   const seedProc=state.procedures.find(p=>p.id==='p1')?.id||state.procedures[0]?.id||'';
+  const seedLines=seedProc?[{procedureId:seedProc,qty:1}]:[];
+  const bom=combinedProcedureMaterials(seedLines);
+  const needsGate=treatmentNeedsStockGate(seedLines);
   openModal(type==='prestacao'?'Lançar honorário (prestação)':'Novo recebível',`<div class="form-grid">
     <div class="field full"><label>Paciente (cadastro)</label>
       <select id="rPerson" class="select" onchange="onReceivablePersonChange()">${personOptionsHtml('')}</select>
@@ -5089,8 +5173,14 @@ function openReceivableModal(type=''){
       <div id="fTreatLines" class="treat-list">${seedProc?treatmentLineRow({procedureId:seedProc}):''}</div>
       <div class="treat-add">
         <select id="fAddProc" class="select">${procOptionsGrouped('')}</select>
-        <button type="button" class="btn small" onclick="addTreatmentLine();recalcReceivableTotals()">＋ Adicionar</button>
+        <button type="button" class="btn small" onclick="addTreatmentLine();recalcReceivableTotals();syncReceivableConsume()">＋ Adicionar</button>
       </div>
+    </div>
+    <div class="field full"><label>Materiais do estoque</label>
+      <p class="field-hint">${needsGate?'Obrigatório: informe implante / enxerto / componente com saldo.':'Baixa automática do estoque conforme o consumo.'}</p>
+      <div id="fConsumeList" class="consume-list">${(bom.items.length?bom.items:[{}]).map(consumeRow).join('')}</div>
+      <div class="row-actions" style="margin-top:8px"><button type="button" class="btn small" onclick="document.getElementById('fConsumeList').insertAdjacentHTML('beforeend', consumeRow());refreshConsumeTotals()">＋ Item</button></div>
+      <div class="consume-total" id="fConsumeTotal"></div>
     </div>
     <div class="field"><label>Valor / honorário</label><input id="rValue" type="number" class="input"><small id="rHonorHint" class="field-hint">Soma dos procedimentos × clínica.</small></div>
     <div class="field"><label>Recebido</label><input id="rReceived" type="number" class="input" value="0"></div>
@@ -5102,7 +5192,11 @@ function openReceivableModal(type=''){
     const lines=collectTreatmentLines();
     if(!lines.length) return toast('Adicione ao menos um procedimento.');
     const cl=getv('rClinic');
-    const bom=combinedProcedureMaterials(lines);
+    refreshConsumeTotals();
+    const consumed=collectConsumeItems();
+    const gate=treatmentNeedsStockGate(lines);
+    const stockCheck=validateStockForSave(consumed,{requireGated:gate});
+    if(!stockCheck.ok) return toast(stockCheck.error);
     const settled=settleLines(lines,cl);
     let personRef=getv('rPerson');
     if(personRef==='__new__' || !personRef){
@@ -5115,21 +5209,36 @@ function openReceivableModal(type=''){
       state.people.unshift(pe);
       personRef=pe.id;
     }
+    const matCost=consumed.reduce((s,it)=>s+Number(material(it.materialId).unitCost||0)*Number(it.qty||0),0);
+    const compCost=consumed.reduce((s,it)=>{
+      const m=material(it.materialId);
+      return s+(isGatedStockMaterial(m)&&/componente|pilar|transfer|an[aá]logo/i.test(`${m.type} ${m.name}`)?Number(m.unitCost||0)*Number(it.qty||0):0);
+    },0);
     state.patients.unshift({
       id:uid(),personId:personRef,name:getv('rName'),origin:cl==='particular'?'Particular':'Prestação',clinicId:cl,
       procedureId:lines[0].procedureId,lines,date:todayISO(),value:num('rValue'),received:num('rReceived'),due:getv('rDue'),status:getv('rStatus'),
-      cost:settled.costs.materials,lab:settled.costs.lab,components:settled.costs.components,clinical:0,progress:getv('rProgress')||'Em tratamento',consumedItems:bom.items,
+      cost:Math.round((matCost-compCost)*100)/100,lab:settled.costs.lab,components:Math.round(compCost*100)/100,clinical:0,progress:getv('rProgress')||'Em tratamento',consumedItems:consumed,
       billingSnap:window.ChevalierBilling?.snapshotSettlement
         ? ChevalierBilling.snapshotSettlement(settled)
         : {cardFee:settled.cardFee,reimbursement:settled.reimbursement,netShare:settled.netShare,grossShare:settled.grossShare,receivable:settled.receivable,ruleSource:settled.ruleSource||'clinic'}
     });
-    applyStockConsumption(bom.items,false);
+    applyStockConsumption(consumed,false);
     syncProductionFromPatient(state.patients[0]);
-    save();closeModal();renderAll();toast('Lançamento salvo com composição.');
+    save();closeModal();renderAll();toast('Lançamento salvo com baixa de estoque.');
   });
   document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  document.getElementById('fConsumeList')?.addEventListener('change',e=>{if(e.target.classList.contains('ci-mat')) refreshConsumeTotals();});
+  refreshConsumeTotals();
   recalcReceivableTotals();
 }
+function syncReceivableConsume(){
+  const box=document.getElementById('fConsumeList');
+  if(!box) return;
+  const bom=combinedProcedureMaterials(collectTreatmentLines());
+  if(bom.items.length) box.innerHTML=bom.items.map(consumeRow).join('');
+  refreshConsumeTotals();
+}
+window.syncReceivableConsume=syncReceivableConsume;
 function onReceivablePersonChange(){
   const id=getv('rPerson');
   if(!id || id==='__new__') return;
@@ -5156,11 +5265,110 @@ function recalcReceivableTotals(){
 }
 function openStockModal(prefillId=''){
   const selected=prefillId||(state.materials[0]?.id||'');
-  openModal('Movimentar estoque',`<div class="form-grid"><div class="field full"><label>Material</label><select id="sMaterial" class="select">${state.materials.map(m=>`<option value="${m.id}" ${m.id===selected?'selected':''}>${esc(m.name)} · saldo ${m.stock}${m.barcode?' · '+esc(m.barcode):''}</option>`).join('')}</select></div><div class="field"><label>Movimento</label><select id="sType" class="select"><option value="in">Entrada</option><option value="out">Saída / consumo</option></select></div><div class="field"><label>Quantidade</label><input id="sQty" type="number" class="input" value="1"></div></div>`,()=>{
+  openModal('Movimentar estoque',`<div class="form-grid"><div class="field full"><label>Material</label><select id="sMaterial" class="select">${state.materials.map(m=>`<option value="${m.id}" ${m.id===selected?'selected':''}>${esc(m.name)} · saldo ${m.stock}${m.barcode?' · '+esc(m.barcode):''}</option>`).join('')}</select></div><div class="field"><label>Movimento</label><select id="sType" class="select"><option value="in">Entrada</option><option value="out">Saída / consumo</option></select></div><div class="field"><label>Quantidade</label><input id="sQty" type="number" class="input" value="1"></div><div class="field"><label>Custo unitário (entrada)</label><input id="sUnitCost" type="number" step="0.001" class="input" placeholder="Opcional — recalcula custo médio"></div></div>`,()=>{
     const m=state.materials.find(x=>x.id===getv('sMaterial'));if(!m)return;
-    const q=num('sQty');m.stock=Math.max(0,Number(m.stock)+(getv('sType')==='in'?q:-q));save();closeModal();renderAll();toast('Estoque atualizado.');
+    const q=num('sQty');
+    if(q<=0) return toast('Informe a quantidade.');
+    if(getv('sType')==='in'){
+      const uc=num('sUnitCost')||Number(m.unitCost||0);
+      if(window.ChevalierNfe?.receiveStock) ChevalierNfe.receiveStock(m,q,uc,{});
+      else m.stock=Number(m.stock||0)+q;
+    }else{
+      if(isGatedStockMaterial(m) && q>Number(m.stock||0)){
+        return toast(`Estoque insuficiente para “${m.name}” (saldo ${m.stock}).`);
+      }
+      m.stock=Math.max(0,Number(m.stock)-q);
+    }
+    ensureStockCollections();
+    state.stockLedger.unshift({id:uid(),at:new Date().toISOString(),type:getv('sType')==='in'?'manual_in':'manual_out',materialId:m.id,qty:q,unitCost:Number(m.unitCost||0),name:m.name});
+    save();closeModal();renderAll();toast('Estoque atualizado.');
   })
 }
+function openNfeImportModal(){
+  if(!window.ChevalierNfe?.parseNfeXml){
+    return toast('Módulo de NF-e não carregou. Recarregue a página.');
+  }
+  ensureStockCollections();
+  let draft=null;
+  openModal('Importar NF-e (XML)',`
+    <div class="form-grid">
+      <div class="field full">
+        <label>Arquivo XML da NF-e</label>
+        <input id="nfeFile" type="file" class="input" accept=".xml,text/xml,application/xml">
+        <p class="field-hint">Use o XML (não o PDF/DANFE). Cada item será associado a um material do estoque ou cadastrado como novo.</p>
+      </div>
+      <div class="field full" id="nfeMeta" hidden></div>
+      <div class="field full" id="nfeItemsWrap" hidden>
+        <label>Itens da nota</label>
+        <div class="table-wrap"><table>
+          <thead><tr><th></th><th>Produto</th><th>Qtd</th><th>R$ un.</th><th>Material no estoque</th></tr></thead>
+          <tbody id="nfeItemsBody"></tbody>
+        </table></div>
+      </div>
+    </div>
+  `,()=>{
+    if(!draft?.items?.length) return toast('Selecione o XML da NF-e.');
+    // sync UI → draft
+    draft.items.forEach((it,i)=>{
+      const row=document.querySelector(`.nfe-row[data-idx="${i}"]`);
+      if(!row) return;
+      it.selected=!!row.querySelector('.nfe-sel')?.checked;
+      const mode=row.querySelector('.nfe-mode')?.value||'';
+      if(mode==='__new__'){
+        it.createNew=true;
+        it.materialId='';
+      }else{
+        it.createNew=false;
+        it.materialId=mode;
+      }
+    });
+    const selected=draft.items.filter(it=>it.selected);
+    if(!selected.length) return toast('Marque ao menos um item.');
+    const missing=selected.filter(it=>!it.createNew && !it.materialId);
+    if(missing.length) return toast('Associe cada item a um material ou escolha “Cadastrar novo”.');
+    const result=ChevalierNfe.applyImport(state, draft, {uid});
+    if(!result.count) return toast('Nenhum item aplicado.');
+    save();closeModal();renderAll();
+    toast(`NF-e importada: ${result.count} item(ns) entraram no estoque. Custos de procedimento atualizados.`);
+  });
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  document.getElementById('modalSave').textContent='Aplicar no estoque';
+  document.getElementById('nfeFile')?.addEventListener('change', async (ev)=>{
+    const file=ev.target.files?.[0];
+    if(!file) return;
+    try{
+      const text=await file.text();
+      draft=ChevalierNfe.autoMatchDraft(ChevalierNfe.parseNfeXml(text), state.materials);
+      const meta=document.getElementById('nfeMeta');
+      const wrap=document.getElementById('nfeItemsWrap');
+      const body=document.getElementById('nfeItemsBody');
+      if(meta){
+        meta.hidden=false;
+        meta.innerHTML=`<div class="card" style="padding:12px"><strong>NF ${esc(draft.meta.number||'—')}</strong> · série ${esc(draft.meta.series||'—')} · ${esc(draft.meta.date||'—')}<div class="cell-sub">${esc(draft.meta.supplier||'')} · total ${brl.format(draft.meta.total||0)}</div></div>`;
+      }
+      if(wrap) wrap.hidden=false;
+      if(body){
+        body.innerHTML=draft.items.map((it,i)=>{
+          const selected=it.materialId||(it.createNew?'__new__':'');
+          const opts=[`<option value="__new__" ${selected==='__new__'?'selected':''}>＋ Cadastrar novo material</option>`]
+            .concat(state.materials.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).map(m=>`<option value="${m.id}" ${m.id===selected?'selected':''}>${esc(m.name)} · saldo ${m.stock}</option>`))
+            .join('');
+          return `<tr class="nfe-row" data-idx="${i}">
+            <td><input type="checkbox" class="nfe-sel" ${it.selected!==false?'checked':''}></td>
+            <td><strong>${esc(it.name)}</strong><div class="cell-sub">${it.barcode?`EAN ${esc(it.barcode)} · `:''}${esc(it.unit||'UN')}</div></td>
+            <td>${it.qty}</td>
+            <td>${brl.format(it.unitCost||0)}</td>
+            <td><select class="select nfe-mode">${opts}</select></td>
+          </tr>`;
+        }).join('');
+      }
+    }catch(err){
+      draft=null;
+      toast(err.message||'Falha ao ler a NF-e');
+    }
+  });
+}
+window.openNfeImportModal=openNfeImportModal;
 
 function boletoDraftFromFields(){
   if(!window.ChevalierScan) return null;
@@ -5604,7 +5812,8 @@ function openQuickModal(){
   }else if(page==='trabalhos' || page==='lab' || page==='entregas'){
     ctx.push(`<button type="button" class="btn primary" style="height:80px;justify-content:center" onclick="closeModal();openProsthesisModal()">Trabalho protético</button>`);
   }else if(page==='estoque' || page==='materiais'){
-    ctx.push(`<button type="button" class="btn primary" style="height:80px;justify-content:center" onclick="closeModal();openMaterialModal()">Material</button>`);
+    ctx.push(`<button type="button" class="btn primary" style="height:80px;justify-content:center" onclick="closeModal();openNfeImportModal()">Importar NF-e</button>`);
+    ctx.push(`<button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openMaterialModal()">Material</button>`);
     ctx.push(`<button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openStockModal()">Movimentar estoque</button>`);
   }
   const rest=`
@@ -5925,6 +6134,7 @@ async function boot(){
     }
   }catch(e){ /* fallback localStorage */ }
   ensureSettings();
+  ensureStockCollections();
   const catalogAdded=ensureCatalog()||0;
   const fracN=ensureAllMaterialFractions()||0;
   const procAdded=ensureProcedureCatalog()||0;
