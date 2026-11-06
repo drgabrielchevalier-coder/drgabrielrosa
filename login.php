@@ -99,7 +99,7 @@ $csrf = htmlspecialchars(chevalier_csrf_token(), ENT_QUOTES, 'UTF-8');
         <input type="hidden" name="csrf" value="<?= $csrf ?>">
         <label class="login-field">
           <span>Usuário</span>
-          <input type="text" name="user" required autofocus placeholder="Seu usuário" maxlength="80" value="<?= htmlspecialchars((string) ($_POST['user'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+          <input type="text" name="user" required autofocus placeholder="Seu usuário" maxlength="80" autocomplete="username" value="<?= htmlspecialchars((string) ($_POST['user'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
         </label>
         <label class="login-field">
           <span>Senha</span>
