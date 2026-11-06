@@ -7,6 +7,7 @@ header('Cache-Control: no-store');
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/auth-lib.php';
 require_once __DIR__ . '/historico-lib.php';
+require_once __DIR__ . '/ops-wipe-lib.php';
 
 chevalier_auth_boot();
 chevalier_security_headers();
@@ -31,9 +32,12 @@ if ($method === 'GET') {
     $row = $pdo->query('SELECT payload, UNIX_TIMESTAMP(updated_at) AS ts FROM app_state WHERE id = 1')->fetch();
     $state = $row ? json_decode($row['payload'], true) : null;
     $importMeta = null;
+    $opsWiped = false;
     if (is_array($state)) {
+        // One-shot: zera pacientes/cobranças/estoque ao subir nova versão de limpeza.
+        $opsWiped = chevalier_maybe_auto_wipe_ops($state);
         $importMeta = chevalier_historico_apply_to_state($state, false);
-        if (!empty($importMeta['changed'])) {
+        if ($opsWiped || !empty($importMeta['changed'])) {
             $json = json_encode($state, JSON_UNESCAPED_UNICODE);
             if ($json !== false && strlen($json) <= 8_000_000) {
                 $stmt = $pdo->prepare('INSERT INTO app_state (id, payload) VALUES (1, :payload)
@@ -49,6 +53,7 @@ if ($method === 'GET') {
         'state' => $state,
         'updatedAt' => $row ? (int) ($row['ts'] ?? 0) : 0,
         'historicoImport' => $importMeta,
+        'opsWiped' => $opsWiped,
         'csrf' => chevalier_csrf_token(),
     ], JSON_UNESCAPED_UNICODE);
     exit;
