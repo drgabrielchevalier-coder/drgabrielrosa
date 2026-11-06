@@ -105,6 +105,20 @@ function chevalier_asset_url(string $path): string
     return htmlspecialchars($path . '?v=' . $version, ENT_QUOTES, 'UTF-8');
 }
 
+/** Caminho-base público do app ('' na raiz, '/pasta' em subdiretório). */
+function chevalier_web_base_path(): string
+{
+    $script = (string) ($_SERVER['SCRIPT_NAME'] ?? '/');
+    $dir = str_replace('\\', '/', dirname($script));
+    if ($dir === '/' || $dir === '\\' || $dir === '.') {
+        return '';
+    }
+    if (str_ends_with($dir, '/api')) {
+        $dir = substr($dir, 0, -4);
+    }
+    return rtrim($dir, '/');
+}
+
 /**
  * Favicon + ícones de app (PWA / iOS) com o monograma GR.
  * Imprimir dentro de <head>.
@@ -113,10 +127,11 @@ function chevalier_brand_icons_head(): void
 {
     $icon16 = chevalier_asset_url('assets/img/icons/icon-16.png');
     $icon32 = chevalier_asset_url('assets/img/icons/icon-32.png');
-    $icon192 = chevalier_asset_url('assets/img/icons/icon-192.png');
-    $apple = chevalier_asset_url('assets/img/icons/apple-touch-icon.png');
-    // Manifest na raiz: start_url/scope relativos resolvem para o app, não para assets/
-    $manifest = chevalier_asset_url('site.webmanifest');
+    $icon192 = chevalier_asset_url('icon-192.png');
+    $icon512 = chevalier_asset_url('icon-512.png');
+    $apple = chevalier_asset_url('apple-touch-icon.png');
+    // manifest.php gera src absolutos dos ícones (Chrome PWA)
+    $manifest = chevalier_asset_url('manifest.php');
     $svg = chevalier_asset_url('assets/img/favicon.svg');
     $ico = chevalier_asset_url('favicon.ico');
     echo '<link rel="icon" href="' . $ico . '" sizes="any">' . "\n";
@@ -124,6 +139,7 @@ function chevalier_brand_icons_head(): void
     echo '<link rel="icon" type="image/png" sizes="32x32" href="' . $icon32 . '">' . "\n";
     echo '<link rel="icon" type="image/png" sizes="16x16" href="' . $icon16 . '">' . "\n";
     echo '<link rel="icon" type="image/png" sizes="192x192" href="' . $icon192 . '">' . "\n";
+    echo '<link rel="icon" type="image/png" sizes="512x512" href="' . $icon512 . '">' . "\n";
     echo '<link rel="apple-touch-icon" sizes="180x180" href="' . $apple . '">' . "\n";
     echo '<link rel="manifest" href="' . $manifest . '">' . "\n";
 }

@@ -22,12 +22,17 @@ gen() {
   echo "wrote $out"
 }
 
-gen 16  "$OUT/icon-16.png"
-gen 32  "$OUT/icon-32.png"
-gen 48  "$OUT/icon-48.png"
-gen 180 "$OUT/apple-touch-icon.png"
-gen 192 "$OUT/icon-192.png"
-gen 512 "$OUT/icon-512.png"
+gen 16  "$OUT/icon-16.png" 0.04
+gen 32  "$OUT/icon-32.png" 0.04
+gen 48  "$OUT/icon-48.png" 0.04
+gen 96  "$OUT/icon-96.png" 0.05
+gen 128 "$OUT/icon-128.png" 0.05
+gen 144 "$OUT/icon-144.png" 0.05
+gen 180 "$OUT/apple-touch-icon.png" 0.05
+gen 192 "$OUT/icon-192.png" 0.04
+gen 256 "$OUT/icon-256.png" 0.05
+gen 384 "$OUT/icon-384.png" 0.05
+gen 512 "$OUT/icon-512.png" 0.04
 gen 512 "$OUT/icon-512-maskable.png" 0.20
 
 ffmpeg -y -i "$OUT/icon-16.png" -i "$OUT/icon-32.png" -i "$OUT/icon-48.png" \
@@ -35,4 +40,6 @@ ffmpeg -y -i "$OUT/icon-16.png" -i "$OUT/icon-32.png" -i "$OUT/icon-48.png" \
   -map '[a]' -map '[b]' -map '[c]' "$ROOT/assets/img/favicon.ico" >/dev/null 2>&1
 cp "$ROOT/assets/img/favicon.ico" "$ROOT/favicon.ico"
 cp "$OUT/apple-touch-icon.png" "$ROOT/apple-touch-icon.png"
-echo "favicon.ico + apple-touch-icon.png updated"
+cp "$OUT/icon-192.png" "$ROOT/icon-192.png"
+cp "$OUT/icon-512.png" "$ROOT/icon-512.png"
+echo "favicon.ico + root icons updated"
