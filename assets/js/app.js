@@ -14,14 +14,14 @@ const seed = {
     {id:'particular',name:'Particular',type:'Próprio',rule:'Receita integral do paciente',color:'PT',billing:{version:1,shareMode:'percent',professionalPercent:100,fixedAmount:0,cardFeeEnabled:false,cardFeePercent:0,cardFeeOn:'share',materialsPaidBy:'doctor',reimburseComponents:false,reimburseMaterials:false,reimburseLab:false,notes:'Consultório próprio — receita integral.',aiSummary:'100% · sem taxa cartão · você arca com materiais',examplePracticed:2400,exampleComponents:75,exampleMaterials:225,exampleLab:450}}
   ],
   materials:[
-    {id:'m1',name:'Implante CM 3.5',brand:'Dérig',type:'Implante — Fixação',supplier:'Dental fornecedor',pack:'1 un',price:158,unitCost:158,stock:8,min:3,barcode:'7891000000001',updated:todayISO()},
-    {id:'m2',name:'Mini pilar CM',brand:'Neodent',type:'Implante — Componente',supplier:'Dental fornecedor',pack:'1 un',price:92,unitCost:92,stock:4,min:3,barcode:'7891000000002',updated:todayISO()},
-    {id:'m3',name:'Biomaterial 0,5 g',brand:'Lumina Bone',type:'Implante — Biomaterial',supplier:'Dental fornecedor',pack:'1 un',price:198,unitCost:198,stock:2,min:2,barcode:'7891000000003',updated:pastDays(5)},
-    {id:'m4',name:'Anestésico com vasoconstritor',brand:'DFL',type:'Comum — Anestésico',supplier:'Dental fornecedor',pack:'50 tubetes',price:200,unitCost:4,stock:31,min:10,barcode:'7891000000004',updated:pastDays(2)},
-    {id:'m5',name:'Campo cirúrgico estéril',brand:'Genérico',type:'Cirurgia — Descartáveis',supplier:'Distribuidora',pack:'1 kit',price:35,unitCost:35,stock:5,min:3,barcode:'7891000000005',updated:pastDays(8)},
-    {id:'m6',name:'Soro fisiológico 500 ml',brand:'Equiplex',type:'Cirurgia — Antisepsia',supplier:'Distribuidora',pack:'20 bolsas',price:279.90,unitCost:13.995,stock:12,min:5,barcode:'7891000000006',updated:pastDays(12)},
-    {id:'m7',name:'Transfer HE 4.1',brand:'Implacil',type:'Implante — Transfer / análogo',supplier:'Dental fornecedor',pack:'1 un',price:30,unitCost:30,stock:2,min:2,barcode:'7891000000007',updated:pastDays(7)},
-    {id:'m8',name:'Análogo de implante',brand:'Implacil',type:'Implante — Transfer / análogo',supplier:'Dental fornecedor',pack:'1 un',price:45,unitCost:45,stock:3,min:2,barcode:'7891000000008',updated:pastDays(7)}
+    {id:'m1',name:'Implante CM 3.5',brand:'Dérig',type:'Implante — Fixação',supplier:'Dental fornecedor',pack:'1 un',price:158,unitCost:158,stock:0,min:3,barcode:'7891000000001',updated:todayISO()},
+    {id:'m2',name:'Mini pilar CM',brand:'Neodent',type:'Implante — Componente',supplier:'Dental fornecedor',pack:'1 un',price:92,unitCost:92,stock:0,min:3,barcode:'7891000000002',updated:todayISO()},
+    {id:'m3',name:'Biomaterial 0,5 g',brand:'Lumina Bone',type:'Implante — Biomaterial',supplier:'Dental fornecedor',pack:'1 un',price:198,unitCost:198,stock:0,min:2,barcode:'7891000000003',updated:todayISO()},
+    {id:'m4',name:'Anestésico com vasoconstritor',brand:'DFL',type:'Comum — Anestésico',supplier:'Dental fornecedor',pack:'50 tubetes',price:200,unitCost:4,stock:0,min:10,barcode:'7891000000004',updated:todayISO()},
+    {id:'m5',name:'Campo cirúrgico estéril',brand:'Genérico',type:'Cirurgia — Descartáveis',supplier:'Distribuidora',pack:'1 kit',price:35,unitCost:35,stock:0,min:3,barcode:'7891000000005',updated:todayISO()},
+    {id:'m6',name:'Soro fisiológico 500 ml',brand:'Equiplex',type:'Cirurgia — Antisepsia',supplier:'Distribuidora',pack:'20 bolsas',price:279.90,unitCost:13.995,stock:0,min:5,barcode:'7891000000006',updated:todayISO()},
+    {id:'m7',name:'Transfer HE 4.1',brand:'Implacil',type:'Implante — Transfer / análogo',supplier:'Dental fornecedor',pack:'1 un',price:30,unitCost:30,stock:0,min:2,barcode:'7891000000007',updated:todayISO()},
+    {id:'m8',name:'Análogo de implante',brand:'Implacil',type:'Implante — Transfer / análogo',supplier:'Dental fornecedor',pack:'1 un',price:45,unitCost:45,stock:0,min:2,barcode:'7891000000008',updated:todayISO()}
   ],
   procedures:[
     {id:'p1',name:'Implante unitário (plantio)',specialty:'implante',kind:'cirurgico',price:1500,items:[{materialId:'m1',qty:1},{materialId:'m4',qty:4},{materialId:'m5',qty:1},{materialId:'m6',qty:1}],extra:44,clinicPrices:[
@@ -61,39 +61,30 @@ const seed = {
       {clinicId:'particular',practicedValue:230,receiveMode:'fixed',receiveAmount:230,receivePercent:100}
     ]}
   ],
-  patients:[
-    {id:'pt1',name:'Paciente Exemplo 01',origin:'Prestação',clinicId:'allon',procedureId:'p1',lines:[{procedureId:'p1',qty:1,tooth:'26'}],date:pastDays(20),value:490,received:490,due:pastDays(10),status:'Faturado / Recebido',cost:224.86,lab:0,components:0,clinical:0,progress:'Alta'},
-    {id:'pt2',name:'Paciente Exemplo 02',origin:'Prestação',clinicId:'allon',procedureId:'p1',lines:[{procedureId:'p1',qty:1,tooth:'36'},{procedureId:'proc-enxerto-osseo',qty:1,tooth:'36'}],date:pastDays(12),value:490,received:0,due:pastDays(2),status:'À receber',cost:323.86,lab:0,components:0,clinical:0,progress:'Aguardo pós Cirúrgico'},
-    {id:'pt3',name:'Paciente Exemplo 03',origin:'Particular',clinicId:'particular',procedureId:'p1',lines:[{procedureId:'p1',qty:1,tooth:'15'},{procedureId:'p3',qty:1,tooth:'15'}],date:pastDays(18),value:2400,received:1200,due:addDays(12),status:'Recebido parcial',cost:224.86,lab:450,components:75,clinical:300,progress:'Enviado para Laboratório'},
-    {id:'pt4',name:'Paciente Exemplo 04',origin:'Prestação',clinicId:'gerlucia',procedureId:'p3',lines:[{procedureId:'p3',qty:1,tooth:'16'}],date:pastDays(9),value:850,received:400,due:pastDays(1),status:'Recebido parcial',cost:0,lab:450,components:75,clinical:0,progress:'Aguardando Cimentação'},
-    {id:'pt5',name:'Paciente Exemplo 05',origin:'Prestação',clinicId:'daniele',procedureId:'p1',lines:[{procedureId:'p1',qty:1,tooth:'46'}],date:pastDays(6),value:700,received:0,due:addDays(7),status:'Aguardando acerto',cost:224.86,lab:0,components:0,clinical:0,progress:'Em tratamento'}
-  ],
-  costs:[
-    {id:'c1',desc:'Aluguel sala clínica',type:'ALUGUEL',center:'Particular',date:pastDays(5),due:pastDays(5),method:'PIX',value:300,status:'PAGO'},
-    {id:'c2',desc:'Compra de implantes',type:'IMPLANTE',center:'Estoque',date:pastDays(14),due:pastDays(1),method:'BOLETO PARCELADO',value:632,status:'PARCELADO'},
-    {id:'c3',desc:'Laboratório protético',type:'LAB',center:'Particular',date:pastDays(12),due:addDays(3),method:'PIX',value:450,status:'À PAGAR'},
-    {id:'c4',desc:'Transporte clínica',type:'Transporte',center:'Allon Roter',date:pastDays(3),due:pastDays(3),method:'CRÉDITO',value:150,status:'PAGO'},
-    {id:'c5',desc:'Componentes protéticos',type:'COMPONENTES',center:'Gerlúcia',date:pastDays(8),due:pastDays(8),method:'PIX',value:150,status:'PAGO'}
-  ],
-  payroll:[
-    {id:'f1',name:'Auxiliar clínica',type:'Diária',period:'09/2026',center:'Particular',value:300,status:'Pago'},
-    {id:'f2',name:'Apoio administrativo',type:'Fixo',period:'09/2026',center:'Geral',value:450,status:'A pagar'}
-  ],
-  prostheses:[
-    {id:'pr1',code:'GR0001',flow:'protetico',patientId:'pt3',type:'Coroa sobre implante',tooth:'26',lab:'Precisão Lab',cost:450,stage:1,labStatus:'Em produção',entry:pastDays(18),due:addDays(5),urgent:false,shade:'A2',notes:'Componente CM enviado junto.',events:[{date:pastDays(18),stage:0,note:'Trabalho cadastrado'},{date:pastDays(12),stage:1,note:'Enviado ao laboratório'}]},
-    {id:'pr2',code:'GR0002',flow:'protetico',patientId:'pt4',type:'Coroa de zircônia',tooth:'16',lab:'Ateliê Dental',cost:450,stage:3,labStatus:'Recebido — aguardando agendamento',entry:pastDays(9),due:pastDays(1),urgent:true,shade:'A3',notes:'Aguardando cimentação.',events:[{date:pastDays(9),stage:0,note:'Moldagem registrada'},{date:pastDays(7),stage:1,note:'Enviado ao laboratório'},{date:pastDays(2),stage:2,note:'Prova realizada'},{date:pastDays(1),stage:3,note:'Peça pronta na clínica'}]},
-    {id:'pr3',code:'GR0003',flow:'protetico',patientId:'pt3',type:'Protocolo superior',tooth:'Superior',lab:'OralLab',cost:1900,stage:4,labStatus:'Entregue / instalado',entry:pastDays(40),due:pastDays(10),urgent:false,shade:'BL3',notes:'Instalado e alta.',events:[{date:pastDays(40),stage:0,note:'Trabalho cadastrado'},{date:pastDays(28),stage:1,note:'Em produção'},{date:pastDays(14),stage:2,note:'Prova de dentes'},{date:pastDays(10),stage:4,note:'Instalado'}]},
-    {id:'pr4',code:'GR0004',flow:'protetico',patientId:'pt4',type:'Faceta de porcelana',tooth:'11-21',lab:'Ateliê Dental',cost:620,stage:2,labStatus:'Prova / ajustes',entry:pastDays(6),due:addDays(4),urgent:false,shade:'A1',notes:'Ajuste de borda incisal.',events:[{date:pastDays(6),stage:0,note:'Trabalho cadastrado'},{date:pastDays(4),stage:1,note:'Enviado ao laboratório'},{date:pastDays(1),stage:2,note:'Prova em boca'}]},
-    {id:'pr5',code:'GR0005',flow:'cirurgico',patientId:'pt2',type:'Implante unitário (plantio)',tooth:'36',lab:'',cost:0,stage:3,labStatus:'Operado',entry:pastDays(12),due:addDays(20),urgent:false,shade:'',notes:'Enxerto associado. Aguardando cicatrização.',events:[{date:pastDays(12),stage:0,note:'Caso planejado'},{date:pastDays(10),stage:1,note:'Material solicitado'},{date:pastDays(8),stage:2,note:'Agendado'},{date:pastDays(6),stage:3,note:'Cirurgia realizada'}]},
-    {id:'pr6',code:'GR0006',flow:'cirurgico',patientId:'pt5',type:'Implante unitário (plantio)',tooth:'46',lab:'',cost:0,stage:1,labStatus:'Material solicitado',entry:pastDays(6),due:addDays(14),urgent:false,shade:'',notes:'',events:[{date:pastDays(6),stage:0,note:'Planejamento iniciado'},{date:pastDays(5),stage:1,note:'Kit de implante solicitado'}]},
-    {id:'pr7',code:'GR0007',flow:'cirurgico',patientId:'pt1',type:'Implante unitário (plantio)',tooth:'26',lab:'',cost:0,stage:5,labStatus:'Liberado para moldagem',entry:pastDays(40),due:pastDays(5),urgent:false,shade:'',notes:'Alta cirúrgica — liberado para prótese.',events:[{date:pastDays(40),stage:0,note:'Planejado'},{date:pastDays(30),stage:3,note:'Cirurgia'},{date:pastDays(10),stage:4,note:'Cicatrização ok'},{date:pastDays(5),stage:5,note:'Liberado para moldagem'}]}
-  ],
+  patients:[],
+  costs:[],
+  payroll:[],
+  prostheses:[],
   reminders:[],
   plans:[],
   people:[],
   importBatches:[],
   nfImports:[],
   stockLedger:[],
+  // Sela históricos empacotados — não reimportar após limpeza operacional
+  imports:{
+    allonHistoricoV2:{at:todayISO(),added:0,total:0,source:'ops-wipe',sealed:true},
+    danieleHistoricoV2:{at:todayISO(),added:0,total:0,source:'ops-wipe',sealed:true},
+    gerluciaHistoricoV2:{at:todayISO(),added:0,total:0,source:'ops-wipe',sealed:true},
+    particularHistoricoV2:{at:todayISO(),added:0,total:0,source:'ops-wipe',sealed:true},
+    custosHistoricoV2:{at:todayISO(),added:0,total:0,source:'ops-wipe',sealed:true},
+    allonHistoricoV1:{at:todayISO(),added:0,total:0,source:'ops-wipe',sealed:true},
+    danieleHistoricoV1:{at:todayISO(),added:0,total:0,source:'ops-wipe',sealed:true},
+    gerluciaHistoricoV1:{at:todayISO(),added:0,total:0,source:'ops-wipe',sealed:true},
+    particularHistoricoV1:{at:todayISO(),added:0,total:0,source:'ops-wipe',sealed:true},
+    custosHistoricoV1:{at:todayISO(),added:0,total:0,source:'ops-wipe',sealed:true}
+  },
+  opsWipeVersion:1,
   schemaVersion:5
 };
 
@@ -6050,6 +6041,90 @@ function toggleCost(id){const c=state.costs.find(x=>x.id===id);if(!c)return;c.st
 function exportData(){
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='chevalier-gestao-backup.json';a.click();URL.revokeObjectURL(a.href);
 }
+const OPS_WIPE_VERSION=1;
+function sealedHistoricoImports(){
+  const at=todayISO();
+  const meta={at,added:0,total:0,source:'ops-wipe',sealed:true};
+  const flags=[
+    'allonHistoricoV2','danieleHistoricoV2','gerluciaHistoricoV2','particularHistoricoV2','custosHistoricoV2',
+    'allonHistoricoV1','danieleHistoricoV1','gerluciaHistoricoV1','particularHistoricoV1','custosHistoricoV1'
+  ];
+  const o={};
+  flags.forEach(f=>{ o[f]={...meta}; });
+  return o;
+}
+/** Estado limpo: mantém clínicas, procedimentos e materiais (estoque 0). */
+function buildWipedOperationalState(base){
+  const next=structuredClone(base||state);
+  next.patients=[];
+  next.people=[];
+  next.costs=[];
+  next.payroll=[];
+  next.prostheses=[];
+  next.reminders=[];
+  next.plans=[];
+  next.importBatches=[];
+  next.nfImports=[];
+  next.stockLedger=[];
+  next.materials=(Array.isArray(next.materials)?next.materials:[]).map(m=>({...m,stock:0,updated:todayISO()}));
+  next.imports={...(next.imports&&typeof next.imports==='object'?next.imports:{}),...sealedHistoricoImports()};
+  next.opsWipeVersion=OPS_WIPE_VERSION;
+  next.opsWipedAt=new Date().toISOString();
+  next.schemaVersion=next.schemaVersion||5;
+  return next;
+}
+async function wipeOperationalData(opts={}){
+  if(!opts.skipConfirm){
+    const ok=confirm('Zerar pacientes, cobranças, recebimentos, custos e saldos de estoque?\n\nSerão mantidos: clínicas, procedimentos e itens do estoque (quantidade 0).\nOs históricos empacotados NÃO serão reimportados automaticamente.\n\nEsta ação não tem desfazer.');
+    if(!ok) return false;
+  }
+  try{
+    const r=await fetch('api/reset-ops.php',{
+      method:'POST',
+      headers:csrfHeaders({'Content-Type':'application/json'}),
+      credentials:'same-origin',
+      body:JSON.stringify({csrf:csrfToken()})
+    });
+    let data={};
+    try{data=await r.json(); applyCsrfFromResponse(data);}catch(_){}
+    if(r.status===401){ location.href='login.php'; return false; }
+    if(r.ok && data.ok && data.state){
+      bindGlobalState(data.state);
+      persistReady=true;
+      localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
+      renderAll();
+      toast(`Dados operacionais zerados (${data.clearedPatients||0} paciente(s); ${data.materialsKept||0} material(is) mantidos com estoque 0).`);
+      return true;
+    }
+  }catch(e){ console.warn('reset-ops', e); }
+  // Fallback local + forceWipe no state.php
+  const wiped=buildWipedOperationalState(state);
+  bindGlobalState(wiped);
+  persistReady=true;
+  localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
+  try{
+    const r=await fetch('api/state.php',{
+      method:'POST',
+      headers:csrfHeaders({'Content-Type':'application/json'}),
+      credentials:'same-origin',
+      body:JSON.stringify({...state,__forceWipe:true,csrf:csrfToken()})
+    });
+    let data={};
+    try{data=await r.json(); applyCsrfFromResponse(data);}catch(_){}
+    if(r.status===401){ location.href='login.php'; return false; }
+    if(!r.ok){
+      toast(data?.error||'Falha ao gravar limpeza no servidor.');
+      return false;
+    }
+  }catch(e){
+    toast('Limpeza local aplicada; servidor indisponível.');
+  }
+  renderAll();
+  toast('Dados operacionais zerados.');
+  return true;
+}
+window.wipeOperationalData=wipeOperationalData;
+window.buildWipedOperationalState=buildWipedOperationalState;
 const APP_SEARCH_IDS=['globalSearch','patientSearch','prosthSearch','procSearch','oSearch','recvSearch','matDbSearch','procDbSearch','calSearch','planSearch'];
 function loggedInUserLabel(){
   const u=window.CHEVALIER_USER;
@@ -6124,6 +6199,9 @@ async function boot(){
         bindGlobalState(data.state);
         persistReady=true;
         localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
+        if(data.opsWiped){
+          setTimeout(()=>toast('Dados operacionais zerados no servidor (pacientes, cobranças e estoque).'), 400);
+        }
       }else if(data.ok && !data.state){
         persistReady=true;
         await fetch('api/state.php',{
