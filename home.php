@@ -50,7 +50,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 
   <header class="lp-top" id="topo">
     <a class="lp-brand" href="#topo" aria-label="Dr Gabriel Rosa — início">
-      <img src="<?= chevalier_asset_url('assets/img/brand/logo-horizontal-on-dark.png') ?>" width="220" height="48" alt="Dr Gabriel Rosa">
+      <img src="<?= chevalier_asset_url('assets/img/brand/logo-horizontal-on-dark.png') ?>" width="240" height="70" alt="Dr Gabriel Rosa">
     </a>
     <nav class="lp-top-nav" aria-label="Principal">
       <a href="#tratamentos">Tratamentos</a>
