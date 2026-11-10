@@ -1,5 +1,5 @@
 # Chevalier Gestão - configuração básica Hostinger/Apache
-DirectoryIndex home.php login.php index.php index.html
+DirectoryIndex index.html home.php login.php index.php
 Options -Indexes
 
 <Files "config.local.php">
@@ -21,6 +21,8 @@ Options -Indexes
 # Bloqueia execução de scripts em uploads
 <IfModule mod_rewrite.c>
   RewriteEngine On
+  # Arquivos internos do repositório não devem ser acessíveis pela web
+  RewriteRule ^(?:.*/)?\.git(?:/|$) - [F,L,NC]
   RewriteRule ^uploads/.*\.(?i:php|phtml|phar|cgi|pl)$ - [F,L]
 </IfModule>
 
