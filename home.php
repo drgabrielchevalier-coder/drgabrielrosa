@@ -55,6 +55,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
     <nav class="lp-top-nav" aria-label="Principal">
       <a href="#tratamentos">Tratamentos</a>
       <a href="#sobre">Sobre</a>
+      <a href="#credenciais">Credenciais</a>
       <a href="#formacao">Formação</a>
       <a href="#contato">Contato</a>
       <?php if ($LANDING_INSTAGRAM !== ''): ?>
@@ -71,6 +72,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
   <div class="lp-drawer" id="lpDrawer" hidden>
     <a href="#tratamentos">Tratamentos</a>
     <a href="#sobre">Sobre</a>
+    <a href="#credenciais">Credenciais</a>
     <a href="#formacao">Formação</a>
     <a href="#contato">Contato</a>
     <a class="lp-btn lp-btn-primary" href="<?= htmlspecialchars($ctaHref, ENT_QUOTES, 'UTF-8') ?>" <?= $ctaExternal ? 'target="_blank" rel="noopener"' : '' ?>><?= htmlspecialchars($ctaLabel, ENT_QUOTES, 'UTF-8') ?></a>
@@ -160,16 +162,72 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
         <p class="lp-eyebrow">Sobre</p>
         <h2>Técnica, presença e clareza no consultório</h2>
         <p class="lp-quote">A imagem que o paciente confia é a mesma que o clínico entrega: postura, precisão e um plano que se entende.</p>
-        <p>Cirurgião-dentista formado pela Universidade Iguaçu (UNIG, 2022), com trajetória em cirurgia oral, implantodontia, prótese e harmonização orofacial. Estágios supervisionados em Cirurgia Bucomaxilofacial em hospitais de referência.</p>
-        <p>Também atua na gestão pública — coordenação de Saúde Bucal em Duque de Caxias (RJ) — unindo visão clínica e organização de cuidado.</p>
-        <a class="lp-text-link" href="<?= htmlspecialchars($LANDING_LATTES, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">Currículo Lattes</a>
+        <p>Cirurgião-dentista formado pela Universidade Iguaçu (UNIG, 2022), com especialização em implantodontia e formação avançada em prótese, harmonização orofacial e cirurgia. Estágios supervisionados em Cirurgia Bucomaxilofacial em hospitais de referência do Rio de Janeiro.</p>
+        <p>Também coordena a Saúde Bucal da Prefeitura de Duque de Caxias (RJ) — responsabilidade pública que reforça disciplina, protocolo e cuidado em escala.</p>
+        <a class="lp-text-link" href="#credenciais">Ver credenciais em linguagem simples</a>
+      </div>
+    </section>
+
+    <section class="lp-section lp-proof" id="credenciais" data-reveal aria-labelledby="proof-title">
+      <div class="lp-section-head">
+        <p class="lp-eyebrow">Prova social · Currículo Lattes</p>
+        <h2 id="proof-title">Por que pacientes confiam neste doutor</h2>
+        <p class="lp-lead">Traduzimos o currículo acadêmico em linguagem clara — para você entender, sem jargão, o que cada formação significa no seu tratamento.</p>
+      </div>
+
+      <ul class="lp-proof-stats" aria-label="Números do currículo">
+        <li>
+          <strong>1.560h</strong>
+          <span>Especialização em implantodontia</span>
+        </li>
+        <li>
+          <strong>+1.800h</strong>
+          <span>Cirurgia em hospitais de referência</span>
+        </li>
+        <li>
+          <strong>CRO-RJ 52957</strong>
+          <span>Registro profissional ativo</span>
+        </li>
+        <li>
+          <strong>Coordenador</strong>
+          <span>Saúde Bucal · Duque de Caxias</span>
+        </li>
+      </ul>
+
+      <div class="lp-proof-grid">
+        <article class="lp-proof-card">
+          <p class="lp-proof-tag">Para o seu tratamento</p>
+          <h3>Especialista em implantes</h3>
+          <p>Formação longa e supervisada em implantodontia (Capacite Institute). Na prática: planejamento de implantes, enxertos e reabilitações com mais segurança e previsibilidade.</p>
+        </article>
+        <article class="lp-proof-card">
+          <p class="lp-proof-tag">Experiência hospitalar</p>
+          <h3>Cirurgia de média e alta complexidade</h3>
+          <p>Estágios em Cirurgia Bucomaxilofacial no Hospital Municipal Dr. Moacyr do Carmo e no Hospital Adão Pereira Nunes — ambiente exigente, com protocolo e responsabilidade clínica.</p>
+        </article>
+        <article class="lp-proof-card">
+          <p class="lp-proof-tag">Estética e função</p>
+          <h3>Prótese e harmonia facial</h3>
+          <p>Aperfeiçoamento no IOA RIO em prótese dentária e harmonização orofacial. O objetivo: dentes e face em equilíbrio, com resultado natural e duradouro.</p>
+        </article>
+        <article class="lp-proof-card">
+          <p class="lp-proof-tag">Liderança e confiança pública</p>
+          <h3>Coordena a Saúde Bucal de um município</h3>
+          <p>Na Prefeitura de Duque de Caxias, planeja equipes, protocolos e acesso ao cuidado. Quem organiza a saúde de tantos pacientes leva essa mesma disciplina para o consultório.</p>
+        </article>
+      </div>
+
+      <div class="lp-proof-foot">
+        <p>Tudo isso está documentado no Currículo Lattes — a base oficial de formação acadêmica e profissional no Brasil.</p>
+        <a class="lp-btn lp-btn-primary" href="<?= htmlspecialchars($LANDING_LATTES, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">Abrir Currículo Lattes completo</a>
       </div>
     </section>
 
     <section class="lp-section lp-path" id="formacao" data-reveal>
       <div class="lp-section-head">
         <p class="lp-eyebrow">Percurso</p>
-        <h2>Formação</h2>
+        <h2>Formação, passo a passo</h2>
+        <p class="lp-lead">A linha do tempo acadêmica — a mesma informação do Lattes, organizada para leitura rápida.</p>
       </div>
       <ol class="lp-timeline">
         <li>
@@ -204,7 +262,7 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
           <span class="lp-year">2024</span>
           <div>
             <strong>Cirurgia Bucomaxilofacial</strong>
-            <span>Estágios em hospitais de referência · +1.800h supervisionadas</span>
+            <span>Estágios hospitalares · HMMRC 1.248h + HMAPN 620h</span>
           </div>
         </li>
         <li>
