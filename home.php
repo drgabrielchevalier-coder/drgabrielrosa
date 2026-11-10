@@ -7,7 +7,7 @@ require_once __DIR__ . '/api/app-version-lib.php';
  * Preencha WhatsApp (DDI+DDD+número, só dígitos) e Instagram quando tiver.
  */
 $LANDING_WHATSAPP = '5521967329133';
-$LANDING_EMAIL = 'drgabrielchevalier@hotmail.com';
+$LANDING_EMAIL = 'drgabrielchevalier@gmail.com';
 $LANDING_LATTES = 'http://lattes.cnpq.br/9376004341430383';
 $LANDING_INSTAGRAM = 'https://instagram.com/dr_gabrielrosa';
 $LANDING_CRO = 'CRO-RJ 52957';

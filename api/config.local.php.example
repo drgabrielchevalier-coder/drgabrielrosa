@@ -18,7 +18,7 @@ declare(strict_types=1);
 // define('AUTH_USER', 'gabriel');
 // define('AUTH_PASS', '...');
 // define('AUTH_PASS_HASH', '...'); // preferível à senha em texto claro
-// define('AUTH_EMAIL', 'drgabrielchevalier@hotmail.com');
+// define('AUTH_EMAIL', 'drgabrielchevalier@gmail.com');
 
 // E-mail do sistema (recuperação de senha) — use caixa do seu domínio:
 // define('MAIL_FROM', 'noreply@seudominio.com');

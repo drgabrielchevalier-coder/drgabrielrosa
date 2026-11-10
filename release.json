@@ -1,10 +1,10 @@
 {
-  "version": "2.15.0",
-  "name": "Layout didático — hierarquia e fluxo",
-  "releasedAt": "2026-11-01",
+  "version": "2.15.1",
+  "name": "Deploy automático + e-mail oficial",
+  "releasedAt": "2026-11-10",
   "changes": [
-    "Tipografia Fraunces + Source Sans 3; tokens de cor e ritmo visual mais clínicos.",
-    "Dashboard, Pacientes e Recebíveis em seções numeradas (entender → filtrar → agir).",
-    "Prioridades do dia com atalhos; saudação contextual no dashboard."
+    "E-mail oficial unificado: drgabrielchevalier@gmail.com (site e recuperação de senha padrão).",
+    "Deploy automático: push em claude/** passa por checagens e vai para main → Hostinger publica.",
+    "Arquivos internos do repositório (.md, scripts, .github) bloqueados para acesso web."
   ]
 }

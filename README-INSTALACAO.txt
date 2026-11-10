@@ -3,8 +3,18 @@ DR GABRIEL ROSA — GESTÃO CLÍNICA
 ============================================================
 DEPLOY AUTOMÁTICO (recomendado)
 ============================================================
-Assim o Cursor (e você) só precisam dar push no GitHub; a
+Assim o Claude (e você) só precisam dar push no GitHub; a
 Hostinger publica sozinha.
+
+FLUXO DO CLAUDE (automático)
+- O Claude trabalha em branches claude/<nome>.
+- Cada push em claude/** dispara .github/workflows/auto-merge-claude.yml:
+  php -l + node --check + scripts/test-*.mjs → se tudo passar,
+  faz merge em main → o Git do hPanel publica sozinho.
+- Se um check falhar ou houver conflito, nada vai para main
+  (produção não muda) e o erro aparece na aba Actions do GitHub.
+- Para pausar o deploy automático: GitHub → Settings → Variables →
+  crie AUTO_MERGE_CLAUDE = off (volta a valer com qualquer outro valor).
 
 1) No hPanel, abra o site do subdomínio:
    drgabrielrosa.implantstore.com.br
@@ -22,7 +32,8 @@ A partir daí: todo push/merge em main atualiza o site.
 A senha do MySQL fica só no servidor em api/config.local.php
 (não vai para o Git).
 
-A home pública é home.php (landing do Instagram).
+A raiz (/) abre index.html (hub do Instagram: pacientes × dentistas).
+O site profissional é home.php.
 O sistema de gestão continua em /login.php → /index.php.
 
 LANDING (Instagram bio)
@@ -36,9 +47,8 @@ não conectou o banco.
 
 OPCIONAL — token da API (para o agente publicar via MCP)
 - hPanel → Perfil → API Tokens → criar token
-- No Cursor Cloud Environment, salve o secret HOSTINGER_API_TOKEN
-  (assim hosting_deployStaticWebsite / Git settings deixam de
-  depender só do OAuth interativo)
+- No ambiente do Claude, salve o secret HOSTINGER_API_TOKEN
+  (opcional: o deploy normal é pelo Git do hPanel, não pela API)
 
 OPCIONAL — backup via GitHub Actions (FTP)
 - Secrets do repositório: FTP_SERVER, FTP_USERNAME, FTP_PASSWORD

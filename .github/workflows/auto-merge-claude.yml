@@ -1,0 +1,89 @@
+name: Auto-merge Claude → main (deploy automático)
+
+# Cada push em claude/** roda as checagens rápidas e, se passarem,
+# faz merge em main. O Git do hPanel (auto-deploy ligado em main,
+# diretório raiz) publica em drgabrielrosa.implantstore.com.br.
+# Falha de check ou conflito = nada vai para main (produção intacta).
+# Pausar: Settings → Variables → AUTO_MERGE_CLAUDE = off
+
+on:
+  push:
+    branches: ['claude/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-merge-main
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Segredos não versionados
+        run: |
+          if git ls-files --error-unmatch api/config.local.php >/dev/null 2>&1; then
+            echo "::error::api/config.local.php está versionado — remova do Git."; exit 1
+          fi
+
+      - name: Wipe selado (versão não pode subir)
+        run: |
+          grep -A3 "function chevalier_ops_wipe_version" api/ops-wipe-lib.php | grep -q "return 1;" || { echo "::error::chevalier_ops_wipe_version() mudou — isso apagaria a produção."; exit 1; }
+          grep -Eq "^const OPS_WIPE_VERSION=1;" assets/js/app.js || { echo "::error::OPS_WIPE_VERSION mudou em app.js."; exit 1; }
+
+      - name: php -l
+        run: |
+          set -e
+          git ls-files '*.php' | while read -r f; do php -l "$f" >/dev/null || { echo "::error file=$f::erro de sintaxe PHP"; exit 1; }; done
+
+      - name: node --check
+        run: |
+          set -e
+          for f in $(git ls-files 'assets/js/*.js'); do node --check "$f" || { echo "::error file=$f::erro de sintaxe JS"; exit 1; }; done
+
+      - name: Testes de regressão (baixas, pacientes, integrações)
+        run: |
+          set -e
+          for t in scripts/test-*.mjs; do echo "→ $t"; node "$t"; done
+
+  merge:
+    needs: checks
+    if: vars.AUTO_MERGE_CLAUDE != 'off'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge em main
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main "$BRANCH"
+          git checkout -B main origin/main
+          if git merge-base --is-ancestor "origin/$BRANCH" main; then
+            echo "Nada novo para publicar."; exit 0
+          fi
+          if ! git merge --no-edit "origin/$BRANCH" -m "Auto-merge $BRANCH → main (deploy automático)"; then
+            git merge --abort || true
+            echo "::error::Conflito entre $BRANCH e main — resolva na branch e faça push de novo."
+            exit 1
+          fi
+          git push origin main
+          echo "Publicado: main atualizada; o hPanel faz o deploy em instantes."

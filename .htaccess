@@ -23,6 +23,10 @@ Options -Indexes
   RewriteEngine On
   # Arquivos internos do repositório não devem ser acessíveis pela web
   RewriteRule ^(?:.*/)?\.git(?:/|$) - [F,L,NC]
+  RewriteRule ^(?:.*/)?\.github(?:/|$) - [F,L,NC]
+  RewriteRule ^scripts(?:/|$) - [F,L,NC]
+  RewriteRule ^(?:.*/)?[^/]+\.md$ - [F,L,NC]
+  RewriteRule ^README-INSTALACAO\.txt$ - [F,L,NC]
   RewriteRule ^uploads/.*\.(?i:php|phtml|phar|cgi|pl)$ - [F,L]
 </IfModule>
 

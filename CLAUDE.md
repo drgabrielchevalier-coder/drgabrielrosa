@@ -7,6 +7,7 @@ Projeto em produção, **não é greenfield**. Evoluir o que existe; nunca recon
 - Hosting: Hostinger (PHP + MySQL), `public_html` = raiz do repo
 - Branch de produção: `main` (Git do hPanel com auto-deploy a cada push/merge)
 - Versão do app: `release.json` (atual 2.15.0)
+- E-mail oficial: drgabrielchevalier@gmail.com (usar em todo o site e no AUTH_EMAIL padrão)
 - CRO-RJ 52957 · WhatsApp clínico 5521967329133 · Instagram @dr_gabrielrosa · GR Scan https://grscan.implantstore.com.br/
 
 ## Stack
@@ -55,10 +56,15 @@ uploads/        sem execução de PHP (.htaccess)
    - Status especiais (Retrabalho, Não vai receber, Aguardando acerto) são preservados.
 5. Preservar o motor `clinic-billing.js`.
 6. Landings: hub (`index.html`) ≠ site profissional (`home.php`). Não confundir card clínico (paciente) com GR Scan (dentistas).
-7. Deploy = merge em `main`. Nunca subir zip parcial em `public_html` (apaga o app). FTP Actions é só fallback (secrets `FTP_*` ausentes).
+7. Deploy = `main`. Nunca subir zip parcial em `public_html` (apaga o app). FTP Actions é só fallback (secrets `FTP_*` ausentes).
+8. O repo inteiro vai para `public_html`. Arquivos internos (`*.md`, `scripts/`, `.github/`, `README-INSTALACAO.txt`) são bloqueados no `.htaccess`. Nunca colocar segredo em arquivo versionado.
 
-## Fluxo de trabalho
-- Branch de feature → commit → push → PR para `main`. Mudanças pontuais, sem refactors amplos.
+## Fluxo de trabalho (deploy automático)
+- Trabalhar sempre em branch `claude/<nome>` (nunca `cursor/...`). Mudanças pontuais, sem refactors amplos.
+- Push em `claude/**` dispara `.github/workflows/auto-merge-claude.yml`: checa segredos, wipe selado, `php -l`, `node --check` e `scripts/test-*.mjs`. Se tudo passar, faz merge em `main` → o Git do hPanel publica (auto-deploy ligado: main, diretório raiz).
+- Ou seja: **push em `claude/**` = produção**. Rodar as checagens localmente antes do push. Não abrir PR, a menos que o usuário peça.
+- Check falhou ou conflito → nada vai para `main`. Corrigir na branch e fazer push de novo.
+- Pausa: variável de repo `AUTO_MERGE_CLAUDE=off`.
 - Ao mudar CSS/JS, os assets já são versionados por `chevalier_asset_url`. Em mudança visível ao usuário, atualizar `release.json` (version/name/releasedAt/changes).
 - Checagens rápidas: `php -l <arquivo>` nos PHP alterados; `node --check assets/js/<arquivo>.js`; testes em `scripts/test-*.mjs` (`node scripts/test-fase3-recebiveis.mjs` etc.).
 - Local: `php -S localhost:8000` na raiz (sem `config.local.php` o painel cai no localStorage).

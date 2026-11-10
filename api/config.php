@@ -29,7 +29,7 @@ if (!defined('AUTH_PASS')) {
 /* Opcional: define('AUTH_PASS_HASH', password_hash('sua-senha', PASSWORD_DEFAULT)); */
 /* E-mail vinculado à conta (recuperação de senha) */
 if (!defined('AUTH_EMAIL')) {
-    define('AUTH_EMAIL', 'drgabrielchevalier@hotmail.com');
+    define('AUTH_EMAIL', 'drgabrielchevalier@gmail.com');
 }
 /* Remetente do sistema — use um e-mail do seu domínio Hostinger para melhor entrega:
    define('MAIL_FROM', 'noreply@seudominio.com');
