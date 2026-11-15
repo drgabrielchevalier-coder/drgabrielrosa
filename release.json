@@ -1,10 +1,10 @@
 {
-  "version": "2.15.1",
-  "name": "Deploy automático + e-mail oficial",
-  "releasedAt": "2026-11-10",
+  "version": "2.15.2",
+  "name": "Menu circular no hub",
+  "releasedAt": "2026-11-15",
   "changes": [
-    "E-mail oficial unificado: drgabrielchevalier@gmail.com (site e recuperação de senha padrão).",
-    "Deploy automático: push em claude/** passa por checagens e vai para main → Hostinger publica.",
-    "Arquivos internos do repositório (.md, scripts, .github) bloqueados para acesso web."
+    "Hub (página inicial): botão Menu no cabeçalho abre a navegação circular.",
+    "Atalhos: Início, Pacientes, WhatsApp, Credenciais, GR Scan, Instagram e Painel.",
+    "Fecha por X, Esc, clique fora ou escolha de item; acessível por teclado."
   ]
 }

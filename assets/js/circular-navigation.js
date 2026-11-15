@@ -13,7 +13,7 @@
  *
  * Uso:
  *   const nav = CircularNavigation.create({
- *     navItems: [{ name: 'Início', icon: 'house', href: '#inicio' }, ...],
+ *     navItems: [{ name: 'Início', icon: 'house', href: '#inicio' }, ...],   // external: true abre em nova aba
  *     activeHref: '#inicio',
  *     onNavigate(item, event) { ... },   // event.preventDefault() cancela o link
  *     onToggle(isOpen) { ... },
@@ -41,7 +41,17 @@
       '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
     search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
     menu: '<path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/>',
-    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'
+    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    'message-circle': '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+    'graduation-cap':
+      '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
+    'scan-line':
+      '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/>',
+    instagram:
+      '<rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/>',
+    lock: '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    mail: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>'
   };
 
   var CNAV_CSS = [
@@ -204,6 +214,11 @@
       var a = document.createElement('a');
       a.className = 'cnav-link';
       a.href = item.href;
+      // link externo: item.external abre em nova aba
+      if (item.external) {
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+      }
       if (typeof item.icon === 'string') a.appendChild(icon(item.icon, 'cnav-icon'));
       else if (item.icon instanceof Node) a.appendChild(item.icon);
       var label = document.createElement('span');
