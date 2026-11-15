@@ -31,6 +31,7 @@ uploads/        sem execução de PHP (.htaccess)
 - `assets/js/clinic-billing.js`: motor de regras por clínica (`ChevalierBilling.settleCase`)
 - `assets/js/procedure-catalog.js`, `dental-catalog.js`: catálogo
 - `assets/js/nfe-stock.js`: NF-e → estoque, materiais controlados
+- `assets/js/circular-navigation.js`: menu circular em JS puro (`CircularNavigation.create`), demo em `circular-navigation.html` (noindex)
 - `assets/js/import-assist.js`: wizard CSV/XLSX · `planning-calendar.js`: agenda · `scan-tools.js`: boleto/barcode
 - `assets/css/app.css` (painel), `landing.css` + `landing.js` (home.php)
 - `api/state.php`: GET/POST do estado
