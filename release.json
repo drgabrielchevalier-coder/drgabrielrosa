@@ -1,10 +1,10 @@
 {
-  "version": "2.20.0",
-  "name": "NF-e só agrupa; visão por status",
+  "version": "2.21.0",
+  "name": "Importação com IA",
   "releasedAt": "2026-11-23",
   "changes": [
-    "A NF-e deixou de ser custo: ela agrupa os boletos da compra e dá entrada no estoque. Totais e Boletos a pagar mostram só pagamentos.",
-    "Nova visão Por status em Custos: Atrasados, Vencem em até 7 dias, A pagar e Pagos, com subtotais.",
-    "Editar uma NF abre a ficha da compra (boletos, saldo sem boleto e opção de lançar pagamento à vista); importação 'já paga' lança o pagamento ligado à NF."
+    "Importação assistida aceita PDF e foto (folha de honorários): a IA lê o documento, identifica tipo, clínica e período e sugere o mapeamento.",
+    "Planilhas fora do padrão também podem ser interpretadas pela IA; revisão linha a linha com opção de desmarcar antes de confirmar.",
+    "Botão Importar documento na aba Pacientes; status “Pago/Quitado” das folhas passa a entrar como recebido."
   ]
 }

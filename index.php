@@ -331,6 +331,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
             <p>Cada linha é um tratamento. A ficha reúne cadastro, financeiro e prótese da mesma pessoa — sem misturar homônimos.</p>
           </div>
           <div class="page-actions">
+            <button class="btn" onclick="openImportSpreadsheetModal()" title="Folha de honorários em PDF, foto ou planilha: a IA lê e você confere">⇪ Importar documento</button>
             <button class="btn" onclick="openPatientModal()">＋ Novo tratamento</button>
             <button class="btn primary" onclick="openPersonModal()">＋ Novo paciente</button>
           </div>
@@ -1080,7 +1081,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <div class="card">
             <div class="card-head"><h3>Integrações</h3></div>
             <div class="card-body">
-              <div class="settings-row"><div class="desc"><strong>Importação assistida</strong><span>CSV, HTML ou XLSX com prévia, mapeamento de colunas, validação, duplicatas e registro de lote — sem sobrescrever existentes.</span></div>
+              <div class="settings-row"><div class="desc"><strong>Importação assistida</strong><span>Planilha (CSV, HTML, XLSX) ou documento (PDF, foto da folha de honorários) lido pela IA. Você confere o mapeamento, revisa linha a linha e confirma. Duplicatas são ignoradas, sem sobrescrever existentes.</span></div>
                 <button type="button" class="btn small primary" onclick="openImportSpreadsheetModal()">Importar arquivo</button>
               </div>
               <div class="settings-row"><div class="desc"><strong>Conciliação e vínculos</strong><span>Saúde dos relacionamentos paciente ↔ tratamentos ↔ financeiro ↔ prótese; reparo de personId e divergências.</span></div>

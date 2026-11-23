@@ -6796,6 +6796,8 @@ function mapNotionFinanceiro(fin, honor){
   // Acordo = quitado por acordo no Notion → alimenta gráficos como recebido
   if(/acordo/.test(fl)) return {status:'Faturado / Recebido', received:h};
   if(/faturado|recebido/.test(fl) && !/n[aã]o recebeu/.test(fl)) return {status:'Faturado / Recebido', received:h};
+  // folhas de honorários: "Pago", "Quitado", "Liquidado" (mas não "Não pago" / "A pagar")
+  if(/\b(pago|paga|quitad[oa]|liquidad[oa])\b/.test(fl) && !/n[aã]o\s+(pago|paga)|a\s+pagar/.test(fl)) return {status:'Faturado / Recebido', received:h};
   // Moldagem / COBRAR / Finalizar Endo / - / Não recebeu / vazio → a receber
   return {status:'À receber', received:0};
 }

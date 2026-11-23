@@ -1,6 +1,8 @@
 /**
- * Fase 5 — Importação assistida (CSV / HTML / XLSX).
- * Wizard: upload → mapeamento → validação/duplicatas → confirmação → registro de lote.
+ * Fase 5 — Importação assistida (CSV / HTML / XLSX + PDF/foto com IA).
+ * Wizard: upload → mapeamento → revisão (linha a linha) → confirmação → registro de lote.
+ * PDF, foto ou planilha fora do padrão: a IA (api/import-ai.php) transcreve a tabela e sugere
+ * tipo, clínica e mapeamento — o usuário confere o mapeamento, revisa as linhas e confirma.
  * Depende de helpers expostos por app.js (importPick, mapHonorarioRows, etc.).
  */
 (function (global) {
@@ -112,7 +114,82 @@
         });
         return o;
       });
-    return { headers, rows, sheetName };
+    return { headers, rows, sheetName, aoa };
+  }
+
+  const AI_DOC_RE = /\.(pdf|jpe?g|png|webp)$/i;
+
+  function isAiDocument(f) {
+    return AI_DOC_RE.test(String(f?.name || '')) || /^(application\/pdf|image\/(jpeg|png|webp))$/.test(String(f?.type || ''));
+  }
+
+  /** Foto → JPEG em data URL, no máximo 2000 px no lado maior (legível para a IA, leve para enviar). */
+  async function imageToDataUrl(file) {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bmp.width * scale);
+    canvas.height = Math.round(bmp.height * scale);
+    canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    bmp.close?.();
+    return canvas.toDataURL('image/jpeg', 0.85);
+  }
+
+  /** Conteúdo do arquivo para a IA: texto (PDF digital, planilha) ou imagens (foto, PDF escaneado). */
+  async function readForAi(f) {
+    const lower = String(f.name || '').toLowerCase();
+    if (/\.pdf$/.test(lower) || f.type === 'application/pdf') {
+      if (!global.ChevalierNfe?.readPdfForAi) throw new Error('Leitor de PDF indisponível. Recarregue a página.');
+      const pdf = await global.ChevalierNfe.readPdfForAi(f);
+      return { text: pdf.text, images: pdf.images };
+    }
+    if (/\.(jpe?g|png|webp)$/.test(lower) || /^image\//.test(f.type || '')) {
+      return { text: '', images: [await imageToDataUrl(f)] };
+    }
+    if (/\.xlsx?$/.test(lower)) {
+      const x = await parseXlsxArrayBuffer(await f.arrayBuffer());
+      const tsv = (x.aoa || []).slice(0, 400).map((r) => (r || []).map((c) => String(c ?? '').replace(/\s+/g, ' ').trim()).join('\t')).join('\n');
+      return { text: tsv, images: [] };
+    }
+    let text = await f.text();
+    if (/\.html?$/.test(lower)) {
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+      text = [...doc.querySelectorAll('tr')].map((tr) => [...tr.children].map((td) => td.textContent.replace(/\s+/g, ' ').trim()).join('\t')).join('\n') || doc.body.textContent;
+    }
+    return { text: text.slice(0, 150000), images: [] };
+  }
+
+  /** Clínica do documento (nome dito pela IA) → id cadastrado. */
+  function matchClinicId(name) {
+    const n = normHeader(name);
+    if (!n) return '';
+    const list = global.state?.clinics || [];
+    const hit = list.find((c) => normHeader(c.name) === n)
+      || list.find((c) => normHeader(c.name).includes(n) || n.includes(normHeader(c.name)));
+    return hit ? hit.id : '';
+  }
+
+  async function parseWithAi(f, wiz) {
+    const payload = await readForAi(f);
+    const kindHint = wiz.kindMode === 'patients' || wiz.kindMode === 'costs' ? wiz.kindMode : '';
+    const r = await fetch('api/import-ai.php', {
+      method: 'POST',
+      headers: global.csrfHeaders ? global.csrfHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        text: payload.text,
+        images: payload.images,
+        fileName: f.name,
+        kindHint,
+        clinics: (global.state?.clinics || []).map((c) => c.name),
+        csrf: global.csrfToken ? global.csrfToken() : '',
+      }),
+    });
+    let data = {};
+    try { data = await r.json(); global.applyCsrfFromResponse?.(data); } catch (_) {}
+    if (r.status === 401) { location.href = 'login.php'; throw new Error('Sessão expirada.'); }
+    if (!r.ok || !data.ok) throw new Error(data.error || 'A IA não conseguiu ler o documento.');
+    return data;
   }
 
   function validateMapped(kind, mappedRows) {
@@ -249,6 +326,44 @@
     return { kind, mappedRows, validation, data, split, map };
   }
 
+  function selectedNew(draft) {
+    const ex = global.__importWizard?.excluded;
+    return (draft?.split?.neu || []).filter((r) => !(ex && ex.has(r.importId)));
+  }
+
+  function fmtMoneyBR(v) {
+    return global.brl ? global.brl.format(Number(v || 0)) : String(v ?? '');
+  }
+
+  function fmtDateBR(v) {
+    const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : String(v || '—');
+  }
+
+  /** Revisão: cada lançamento novo com caixa para incluir ou tirar. */
+  function reviewTableHtml(draft) {
+    const wiz = global.__importWizard || {};
+    const ex = wiz.excluded || new Set();
+    const rows = draft.split.neu;
+    if (!rows.length) return '<div class="empty">Nenhum lançamento novo para revisar.</div>';
+    const isCost = draft.kind === 'costs';
+    const head = isCost
+      ? '<th>Descrição</th><th>Data</th><th>Venc.</th><th>Tipo</th><th>Valor</th><th>Status</th>'
+      : '<th>Paciente</th><th>Data</th><th>Procedimento / obs.</th><th>Honorário</th><th>Recebido</th><th>Status</th>';
+    const body = rows.slice(0, 300).map((r) => {
+      const cells = isCost
+        ? `<td><strong>${esc(r.desc)}</strong></td><td>${esc(fmtDateBR(r.date))}</td><td>${esc(fmtDateBR(r.due))}</td><td>${esc(r.type || '')}</td><td>${esc(fmtMoneyBR(r.value))}</td><td>${esc(r.status || '')}</td>`
+        : `<td><strong>${esc(r.name)}</strong></td><td>${esc(fmtDateBR(r.date))}</td><td>${esc(String(r.observation || '').slice(0, 70))}</td><td>${esc(fmtMoneyBR(r.value))}</td><td>${esc(fmtMoneyBR(r.received))}</td><td>${esc(r.status || '')}</td>`;
+      return `<tr><td><input type="checkbox" class="import-row-sel" value="${esc(r.importId)}" ${ex.has(r.importId) ? '' : 'checked'} aria-label="Importar esta linha"></td>${cells}</tr>`;
+    }).join('');
+    const total = rows.filter((r) => !ex.has(r.importId)).reduce((s, r) => s + Number(r.value || 0), 0);
+    return `<h3 class="section-title" style="margin-top:14px">Revise os lançamentos</h3>
+      <p class="field-hint">Desmarque o que não deve entrar. <strong id="importSelCount">${rows.filter((r) => !ex.has(r.importId)).length}</strong> de ${rows.length} marcado(s) · total dos marcados: <strong id="importSelTotal">${esc(fmtMoneyBR(total))}</strong>.${rows.length > 300 ? ' Mostrando as 300 primeiras.' : ''}</p>
+      <div class="table-wrap" style="max-height:360px;overflow:auto"><table>
+        <thead><tr><th><input type="checkbox" id="importSelAll" ${ex.size ? '' : 'checked'} aria-label="Marcar todos"></th>${head}</tr></thead>
+        <tbody>${body}</tbody></table></div>`;
+  }
+
   function setWizardStep(step) {
     const wiz = global.__importWizard;
     if (!wiz) return;
@@ -278,9 +393,12 @@
       box.innerHTML = `${stepper}
         <div class="form-grid">
           <div class="field full"><label>Arquivo</label>
-            <input id="importFile" type="file" class="input" accept=".csv,.html,.htm,.xlsx,.xls,text/csv,text/html,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
-            <p class="field-hint">CSV, HTML (tabela) ou XLSX. Nada sobrescreve lançamentos existentes — duplicatas são reportadas.</p>
+            <input id="importFile" type="file" class="input" accept=".csv,.html,.htm,.xlsx,.xls,.pdf,.jpg,.jpeg,.png,.webp,text/csv,text/html,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/pdf,image/jpeg,image/png,image/webp">
+            <p class="field-hint">Planilha (CSV, XLSX, HTML) ou documento: PDF ou foto da folha de honorários. A IA lê o documento e sugere o mapeamento; você confere, revisa as linhas e confirma. Nada sobrescreve lançamentos existentes.</p>
           </div>
+          <div class="field full"><label class="import-ai-toggle" style="display:flex;gap:8px;align-items:center;font-weight:500;cursor:pointer">
+            <input type="checkbox" id="importUseAi" ${wiz.useAi ? 'checked' : ''}> Interpretar com IA também planilhas fora do padrão (título em cima, colunas com outros nomes)
+          </label></div>
           <div class="field"><label>Tipo</label>
             <select id="importKind" class="select">
               <option value="auto" ${wiz.kindMode === 'auto' ? 'selected' : ''}>Detectar automaticamente</option>
@@ -299,6 +417,10 @@
           <div class="field full"><label>Prévia</label><div id="importPreview">${wiz.parsed ? previewRowsHtml(wiz.parsed.headers, wiz.parsed.rows) : '<div class="empty">Nenhum arquivo ainda.</div>'}</div></div>
         </div>`;
       document.getElementById('importFile')?.addEventListener('change', onFilePicked);
+      document.getElementById('importUseAi')?.addEventListener('change', (ev) => {
+        wiz.useAi = !!ev.target.checked;
+        if (document.getElementById('importFile')?.files?.[0]) onFilePicked();
+      });
       document.getElementById('importKind')?.addEventListener('change', () => {
         wiz.kindMode = document.getElementById('importKind').value;
       });
@@ -311,8 +433,13 @@
     if (step === 2) {
       if (saveBtn) saveBtn.textContent = 'Continuar';
       const fields = wiz.kind === 'costs' ? COST_FIELDS : PATIENT_FIELDS;
+      const ai = wiz.ai;
       box.innerHTML = `${stepper}
-        <p class="field-hint">Mapeamento automático pelas colunas. Ajuste manualmente se necessário.</p>
+        ${ai ? `<div class="card" style="padding:12px;margin-bottom:12px"><strong>A IA leu o documento</strong>
+          <span class="cell-sub">${esc(wiz.kind === 'costs' ? 'Custos' : 'Honorários / pacientes')} · ${wiz.parsed.rows.length} linha(s)${ai.clinic ? ` · clínica: ${esc(ai.clinic)}` : ''}${ai.period ? ` · período: ${esc(ai.period)}` : ''}</span>
+          ${ai.notes ? `<p class="field-hint" style="margin:6px 0 0">${esc(ai.notes)}</p>` : ''}
+          <p class="field-hint" style="margin:6px 0 0">Confira cada campo abaixo: a coluna sugerida pela IA já vem marcada.</p></div>` : ''}
+        <p class="field-hint">${ai ? 'Mapeamento sugerido pela IA.' : 'Mapeamento automático pelas colunas.'} Ajuste manualmente se necessário.</p>
         ${mapSelectHtml(fields, wiz.parsed.headers, wiz.map)}
         <div class="row-actions" style="margin-top:12px">
           <button type="button" class="btn" onclick="ChevalierImport.setStep(1)">Voltar</button>
@@ -336,10 +463,28 @@
         ${v.errors.length ? `<div class="warning-banner"><strong>${v.errors.length} erro(s)</strong><ul>${v.errors.slice(0, 8).map((e) => `<li>L${e.line}: ${esc(e.message)}</li>`).join('')}</ul></div>` : ''}
         ${v.warnings.length ? `<p class="field-hint">${v.warnings.length} aviso(s) — ex.: valores vazios.</p>` : ''}
         <p class="field-hint">Duplicatas (mesmo <code>importId</code>) serão ignoradas — nenhum registro existente será sobrescrito.</p>
+        ${reviewTableHtml(draft)}
         <div class="row-actions" style="margin-top:12px">
           <button type="button" class="btn" onclick="ChevalierImport.setStep(2)">Voltar</button>
-          ${v.errors.length || split.neu.length === 0 ? '' : ''}
         </div>`;
+      const refreshSel = () => {
+        const sel = draft.split.neu.filter((r) => !wiz.excluded.has(r.importId));
+        const cnt = document.getElementById('importSelCount');
+        const tot = document.getElementById('importSelTotal');
+        if (cnt) cnt.textContent = String(sel.length);
+        if (tot) tot.textContent = fmtMoneyBR(sel.reduce((t, r) => t + Number(r.value || 0), 0));
+      };
+      box.querySelectorAll('.import-row-sel').forEach((el) => el.addEventListener('change', () => {
+        if (!wiz.excluded) wiz.excluded = new Set();
+        if (el.checked) wiz.excluded.delete(el.value); else wiz.excluded.add(el.value);
+        refreshSel();
+      }));
+      box.querySelector('#importSelAll')?.addEventListener('change', (ev) => {
+        const on = ev.target.checked;
+        wiz.excluded = on ? new Set() : new Set(draft.split.neu.map((r) => r.importId));
+        box.querySelectorAll('.import-row-sel').forEach((el) => { el.checked = on; });
+        refreshSel();
+      });
       return;
     }
 
@@ -351,7 +496,8 @@
       <div class="detail-grid">
         <div><span>Arquivo</span><strong>${esc(wiz.filename || '—')}</strong></div>
         <div><span>Tipo</span><strong>${draft.kind === 'costs' ? 'Custos' : 'Honorários / pacientes'}</strong></div>
-        <div><span>Novos</span><strong>${draft.split.neu.length}</strong></div>
+        <div><span>Novos (marcados)</span><strong>${selectedNew(draft).length}</strong></div>
+        ${draft.split.neu.length - selectedNew(draft).length ? `<div><span>Desmarcados na revisão</span><strong>${draft.split.neu.length - selectedNew(draft).length}</strong></div>` : ''}
         <div><span>Ignorados (duplicata)</span><strong>${draft.split.dup.length}</strong></div>
         <div><span>Erros de validação</span><strong>${draft.validation.errors.length}</strong></div>
         ${draft.kind !== 'costs' ? `<div><span>Clínica</span><strong>${esc(global.clinic?.(wiz.clinicId)?.name || wiz.clinicId || '—')}</strong></div>` : ''}
@@ -374,10 +520,29 @@
     wiz.filename = f.name;
     wiz.kindMode = document.getElementById('importKind')?.value || 'auto';
     wiz.clinicId = document.getElementById('importClinic')?.value || '';
+    wiz.ai = null;
+    wiz.excluded = new Set();
     try {
       const lower = f.name.toLowerCase();
       let parsed;
-      if (/\.xlsx?$/.test(lower)) {
+      if (isAiDocument(f) || wiz.useAi) {
+        if (box) box.innerHTML = '<div class="empty">A IA está lendo o documento… pode levar alguns segundos.</div>';
+        const saveBtn = document.getElementById('modalSave');
+        if (saveBtn) saveBtn.disabled = true;
+        try {
+          const ai = await parseWithAi(f, wiz);
+          parsed = { kind: ai.kind, headers: ai.headers, rows: ai.rows, format: /\.pdf$/.test(lower) ? 'pdf-ia' : /\.(jpe?g|png|webp)$/.test(lower) ? 'foto-ia' : 'planilha-ia' };
+          wiz.ai = { notes: ai.notes || '', clinic: ai.clinic || '', period: ai.period || '', mapping: ai.mapping || {}, mode: ai.mode };
+          const cid = matchClinicId(ai.clinic);
+          if (cid && !wiz.clinicId) {
+            wiz.clinicId = cid;
+            const sel = document.getElementById('importClinic');
+            if (sel) sel.value = cid;
+          }
+        } finally {
+          if (saveBtn) saveBtn.disabled = false;
+        }
+      } else if (/\.xlsx?$/.test(lower)) {
         if (box) box.innerHTML = '<div class="empty">Lendo planilha Excel…</div>';
         const buf = await f.arrayBuffer();
         const x = await parseXlsxArrayBuffer(buf);
@@ -394,12 +559,25 @@
       wiz.kind = kind === 'costs' ? 'costs' : kind === 'patients' ? 'patients' : parsed.kind;
       const fields = wiz.kind === 'costs' ? COST_FIELDS : PATIENT_FIELDS;
       wiz.map = autoMapFields(parsed.headers, fields);
+      if (wiz.ai?.mapping) {
+        // sugestão da IA tem prioridade; o automático cobre o que ela não mapeou
+        Object.entries(wiz.ai.mapping).forEach(([field, col]) => {
+          if (fields.some((x) => x.id === field) && parsed.headers.includes(col)) wiz.map[field] = col;
+        });
+      }
       if (box) {
-        box.innerHTML = `<p class="field-hint"><strong>${esc(f.name)}</strong> · ${parsed.rows.length} linha(s) · tipo: <strong>${esc(wiz.kind)}</strong>${parsed.sheetName ? ` · aba ${esc(parsed.sheetName)}` : ''}</p>${previewRowsHtml(parsed.headers, parsed.rows)}`;
+        const aiInfo = wiz.ai
+          ? ` · lido pela IA${wiz.ai.clinic ? ` · clínica: <strong>${esc(wiz.ai.clinic)}</strong>` : ''}${wiz.ai.period ? ` · período: ${esc(wiz.ai.period)}` : ''}`
+          : '';
+        const unknownHint = !wiz.ai && (!parsed.kind || parsed.kind === 'unknown')
+          ? '<p class="field-hint" style="color:var(--red)">Não reconheci as colunas. Marque “Interpretar com IA” acima para a IA ler esta planilha.</p>'
+          : '';
+        box.innerHTML = `<p class="field-hint"><strong>${esc(f.name)}</strong> · ${parsed.rows.length} linha(s) · tipo: <strong>${esc(wiz.kind === 'costs' ? 'custos' : wiz.kind === 'patients' ? 'honorários / pacientes' : wiz.kind)}</strong>${parsed.sheetName ? ` · aba ${esc(parsed.sheetName)}` : ''}${aiInfo}</p>${wiz.ai?.notes ? `<p class="field-hint">${esc(wiz.ai.notes)}</p>` : ''}${unknownHint}${previewRowsHtml(parsed.headers, parsed.rows)}`;
       }
     } catch (e) {
       console.warn(e);
       if (box) box.innerHTML = `<div class="warning-banner">Falha ao ler arquivo: ${esc(e.message || e)}</div>`;
+      wiz.ai = null;
       wiz.parsed = null;
     }
   }
@@ -464,7 +642,7 @@
       return;
     }
     // Only import NEW records — never overwrite
-    const data = { ...draft.data, records: draft.split.neu };
+    const data = { ...draft.data, records: selectedNew(draft) };
     let patients = 0;
     let costs = 0;
     const errors = [...draft.validation.errors];
@@ -491,6 +669,8 @@
         totalRows: draft.validation.total,
         valid: draft.validation.valid,
         added: patients + costs,
+        via: wiz.ai ? 'ia' : 'planilha',
+        excluded: draft.split.neu.length - data.records.length,
         skippedDup: draft.split.dup.length,
         errors: errors.length,
         peopleLinked: linked,
@@ -539,7 +719,10 @@
       parsed: null,
       map: null,
       draft: null,
-      filename: ''
+      filename: '',
+      useAi: false,
+      ai: null,
+      excluded: new Set()
     };
     global.openModal?.(
       'Importação assistida',
