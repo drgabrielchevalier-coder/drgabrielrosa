@@ -809,6 +809,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <div class="view-toggle" role="tablist" aria-label="Visualização dos custos">
             <button type="button" class="view-tab active" data-cview="compra" onclick="setCostsView('compra')">Por compra (NF)</button>
             <button type="button" class="view-tab" data-cview="boletos" onclick="setCostsView('boletos')">Boletos a pagar</button>
+            <button type="button" class="view-tab" data-cview="status" onclick="setCostsView('status')">Por status</button>
           </div>
           <span class="costs-view-hint" id="costsViewHint"></span>
         </div>

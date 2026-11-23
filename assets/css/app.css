@@ -307,6 +307,9 @@
   .costs-table tr.cost-child td:first-child{padding-left:40px}
   .costs-table tr.cost-child td{background:#fffdf9}
   .costs-table tr.cost-section td{background:transparent;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:18px}
+  .costs-table tr.cost-status-late td{color:var(--red,#b4423a)}
+  .costs-table tr.cost-status-week td{color:#a8741c}
+  .costs-table tr.cost-status-paid td{color:var(--green,#3d8b5c)}
   .cost-progress{display:inline-block;width:90px;height:5px;border-radius:9px;background:var(--line);vertical-align:middle;margin-left:6px;overflow:hidden}
   .cost-progress i{display:block;height:100%;background:var(--green,#3d8b5c)}
   .patients-kanban-wrap{margin-top:0;overflow:visible}

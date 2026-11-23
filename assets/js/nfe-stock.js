@@ -322,33 +322,52 @@
         items: applied.length,
         materialIds: applied.map((a) => a.materialId),
       });
-      // Lançamento de custo de compra (auditoria financeira)
+      // Registro da compra (NF-e): NÃO é custo — agrupa os boletos/pagamentos desta nota.
+      // payment: 'boleto' = os boletos serão vinculados depois;
+      //          'paid'   = já paga à vista → cria o pagamento (custo PAGO) ligado à NF.
       if (!state.costs) state.costs = [];
       const sum = applied.reduce((s, a) => s + a.qty * a.unitCost, 0);
       if (sum > 0) {
-        // payment: 'boleto' = será paga em boleto(s) que serão vinculados a esta NF (evita custo em dobro);
-        //          'paid'   = já paga à vista (Pix, cartão, dinheiro) → custo pago agora.
-        const viaBoleto = opts.payment !== 'paid';
+        const paidNow = opts.payment === 'paid';
         const today = (global.todayISO && todayISO()) || new Date().toISOString().slice(0, 10);
-        const cost = {
+        const label = `NF-e ${meta.number || meta.key || ''} — ${meta.supplier || 'fornecedor'}`.trim();
+        const nf = {
           id: uidFn(),
-          desc: `NF-e ${meta.number || meta.key || ''} — ${meta.supplier || 'fornecedor'}`.trim(),
+          kind: 'nfe',
+          desc: label,
           type: 'INSUMOS',
           center: 'Estoque',
           date: meta.date || today,
           due: meta.date || today,
-          method: viaBoleto ? 'BOLETO PARCELADO' : 'À VISTA',
+          method: '',
           value: Math.round(sum * 100) / 100,
-          status: viaBoleto ? 'À PAGAR' : 'PAGO',
+          status: 'NF-e',
           installment: '',
           boletoLine: '',
           nfeKey: meta.key || '',
           nfeNumber: meta.number || '',
           nfeSupplier: meta.supplier || '',
-          awaitingBoletos: viaBoleto,
+          awaitingBoletos: !paidNow,
         };
-        state.costs.unshift(cost);
-        costId = cost.id;
+        state.costs.unshift(nf);
+        costId = nf.id;
+        if (paidNow) {
+          state.costs.unshift({
+            id: uidFn(),
+            desc: `Pagamento ${label}`,
+            type: 'INSUMOS',
+            center: 'Geral',
+            date: meta.date || today,
+            due: meta.date || today,
+            method: opts.paidMethod || 'PIX',
+            value: nf.value,
+            status: 'PAGO',
+            installment: '',
+            boletoLine: '',
+            nfeCostId: nf.id,
+            nfeLabel: label,
+          });
+        }
       }
     }
     return { applied, count: applied.length, costId };

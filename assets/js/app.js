@@ -3962,11 +3962,11 @@ function costsLinkIndex(){
 const COSTS_VIEW_KEY='chevalier_costs_view';
 let costsOpenGroups=new Set();
 function costsView(){
-  try{ const v=localStorage.getItem(COSTS_VIEW_KEY); if(v==='boletos'||v==='compra') return v; }catch(_){}
+  try{ const v=localStorage.getItem(COSTS_VIEW_KEY); if(['compra','boletos','status'].includes(v)) return v; }catch(_){}
   return 'compra';
 }
 function setCostsView(v){
-  try{ localStorage.setItem(COSTS_VIEW_KEY, v==='boletos'?'boletos':'compra'); }catch(_){}
+  try{ localStorage.setItem(COSTS_VIEW_KEY, ['compra','boletos','status'].includes(v)?v:'compra'); }catch(_){}
   renderCosts();
 }
 function toggleCostGroup(id){
@@ -4004,8 +4004,8 @@ function costNfGroupHtml(nf,idx){
   const pctPaid=Number(nf.value||0)>0?Math.min(100,Math.round(paid/Number(nf.value)*100)):0;
   let status, sub;
   if(!boletos.length){
-    status=nf.awaitingBoletos?'<span class="badge b-amber">Aguardando boletos</span>':badge(nf.status);
-    sub=nf.awaitingBoletos?'Nenhum boleto vinculado ainda':'Compra sem boleto (paga à vista)';
+    status='<span class="badge b-amber">Sem boletos</span>';
+    sub='Nenhum boleto vinculado ainda · a NF não entra nos custos';
   }else{
     const parcelas=ofN?`${boletos.length} de ${ofN} parcelas`:`${boletos.length} boleto(s)`;
     sub=`${parcelas} · pago ${brl.format(paid)} · em aberto ${brl.format(covered-paid)}${rem>0.01?` · sem boleto ${brl.format(rem)}`:''}`;
@@ -4015,7 +4015,7 @@ function costNfGroupHtml(nf,idx){
   const title=boletos.length
     ?`<button type="button" class="cost-toggle" onclick="toggleCostGroup('${nf.id}')" aria-expanded="${open}"><span class="cost-caret" aria-hidden="true">▸</span><strong>${esc(nf.desc)}</strong></button>`
     :`<strong>${esc(nf.desc)}</strong>`;
-  const head=`<tr class="cost-group-head${open?' is-open':''}">${td('Compra',`${title}<span class="cell-sub">${esc(sub)}${boletos.length?`<span class="cost-progress" title="${pctPaid}% pago"><i style="width:${pctPaid}%"></i></span>`:''}</span>`)}${td('Tipo',esc(nf.type))}${td('Centro',esc(nf.center))}${td('Emissão',fmtDate(nf.date))}${td('Próx. venc.',nextDue?fmtDate(nextDue):'—')}${td('Forma pg.',esc(nf.method))}${td('Total',brl.format(nf.value))}${td('Status',status)}${costActionsHtml(nf,`<button class="btn small" onclick="openNfeLinkModal('${nf.id}')">${boletos.length?'Boletos':'Vincular boletos'}</button>`,{noPay:boletos.length>0})}</tr>`;
+  const head=`<tr class="cost-group-head${open?' is-open':''}">${td('Compra',`${title}<span class="cell-sub">${esc(sub)}${boletos.length?`<span class="cost-progress" title="${pctPaid}% pago"><i style="width:${pctPaid}%"></i></span>`:''}</span>`)}${td('Tipo',esc(nf.type))}${td('Centro',esc(nf.center))}${td('Emissão',fmtDate(nf.date))}${td('Próx. venc.',nextDue?fmtDate(nextDue):'—')}${td('Forma pg.','—')}${td('Total',brl.format(nf.value))}${td('Status',status)}${costActionsHtml(nf,`<button class="btn small" onclick="openNfeLinkModal('${nf.id}')">${boletos.length?'Boletos':'Vincular boletos'}</button>`,{noPay:true})}</tr>`;
   const kids=open?boletos.map(b=>costRowHtml(b,{child:true})).join(''):'';
   return head+kids;
 }
@@ -4035,26 +4035,35 @@ function renderCosts(){
   const tbody=document.getElementById('costsTable');
   if(!L){ tbody.innerHTML=state.costs.map(c=>costRowHtml(c)).join(''); return; }
   const section=t=>`<tr class="cost-section"><td colspan="9">${esc(t)}</td></tr>`;
+  const payables=state.costs.filter(c=>!L.isNfeCost(c));
+  const byDue=(x,y)=>String(x.due||'').localeCompare(String(y.due||''));
   if(view==='boletos'){
-    // só o que se paga: boletos e custos comuns; da NF, apenas o saldo que ainda não tem boleto
-    const rows=[];
-    state.costs.forEach(c=>{
-      if(L.isNfeCost(c)){
-        const rem=L.remainingOf(c,idx);
-        const hasBoletos=idx.has(c.id);
-        if(rem>0.01 && (hasBoletos || c.awaitingBoletos || c.status!=='PAGO')) rows.push({kind:'nf',c,rem,due:c.due||c.date||''});
-        return;
-      }
-      rows.push({kind:'cost',c,due:c.due||''});
+    // só o que se paga, por vencimento (em aberto primeiro). A NF não aparece: ela só agrupa.
+    const rows=payables.slice().sort((x,y)=>((x.status==='PAGO')-(y.status==='PAGO'))||byDue(x,y));
+    if(hint) hint.textContent='Pagamentos em ordem de vencimento. A NF-e não aparece aqui: ela só agrupa os boletos.';
+    tbody.innerHTML=rows.length?rows.map(c=>costRowHtml(c,{showNf:true})).join(''):`<tr><td colspan="9"><div class="empty">Nenhum boleto ou custo lançado.</div></td></tr>`;
+    return;
+  }
+  if(view==='status'){
+    const today=todayISO();
+    const in7=addDays(7);
+    const groups=[
+      {key:'late',title:'Atrasados',test:c=>c.status!=='PAGO'&&c.due&&c.due<today},
+      {key:'week',title:'Vencem em até 7 dias',test:c=>c.status!=='PAGO'&&c.due&&c.due>=today&&c.due<=in7},
+      {key:'open',title:'A pagar',test:c=>c.status!=='PAGO'},
+      {key:'paid',title:'Pagos',test:c=>c.status==='PAGO'},
+    ];
+    const used=new Set();
+    let html='';
+    groups.forEach(g=>{
+      const list=payables.filter(c=>!used.has(c.id)&&g.test(c)).sort(g.key==='paid'?(x,y)=>byDue(y,x):byDue);
+      list.forEach(c=>used.add(c.id));
+      if(!list.length) return;
+      const sum=list.reduce((t,c)=>t+Number(c.value||0),0);
+      html+=`<tr class="cost-section cost-status-${g.key}"><td colspan="9">${esc(g.title)} · ${list.length} · ${brl.format(sum)}</td></tr>`+list.map(c=>costRowHtml(c,{showNf:true})).join('');
     });
-    const openFirst=(r)=>r.c.status==='PAGO'?1:0;
-    rows.sort((a,b)=>openFirst(a)-openFirst(b)||String(a.due).localeCompare(String(b.due)));
-    if(hint) hint.textContent='Pagamentos em ordem de vencimento. Cada compra aparece pelas parcelas.';
-    tbody.innerHTML=rows.length?rows.map(r=>{
-      if(r.kind==='cost') return costRowHtml(r.c,{showNf:true});
-      const nf=r.c;
-      return `<tr>${td('Descrição',`<strong>${esc(nf.desc)}</strong><span class="cell-sub">${idx.has(nf.id)?'Saldo da compra ainda sem boleto':'Compra sem boletos vinculados'}</span>`)}${td('Tipo',esc(nf.type))}${td('Centro',esc(nf.center))}${td('Data',fmtDate(nf.date))}${td('Vencimento',fmtDate(nf.due))}${td('Forma pg.',esc(nf.method))}${td('Valor',brl.format(r.rem))}${td('Status','<span class="badge b-amber">Sem boleto</span>')}${costActionsHtml(nf,`<button class="btn small" onclick="openNfeLinkModal('${nf.id}')">Vincular boletos</button>`,{noPay:idx.has(nf.id)})}</tr>`;
-    }).join(''):`<tr><td colspan="9"><div class="empty">Nenhum custo lançado.</div></td></tr>`;
+    if(hint) hint.textContent='Agrupado por situação do pagamento. A NF-e não entra: ela só agrupa os boletos.';
+    tbody.innerHTML=html||`<tr><td colspan="9"><div class="empty">Nenhum boleto ou custo lançado.</div></td></tr>`;
     return;
   }
   // Por compra: NF como grupo (boletos dentro), depois boletos e custos sem NF
@@ -4062,7 +4071,7 @@ function renderCosts(){
   const loose=state.costs.filter(c=>!L.isNfeCost(c) && !(c.nfeCostId && nfs.some(n=>n.id===c.nfeCostId)));
   const looseBol=loose.filter(c=>L.isBoletoCost(c)).sort((a,b)=>String(a.due||'').localeCompare(String(b.due||'')));
   const others=loose.filter(c=>!L.isBoletoCost(c));
-  if(hint) hint.textContent=nfs.length?'Clique na compra para ver as parcelas.':'';
+  if(hint) hint.textContent=nfs.length?'Clique na compra para ver as parcelas. A NF-e só agrupa: o custo são os boletos.':'';
   let html='';
   if(nfs.length) html+=section(`Compras com NF-e (${nfs.length})`)+nfs.map(nf=>costNfGroupHtml(nf,idx)).join('');
   if(looseBol.length) html+=section(`Boletos sem NF-e (${looseBol.length})`)+looseBol.map(c=>costRowHtml(c)).join('');
@@ -4087,7 +4096,7 @@ function openNfeLinkModal(nfId){
   openModal('Boletos desta NF-e',`
     <div class="card" style="padding:12px;margin-bottom:12px"><strong>${esc(nf.desc)}</strong>
       <div class="cell-sub">${esc(supplier||'')} · emissão ${fmtDate(nf.date)} · total ${brl.format(nf.value||0)}</div>
-      <p class="field-hint" style="margin:8px 0 0">Marque os boletos que pagam esta nota. A NF passa a contar só o que faltar, e os boletos contam com os vencimentos reais.${sug.exact?' <strong>Sugestão: os boletos marcados fecham o total.</strong>':''}</p>
+      <p class="field-hint" style="margin:8px 0 0">Marque os boletos que pagam esta nota. A NF só agrupa; o custo são os boletos, com os vencimentos reais.${sug.exact?' <strong>Sugestão: os boletos marcados fecham o total.</strong>':''}</p>
     </div>
     ${rows.length?`<div class="table-wrap"><table>
       <thead><tr><th></th><th>Boleto</th><th>Vencimento</th><th>Parcela</th><th>Valor</th></tr></thead>
@@ -4104,7 +4113,7 @@ function openNfeLinkModal(nfId){
     if(chosen.size) nf.awaitingBoletos=false;
     save();closeModal();renderAll();
     const rem=L.remainingOf(nf,L.linkIndex(state.costs));
-    toast(chosen.size?(rem<=0.01?'NF-e paga pelos boletos: sem duplicidade em Custos.':`Boletos vinculados. Falta ${brl.format(rem)} desta NF.`):'Vínculos removidos.');
+    toast(chosen.size?(rem<=0.01?'Todos os boletos da compra vinculados.':`Boletos vinculados. Faltam ${brl.format(rem)} desta compra sem boleto.`):'Vínculos removidos.');
   });
   document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
   document.getElementById('modalSave').textContent='Salvar vínculo';
@@ -4160,7 +4169,7 @@ function openCostReconcileModal(){
   const nfsOpen=state.costs.filter(c=>L.isNfeCost(c)&&L.remainingOf(c,costsLinkIndex())>0.01);
   const byId=id=>state.costs.find(c=>c.id===id)||{};
   openModal('Conciliar NF-e × boletos',`
-    <p class="field-hint" style="margin-top:0">Cada NF-e lançada no estoque também entra em Custos, e os boletos da mesma compra entram de novo. Vincule os boletos à NF para contar uma vez só. A correlação usa fornecedor (e apelidos aprendidos), valor das parcelas, parcela informada no boleto e datas. Confira antes de aplicar.</p>
+    <p class="field-hint" style="margin-top:0">A NF-e agrupa os boletos da compra (ela não entra nos custos). Vincule cada boleto à sua NF para ver a compra completa. A correlação usa fornecedor (e apelidos aprendidos), valor das parcelas, parcela informada no boleto e datas. Confira antes de aplicar.</p>
     ${plan.length?plan.map((p,i)=>{const nf=byId(p.nfId);return `<div class="card" style="padding:12px;margin:10px 0">
       <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" class="rc-sel" value="${i}" checked style="margin-top:3px">
       <span><strong>${esc(nf.desc)}</strong> · ${brl.format(nf.value||0)}<span class="cell-sub">${p.exact?'Fecha o total':'Parcial'}: ${p.boletoIds.length} boleto(s) somando ${brl.format(p.sum)}${p.exact?'':` (falta ${brl.format(Math.max(0,p.remaining-p.sum))})`}</span>
@@ -4176,6 +4185,53 @@ function openCostReconcileModal(){
   document.getElementById('modalSave').textContent=plan.length?'Aplicar vínculos':'Fechar';
 }
 window.openNfeLinkModal=openNfeLinkModal;
+/** Ficha da compra (NF-e): não é custo; agrupa os boletos e registra a entrada no estoque. */
+function openNfeRecordModal(nfId){
+  const L=window.ChevalierCostLink; if(!L) return;
+  const nf=state.costs.find(c=>c.id===nfId); if(!nf) return;
+  const pays=L.linkedBoletos(nf,state.costs).slice().sort((a,b)=>String(a.due||'').localeCompare(String(b.due||'')));
+  const rem=L.remainingOf(nf,costsLinkIndex());
+  const supplier=L.nfeSupplierOf(nf,state.nfImports);
+  const imp=(state.nfImports||[]).find(n=>(nf.nfeKey&&n.key===nf.nfeKey)||(L.nfeNumberOf(nf)&&String(n.number)===L.nfeNumberOf(nf)));
+  openModal('Compra — NF-e',`
+    <p class="field-hint" style="margin-top:0">A NF-e não é um custo: ela agrupa os boletos desta compra e registra a entrada dos itens no estoque. Os valores a pagar ficam nos boletos.</p>
+    <div class="form-grid">
+      <div class="field full"><label>Descrição</label><input id="nfrDesc" class="input" value="${esc(nf.desc||'')}"></div>
+      <div class="field"><label>Fornecedor</label><input id="nfrSupplier" class="input" value="${esc(supplier||'')}"></div>
+      <div class="field"><label>Emissão</label><input id="nfrDate" type="date" class="input" value="${esc(nf.date||'')}"></div>
+      <div class="field"><label>Valor total da nota</label><input id="nfrValue" type="number" step="0.01" class="input" value="${nf.value??''}"></div>
+      <div class="field"><label>Itens no estoque</label><input class="input" value="${imp?`${imp.items||0} item(ns)`:'—'}" disabled></div>
+      ${nf.nfeKey?`<div class="field full"><label>Chave de acesso</label><input class="input" value="${esc(nf.nfeKey)}" disabled></div>`:''}
+    </div>
+    <h3 class="section-title" style="margin-top:14px">Boletos / pagamentos desta compra</h3>
+    ${pays.length?`<div class="table-wrap"><table><thead><tr><th>Pagamento</th><th>Vencimento</th><th>Parcela</th><th>Valor</th><th>Status</th></tr></thead><tbody>${pays.map(b=>`<tr>${td('Pagamento',esc(b.desc))}${td('Vencimento',fmtDate(b.due))}${td('Parcela',esc(b.installment||'—'))}${td('Valor',brl.format(b.value||0))}${td('Status',badge(b.status))}</tr>`).join('')}</tbody></table></div>`:`<div class="empty">Nenhum boleto vinculado ainda.</div>`}
+    <p class="field-hint">${rem>0.01?`Sem boleto: ${brl.format(rem)} de ${brl.format(nf.value||0)}.`:'Toda a compra está em boletos/pagamentos.'}</p>
+    <div class="row-actions" style="margin-top:8px">
+      <button type="button" class="btn small" onclick="closeModal();openNfeLinkModal('${nf.id}')">Vincular boletos</button>
+      ${rem>0.01?`<button type="button" class="btn small" onclick="addNfeCashPayment('${nf.id}')">Lançar pagamento à vista (${brl.format(rem)})</button>`:''}
+    </div>
+  `,()=>{
+    nf.desc=getv('nfrDesc').trim()||nf.desc;
+    nf.nfeSupplier=getv('nfrSupplier').trim();
+    nf.date=getv('nfrDate')||nf.date;
+    nf.due=nf.date;
+    const v=num('nfrValue'); if(v>0) nf.value=v;
+    nf.kind='nfe';
+    save();closeModal();renderAll();toast('Compra (NF-e) atualizada.');
+  });
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+}
+/** Compra paga à vista: lança o pagamento (custo PAGO) ligado à NF. */
+function addNfeCashPayment(nfId){
+  const L=window.ChevalierCostLink;
+  const nf=state.costs.find(c=>c.id===nfId); if(!nf||!L) return;
+  const rem=L.remainingOf(nf,costsLinkIndex()); if(rem<=0.01) return toast('A compra já está toda em pagamentos.');
+  state.costs.unshift({id:uid(),desc:`Pagamento ${nf.desc}`,type:nf.type||'INSUMOS',center:'Geral',date:todayISO(),due:todayISO(),method:'PIX',value:rem,status:'PAGO',installment:'',boletoLine:'',nfeCostId:nf.id,nfeLabel:nf.desc});
+  nf.awaitingBoletos=false;
+  save();closeModal();renderAll();toast(`Pagamento à vista de ${brl.format(rem)} lançado em Custos.`);
+}
+window.openNfeRecordModal=openNfeRecordModal;
+window.addNfeCashPayment=addNfeCashPayment;
 window.openBoletoLinkModal=openBoletoLinkModal;
 window.openCostReconcileModal=openCostReconcileModal;
 function renderPayroll(){
@@ -5347,6 +5403,8 @@ function wireHonorariumAutosuggest(clinicId,procId){
   procEl.addEventListener('change',syncPatientHonorarium);
 }
 function openCostModal(editId=''){
+  const cur=state.costs.find(x=>x.id===editId);
+  if(cur && window.ChevalierCostLink?.isNfeCost(cur)) return openNfeRecordModal(editId);
   const types=['IMPLANTE','LAB','BIOMATERIAL','INSUMOS','COMPONENTES','EQUIPAMENTO','ALUGUEL','Transporte','Alimentação','IMPOSTO E CRO','Consultoria','BOLETO'];
   const c=state.costs.find(x=>x.id===editId)||{};
   openModal(editId?'Editar custo':'Novo custo',`<div class="form-grid"><div class="field full"><label>Descrição / beneficiário</label><input id="xDesc" class="input" value="${esc(c.desc||'')}"></div><div class="field"><label>Tipo</label><select id="xType" class="select">${types.map(x=>`<option ${x===c.type?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Centro de custo</label><select id="xCenter" class="select"><option>Geral</option>${state.clinics.map(cl=>`<option ${cl.name===(c.center||'')?'selected':''}>${esc(cl.name)}</option>`).join('')}</select></div><div class="field"><label>Data</label><input id="xDate" type="date" class="input" value="${c.date||todayISO()}"></div><div class="field"><label>Vencimento</label><input id="xDue" type="date" class="input" value="${c.due||addDays(7)}"></div><div class="field"><label>Forma de pagamento</label><select id="xMethod" class="select">${['PIX','BOLETO À VISTA','BOLETO PARCELADO','CRÉDITO','DÉBITO','DINHEIRO'].map(x=>`<option ${x===c.method?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Valor</label><input id="xValue" type="number" step="0.01" class="input" value="${c.value??''}"></div><div class="field"><label>Parcela</label><input id="xInstallment" class="input" value="${esc(c.installment||'')}" placeholder="Ex.: 2/6"></div><div class="field"><label>Status</label><select id="xStatus" class="select">${['À PAGAR','PAGO','PARCELADO','ATRASADO'].map(x=>`<option ${x===c.status?'selected':''}>${x}</option>`).join('')}</select></div>${c.boletoLine?`<div class="field full"><label>Linha digitável</label><input class="input" value="${esc(c.boletoLine)}" disabled></div>`:''}</div>`,()=>{
@@ -5522,9 +5580,9 @@ function openNfeImportModal(){
         <label>Pagamento da nota</label>
         <select id="nfePayment" class="select">
           <option value="boleto" selected>Boleto / parcelado: vou vincular os boletos desta NF</option>
-          <option value="paid">Já paga à vista (Pix, cartão, dinheiro)</option>
+          <option value="paid">Já paga à vista (Pix, cartão, dinheiro): lança o pagamento como pago</option>
         </select>
-        <p class="field-hint">Com boleto, a NF entra em Custos como “a pagar” e deixa de contar quando os boletos dela forem vinculados. Assim a compra não conta duas vezes.</p>
+        <p class="field-hint">A NF não é custo: ela agrupa os boletos desta compra e dá entrada no estoque. O custo são os boletos (ou o pagamento à vista).</p>
       </div>
       <div class="field full" id="nfeMeta" hidden></div>
       <div class="field full" id="nfeItemsWrap" hidden>

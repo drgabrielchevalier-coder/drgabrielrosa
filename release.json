@@ -1,10 +1,10 @@
 {
-  "version": "2.19.0",
-  "name": "Custos: por compra ou por boleto",
+  "version": "2.20.0",
+  "name": "NF-e só agrupa; visão por status",
   "releasedAt": "2026-11-23",
   "changes": [
-    "Custos com duas visões: Por compra (NF), com os boletos agrupados dentro de cada nota, e Boletos a pagar, lista única por vencimento.",
-    "Cada compra mostra parcelas lançadas, pago, em aberto e saldo ainda sem boleto, com barra de progresso.",
-    "A visão escolhida fica salva; no celular os cartões de totais deixam de estourar a largura da tela."
+    "A NF-e deixou de ser custo: ela agrupa os boletos da compra e dá entrada no estoque. Totais e Boletos a pagar mostram só pagamentos.",
+    "Nova visão Por status em Custos: Atrasados, Vencem em até 7 dias, A pagar e Pagos, com subtotais.",
+    "Editar uma NF abre a ficha da compra (boletos, saldo sem boleto e opção de lançar pagamento à vista); importação 'já paga' lança o pagamento ligado à NF."
   ]
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Regressão Fase 6 — vínculo NF-e × boletos (assets/js/cost-link.js).
- * Garante: NF não conta em dobro, parcelas são sugeridas, apelido de fornecedor é aprendido.
+ * Garante: NF é só agrupadora (nunca soma nos custos), parcelas são sugeridas, apelido de fornecedor é aprendido.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -43,13 +43,13 @@ ok('fornecedor da NF', L.nfeSupplierOf(state.costs[1], state.nfImports) === 'LSI
 ok('parcela 2/3', JSON.stringify(L.parseInstallment('2/3')) === JSON.stringify({ n: 2, of: 3 }));
 
 const before = total(state);
-ok('antes: duplicado (NF + boletos)', before === Math.round((810.88 + 359.06 + 810.88 + 1500) * 100) / 100);
+ok('NF nunca soma: só boletos e pagamentos', before === Math.round((810.88 + 1500) * 100) / 100);
 
 const sug = L.suggestBoletosForNfe(state.costs[0], state);
 ok('sugere as 3 parcelas que fecham a NF', sug.exact && ['b1', 'b2', 'b3'].every((id) => sug.ids.includes(id)) && sug.ids.length === 3);
 
 sug.ids.forEach((id) => L.setLink(state, id, 'nf1'));
-ok('depois: NF não conta em dobro', total(state) === Math.round((359.06 + 810.88 + 1500) * 100) / 100);
+ok('vincular não muda o total (NF já não somava)', total(state) === before);
 ok('saldo da NF zerado', L.remainingOf(state.costs[0], L.linkIndex(state.costs)) === 0);
 ok('aprendeu apelido Dental Cremer → LSI', (state.settings.supplierAliases['dental cremer'] || []).includes('lsi'));
 
@@ -68,7 +68,8 @@ state.costs.push(nf3, p1);
 ok('parcela 1/2 sugerida', L.suggestNfeForBoleto(p1, state)[0]?.nf.id === 'nf3');
 L.setLink(state, 'p1', 'nf3');
 const idx = L.linkIndex(state.costs);
-ok('parcial: NF conta só o saldo (300)', L.effectiveValue(nf3, idx) === 300);
+ok('parcial: NF continua 0 nos custos', L.effectiveValue(nf3, idx) === 0);
+ok('parcial: saldo sem boleto informado (300)', L.remainingOf(nf3, idx) === 300);
 
 // reconciliar tudo não reaproveita boleto
 const plan = L.reconcileAll(state);

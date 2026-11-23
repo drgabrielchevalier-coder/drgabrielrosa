@@ -31,7 +31,7 @@ uploads/        sem execução de PHP (.htaccess)
 - `assets/js/clinic-billing.js`: motor de regras por clínica (`ChevalierBilling.settleCase`)
 - `assets/js/procedure-catalog.js`, `dental-catalog.js`: catálogo
 - `assets/js/nfe-stock.js`: NF-e → estoque, materiais controlados
-- `assets/js/cost-link.js`: vínculo NF-e × boletos em Custos (`ChevalierCostLink`). Boleto tem `nfeCostId`; a NF conta só o saldo não coberto (`effectiveValue`). Totais de custos devem usar `costEffectiveValue`. Teste: `scripts/test-fase6-nfe-boletos.mjs`
+- `assets/js/cost-link.js`: vínculo NF-e × boletos em Custos (`ChevalierCostLink`). A NF-e (`kind:'nfe'`, em `state.costs`) **não é custo**: só agrupa os pagamentos (boletos ou pagamento à vista, com `nfeCostId`) e dá entrada no estoque; `effectiveValue(NF)=0`. Totais de custos devem usar `costEffectiveValue`. Custos tem 3 visões (Por compra, Boletos a pagar, Por status). Teste: `scripts/test-fase6-nfe-boletos.mjs`
 - `assets/js/circular-navigation.js`: menu circular em JS puro (`CircularNavigation.create`), demo em `circular-navigation.html` (noindex)
 - `assets/js/import-assist.js`: wizard CSV/XLSX · `planning-calendar.js`: agenda · `scan-tools.js`: boleto/barcode
 - `assets/css/app.css` (painel), `landing.css` + `landing.js` (home.php)

@@ -4,10 +4,11 @@
  * Problema: a NF-e lançada no estoque gera um custo ("NF-e 123 — Fornecedor") e os boletos
  * da mesma compra (quase sempre parcelados) entram de novo em Custos → duplicidade.
  *
- * Regra: cada boleto pode apontar para a NF-e que ele paga (boleto.nfeCostId = id do custo da NF).
- * A NF-e passa a contar só o saldo ainda não coberto por boletos:
- *     valor efetivo da NF = max(0, valor da NF − soma dos boletos vinculados)
- * Os boletos contam pelo valor deles (com os vencimentos reais). Nada é apagado.
+ * Regra: a NF-e NÃO é custo. Ela só agrupa os pagamentos da compra (boletos, ou o pagamento
+ * à vista lançado na importação) e dá entrada dos itens no estoque. Cada pagamento aponta para
+ * a NF que ele paga (pagamento.nfeCostId = id do registro da NF). Nos totais:
+ *     valor efetivo da NF = 0   ·   boletos/pagamentos contam pelo valor deles
+ * remainingOf() continua informando quanto da compra ainda está sem boleto. Nada é apagado.
  *
  * Correlação (sugestão, sempre confirmada pelo usuário):
  *   - fornecedor: nome do beneficiário × emitente da NF (sem LTDA/S.A etc.) e apelidos
@@ -53,7 +54,7 @@
   function isNfeCost(c) {
     if (!c) return false;
     if (c.nfeCostId) return false; // é boleto vinculado
-    return c.nfeKey !== undefined || !!c.nfeNumber || /^NF-e\b/i.test(String(c.desc || ''));
+    return c.kind === 'nfe' || c.nfeKey !== undefined || !!c.nfeNumber || /^NF-e\b/i.test(String(c.desc || ''));
   }
 
   function isBoletoCost(c) {
@@ -96,10 +97,10 @@
     return round2(Math.max(0, Number(nf.value || 0) - (idx.get(nf.id) || 0)));
   }
 
-  /** Valor que entra nos totais: NF conta só o que os boletos ainda não cobrem. */
-  function effectiveValue(c, idx) {
+  /** Valor que entra nos totais: a NF é só agrupadora (0); pagamentos contam pelo valor. */
+  function effectiveValue(c) {
     if (!c) return 0;
-    if (isNfeCost(c) && idx && idx.has(c.id)) return remainingOf(c, idx);
+    if (isNfeCost(c)) return 0;
     return Number(c.value || 0);
   }
 
