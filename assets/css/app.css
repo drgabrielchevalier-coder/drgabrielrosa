@@ -297,6 +297,18 @@
     color:var(--muted);font-size:12px;font-weight:600;cursor:pointer
   }
   .view-tab.active{background:var(--sidebar);color:#fff}
+  .costs-toolbar{align-items:center;justify-content:space-between}
+  .costs-view-hint{font-size:11px;color:var(--muted)}
+  .costs-table tr.cost-group-head td{background:#f7f4ee;border-top:1px solid var(--line)}
+  .costs-table tr.cost-group-head:hover td{background:#f2eee6}
+  .costs-table tr.cost-group-head .cost-toggle{cursor:pointer;display:inline-flex;align-items:center;gap:8px;border:0;background:none;padding:0;font:inherit;color:inherit;text-align:left}
+  .costs-table .cost-caret{display:inline-block;width:14px;color:var(--muted);transition:transform .15s}
+  .costs-table tr.cost-group-head.is-open .cost-caret{transform:rotate(90deg)}
+  .costs-table tr.cost-child td:first-child{padding-left:40px}
+  .costs-table tr.cost-child td{background:#fffdf9}
+  .costs-table tr.cost-section td{background:transparent;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:18px}
+  .cost-progress{display:inline-block;width:90px;height:5px;border-radius:9px;background:var(--line);vertical-align:middle;margin-left:6px;overflow:hidden}
+  .cost-progress i{display:block;height:100%;background:var(--green,#3d8b5c)}
   .patients-kanban-wrap{margin-top:0;overflow:visible}
   /* Campão: colunas com largura mínima + scroll — evita cortar R$ e nomes */
   .lab-board.patients-kanban{
@@ -909,6 +921,13 @@
     .toolbar .input,.toolbar .select{width:100%;min-width:0}
     .patients-toolbar .view-toggle{width:100%;justify-content:stretch}
     .patients-toolbar .view-tab{flex:1}
+    #page-custos .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .costs-toolbar .view-toggle{width:100%}
+    .costs-toolbar .view-tab{flex:1}
+    .costs-table tr.cost-child{margin-left:14px;border-left:3px solid var(--line)}
+    .costs-table tr.cost-child td:first-child{padding-left:0}
+    .costs-table tr.cost-section{border:0;padding:4px 2px;margin:14px 0 6px;background:transparent}
+    .costs-table tr.cost-section td:before{display:none}
     .patients-kanban-hint{font-size:11px}
     .table-wrap{overflow:visible}
     .table-wrap table,.table-wrap thead,.table-wrap tbody,.table-wrap th,.table-wrap td,.table-wrap tr{display:block}

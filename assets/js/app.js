@@ -3959,6 +3959,66 @@ function costEffectiveValue(c, idx){
 function costsLinkIndex(){
   return window.ChevalierCostLink?window.ChevalierCostLink.linkIndex(state.costs||[]):new Map();
 }
+const COSTS_VIEW_KEY='chevalier_costs_view';
+let costsOpenGroups=new Set();
+function costsView(){
+  try{ const v=localStorage.getItem(COSTS_VIEW_KEY); if(v==='boletos'||v==='compra') return v; }catch(_){}
+  return 'compra';
+}
+function setCostsView(v){
+  try{ localStorage.setItem(COSTS_VIEW_KEY, v==='boletos'?'boletos':'compra'); }catch(_){}
+  renderCosts();
+}
+function toggleCostGroup(id){
+  if(costsOpenGroups.has(id)) costsOpenGroups.delete(id); else costsOpenGroups.add(id);
+  renderCosts();
+}
+window.setCostsView=setCostsView;
+window.toggleCostGroup=toggleCostGroup;
+function costActionsHtml(c,extra='',opts={}){
+  const pay=opts.noPay?'':`<button class="btn small" onclick="toggleCost('${c.id}')">${c.status==='PAGO'?'Reabrir':'Pagar'}</button>`;
+  return `<td class="actions-cell"><div class="row-actions">${extra}${pay}<button class="btn small" onclick="openCostModal('${c.id}')">Editar</button><button class="btn small danger" onclick="deleteCost('${c.id}')">Excluir</button></div></td>`;
+}
+/** Linha de um boleto/custo comum (sem NF ou dentro do grupo da NF). */
+function costRowHtml(c,opts={}){
+  const L=window.ChevalierCostLink;
+  const isBol=L?.isBoletoCost(c);
+  const subParts=[c.installment?`Parcela ${c.installment}`:'',c.boletoLine?'Boleto escaneado':''];
+  if(opts.showNf && c.nfeCostId){
+    const nf=state.costs.find(x=>x.id===c.nfeCostId);
+    subParts.push(`Compra: ${(nf?nf.desc:(c.nfeLabel||'NF-e'))}`);
+  }
+  const linkBtn=isBol&&!opts.child?`<button class="btn small" onclick="openBoletoLinkModal('${c.id}')">${c.nfeCostId?'NF-e':'Vincular NF'}</button>`:'';
+  const sub=subParts.filter(Boolean).join(' · ');
+  return `<tr class="${opts.child?'cost-child':''}">${td('Descrição',`<strong>${esc(c.desc)}</strong>${sub?`<span class="cell-sub">${esc(sub)}</span>`:''}`)}${td('Tipo',esc(c.type))}${td('Centro',esc(c.center))}${td('Data',fmtDate(c.date))}${td('Vencimento',fmtDate(c.due))}${td('Forma pg.',esc(c.method))}${td('Valor',brl.format(c.value))}${td('Status',badge(c.status))}${costActionsHtml(c,linkBtn)}</tr>`;
+}
+/** Cabeçalho da compra (NF): total, parcelas lançadas, pago e em aberto. */
+function costNfGroupHtml(nf,idx){
+  const L=window.ChevalierCostLink;
+  const boletos=L.linkedBoletos(nf,state.costs).slice().sort((a,b)=>String(a.due||'').localeCompare(String(b.due||'')));
+  const covered=boletos.reduce((s,b)=>s+Number(b.value||0),0);
+  const paid=boletos.filter(b=>b.status==='PAGO').reduce((s,b)=>s+Number(b.value||0),0);
+  const rem=L.remainingOf(nf,idx);
+  const ofN=boletos.map(b=>L.parseInstallment(b.installment)?.of||0).reduce((m,x)=>Math.max(m,x),0);
+  const open=costsOpenGroups.has(nf.id);
+  const pctPaid=Number(nf.value||0)>0?Math.min(100,Math.round(paid/Number(nf.value)*100)):0;
+  let status, sub;
+  if(!boletos.length){
+    status=nf.awaitingBoletos?'<span class="badge b-amber">Aguardando boletos</span>':badge(nf.status);
+    sub=nf.awaitingBoletos?'Nenhum boleto vinculado ainda':'Compra sem boleto (paga à vista)';
+  }else{
+    const parcelas=ofN?`${boletos.length} de ${ofN} parcelas`:`${boletos.length} boleto(s)`;
+    sub=`${parcelas} · pago ${brl.format(paid)} · em aberto ${brl.format(covered-paid)}${rem>0.01?` · sem boleto ${brl.format(rem)}`:''}`;
+    status=paid>=Number(nf.value||0)-0.01?'<span class="badge b-green">Quitada</span>':(rem>0.01?'<span class="badge b-amber">Boletos parciais</span>':'<span class="badge b-blue">Em boletos</span>');
+  }
+  const nextDue=boletos.find(b=>b.status!=='PAGO')?.due||'';
+  const title=boletos.length
+    ?`<button type="button" class="cost-toggle" onclick="toggleCostGroup('${nf.id}')" aria-expanded="${open}"><span class="cost-caret" aria-hidden="true">▸</span><strong>${esc(nf.desc)}</strong></button>`
+    :`<strong>${esc(nf.desc)}</strong>`;
+  const head=`<tr class="cost-group-head${open?' is-open':''}">${td('Compra',`${title}<span class="cell-sub">${esc(sub)}${boletos.length?`<span class="cost-progress" title="${pctPaid}% pago"><i style="width:${pctPaid}%"></i></span>`:''}</span>`)}${td('Tipo',esc(nf.type))}${td('Centro',esc(nf.center))}${td('Emissão',fmtDate(nf.date))}${td('Próx. venc.',nextDue?fmtDate(nextDue):'—')}${td('Forma pg.',esc(nf.method))}${td('Total',brl.format(nf.value))}${td('Status',status)}${costActionsHtml(nf,`<button class="btn small" onclick="openNfeLinkModal('${nf.id}')">${boletos.length?'Boletos':'Vincular boletos'}</button>`,{noPay:boletos.length>0})}</tr>`;
+  const kids=open?boletos.map(b=>costRowHtml(b,{child:true})).join(''):'';
+  return head+kids;
+}
 function renderCosts(){
   const L=window.ChevalierCostLink;
   const idx=costsLinkIndex();
@@ -3969,35 +4029,45 @@ function renderCosts(){
   const pending=L?L.reconcileAll(state).length:0;
   const recBtn=document.getElementById('costReconcileBtn');
   if(recBtn) recBtn.textContent=pending?`⇄ Conciliar NF × boletos (${pending})`:'⇄ Conciliar NF × boletos';
-  document.getElementById('costsTable').innerHTML=state.costs.map(c=>{
-    const isNf=L?.isNfeCost(c);
-    const isBol=L?.isBoletoCost(c);
-    const subParts=[c.installment?`Parcela ${c.installment}`:'',c.boletoLine?'Boleto escaneado':''];
-    let valueCell=brl.format(c.value);
-    let statusCell=badge(c.status);
-    let linkBtn='';
-    if(isNf){
-      const linked=L.linkedBoletos(c,state.costs);
-      const covered=linked.reduce((s,b)=>s+Number(b.value||0),0);
-      const rem=L.remainingOf(c,idx);
-      if(linked.length){
-        subParts.push(rem<=0.01?`Paga em ${linked.length} boleto(s)`:`${linked.length} boleto(s) · ${brl.format(covered)} de ${brl.format(c.value)} · falta ${brl.format(rem)}`);
-        valueCell=`${brl.format(c.value)}<span class="cell-sub">${rem<=0.01?'conta pelos boletos':`conta ${brl.format(rem)}`}</span>`;
-        statusCell=`<span class="badge ${rem<=0.01?'b-green':'b-amber'}">${rem<=0.01?'Em boletos':'Boletos parciais'}</span>`;
-      }else if(c.awaitingBoletos){
-        subParts.push('Aguardando boletos');
+  const view=costsView();
+  document.querySelectorAll('[data-cview]').forEach(b=>{ const on=b.dataset.cview===view; b.classList.toggle('active',on); b.setAttribute('aria-selected',String(on)); });
+  const hint=document.getElementById('costsViewHint');
+  const tbody=document.getElementById('costsTable');
+  if(!L){ tbody.innerHTML=state.costs.map(c=>costRowHtml(c)).join(''); return; }
+  const section=t=>`<tr class="cost-section"><td colspan="9">${esc(t)}</td></tr>`;
+  if(view==='boletos'){
+    // só o que se paga: boletos e custos comuns; da NF, apenas o saldo que ainda não tem boleto
+    const rows=[];
+    state.costs.forEach(c=>{
+      if(L.isNfeCost(c)){
+        const rem=L.remainingOf(c,idx);
+        const hasBoletos=idx.has(c.id);
+        if(rem>0.01 && (hasBoletos || c.awaitingBoletos || c.status!=='PAGO')) rows.push({kind:'nf',c,rem,due:c.due||c.date||''});
+        return;
       }
-      linkBtn=`<button class="btn small" onclick="openNfeLinkModal('${c.id}')">${linked.length?'Boletos':'Vincular boletos'}</button>`;
-    }else if(isBol){
-      if(c.nfeCostId){
-        const nf=state.costs.find(x=>x.id===c.nfeCostId);
-        subParts.push(`Paga ${nf?nf.desc.replace(/\s+—.*$/,''):(c.nfeLabel||'NF-e').replace(/\s+—.*$/,'')}`);
-      }
-      linkBtn=`<button class="btn small" onclick="openBoletoLinkModal('${c.id}')">${c.nfeCostId?'NF-e':'Vincular NF'}</button>`;
-    }
-    const sub=subParts.filter(Boolean).join(' · ');
-    return `<tr>${td('Descrição',`<strong>${esc(c.desc)}</strong>${sub?`<span class="cell-sub">${esc(sub)}</span>`:''}`)}${td('Tipo',esc(c.type))}${td('Centro',esc(c.center))}${td('Data',fmtDate(c.date))}${td('Vencimento',fmtDate(c.due))}${td('Forma pg.',esc(c.method))}${td('Valor',valueCell)}${td('Status',statusCell)}<td class="actions-cell"><div class="row-actions">${linkBtn}<button class="btn small" onclick="toggleCost('${c.id}')">${c.status==='PAGO'?'Reabrir':'Pagar'}</button><button class="btn small" onclick="openCostModal('${c.id}')">Editar</button><button class="btn small danger" onclick="deleteCost('${c.id}')">Excluir</button></div></td></tr>`;
-  }).join('');
+      rows.push({kind:'cost',c,due:c.due||''});
+    });
+    const openFirst=(r)=>r.c.status==='PAGO'?1:0;
+    rows.sort((a,b)=>openFirst(a)-openFirst(b)||String(a.due).localeCompare(String(b.due)));
+    if(hint) hint.textContent='Pagamentos em ordem de vencimento. Cada compra aparece pelas parcelas.';
+    tbody.innerHTML=rows.length?rows.map(r=>{
+      if(r.kind==='cost') return costRowHtml(r.c,{showNf:true});
+      const nf=r.c;
+      return `<tr>${td('Descrição',`<strong>${esc(nf.desc)}</strong><span class="cell-sub">${idx.has(nf.id)?'Saldo da compra ainda sem boleto':'Compra sem boletos vinculados'}</span>`)}${td('Tipo',esc(nf.type))}${td('Centro',esc(nf.center))}${td('Data',fmtDate(nf.date))}${td('Vencimento',fmtDate(nf.due))}${td('Forma pg.',esc(nf.method))}${td('Valor',brl.format(r.rem))}${td('Status','<span class="badge b-amber">Sem boleto</span>')}${costActionsHtml(nf,`<button class="btn small" onclick="openNfeLinkModal('${nf.id}')">Vincular boletos</button>`,{noPay:idx.has(nf.id)})}</tr>`;
+    }).join(''):`<tr><td colspan="9"><div class="empty">Nenhum custo lançado.</div></td></tr>`;
+    return;
+  }
+  // Por compra: NF como grupo (boletos dentro), depois boletos e custos sem NF
+  const nfs=state.costs.filter(c=>L.isNfeCost(c)).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  const loose=state.costs.filter(c=>!L.isNfeCost(c) && !(c.nfeCostId && nfs.some(n=>n.id===c.nfeCostId)));
+  const looseBol=loose.filter(c=>L.isBoletoCost(c)).sort((a,b)=>String(a.due||'').localeCompare(String(b.due||'')));
+  const others=loose.filter(c=>!L.isBoletoCost(c));
+  if(hint) hint.textContent=nfs.length?'Clique na compra para ver as parcelas.':'';
+  let html='';
+  if(nfs.length) html+=section(`Compras com NF-e (${nfs.length})`)+nfs.map(nf=>costNfGroupHtml(nf,idx)).join('');
+  if(looseBol.length) html+=section(`Boletos sem NF-e (${looseBol.length})`)+looseBol.map(c=>costRowHtml(c)).join('');
+  if(others.length) html+=section(`Outros custos (${others.length})`)+others.map(c=>costRowHtml(c)).join('');
+  tbody.innerHTML=html||`<tr><td colspan="9"><div class="empty">Nenhum custo lançado.</div></td></tr>`;
 }
 function linkReasonHtml(x){
   return x?.reasons?.length?`<span class="cell-sub">${esc(x.reasons.join(' · '))}</span>`:'';

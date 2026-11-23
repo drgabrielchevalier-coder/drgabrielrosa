@@ -805,7 +805,14 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <div class="kpi"><div class="label">A pagar</div><div class="value" id="costOpen">R$ 0</div></div>
           <div class="kpi"><div class="label">Maior categoria</div><div class="value" id="costLargest">—</div></div>
         </div>
-        <div class="card"><div class="table-wrap"><table>
+        <div class="toolbar costs-toolbar">
+          <div class="view-toggle" role="tablist" aria-label="Visualização dos custos">
+            <button type="button" class="view-tab active" data-cview="compra" onclick="setCostsView('compra')">Por compra (NF)</button>
+            <button type="button" class="view-tab" data-cview="boletos" onclick="setCostsView('boletos')">Boletos a pagar</button>
+          </div>
+          <span class="costs-view-hint" id="costsViewHint"></span>
+        </div>
+        <div class="card"><div class="table-wrap"><table class="costs-table">
           <thead><tr><th>Descrição</th><th>Tipo</th><th>Centro</th><th>Data</th><th>Vencimento</th><th>Forma pg.</th><th>Valor</th><th>Status</th><th></th></tr></thead>
           <tbody id="costsTable"></tbody>
         </table></div></div>

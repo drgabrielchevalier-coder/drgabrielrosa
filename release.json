@@ -1,10 +1,10 @@
 {
-  "version": "2.18.0",
-  "name": "NF-e × boletos sem duplicidade",
+  "version": "2.19.0",
+  "name": "Custos: por compra ou por boleto",
   "releasedAt": "2026-11-23",
   "changes": [
-    "Custos: boletos podem ser vinculados à NF-e que pagam; a NF passa a contar só o saldo ainda não coberto, sem somar a compra duas vezes.",
-    "Correlação automática por fornecedor (com apelidos aprendidos), valor das parcelas, parcela do boleto e datas; botão Conciliar NF × boletos.",
-    "Importar NF-e pergunta se a nota será paga em boleto/parcelado ou já foi paga à vista."
+    "Custos com duas visões: Por compra (NF), com os boletos agrupados dentro de cada nota, e Boletos a pagar, lista única por vencimento.",
+    "Cada compra mostra parcelas lançadas, pago, em aberto e saldo ainda sem boleto, com barra de progresso.",
+    "A visão escolhida fica salva; no celular os cartões de totais deixam de estourar a largura da tela."
   ]
 }
