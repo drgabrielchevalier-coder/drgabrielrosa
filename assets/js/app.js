@@ -384,6 +384,11 @@ function honorariumFromPrice(row){
   if(r.receiveMode==='mixed') return moneyRound(Number(r.receiveAmount||0)+Number(r.practicedValue||0)*Number(r.receivePercent||0)/100);
   return moneyRound(Number(r.receiveAmount||0));
 }
+/** "Fixo" igual ao próprio preço = catálogo sem regra de repasse: o honorário é o valor do procedimento. */
+function isFullValuePrice(row){
+  const r=normalizeClinicPrice(row);
+  return r.receiveMode==='fixed' && moneyRound(r.receiveAmount)===moneyRound(r.practicedValue);
+}
 function procedureHonorarium(procId,clinicId){
   return honorariumFromPrice(clinicPriceFor(procId,clinicId));
 }
@@ -444,7 +449,9 @@ function settleLines(lines,clinicId,settleOpts={}){
     const linePracticed=moneyRound(unitPracticed*q);
     const lineShare=(l.honorarium!=null && l.honorarium!=='')
       ? moneyRound(Number(l.honorarium)*q)
-      : moneyRound(honorariumFromPrice({...row,practicedValue:unitPracticed})*q);
+      : isFullValuePrice(row)
+        ? moneyRound(unitPracticed*q)
+        : moneyRound(honorariumFromPrice({...row,practicedValue:unitPracticed})*q);
     practiced+=linePracticed;
     baseShare+=lineShare;
     breakdown.push({procedureId:l.procedureId,practiced:linePracticed,baseShare:lineShare,unitPracticed});
@@ -974,26 +981,88 @@ function combinedProcedureMaterials(lines){
   });
   return {items,materials,components,lab,total:materials+components+lab};
 }
-function treatmentLineRow(line={}){
+/** Clínica do formulário aberto (tratamento ou recebível rápido). */
+function treatFormClinicId(){
+  return getv('fClinic')||getv('rClinic')||'';
+}
+/** Recalcula o formulário aberto (tratamento ou recebível rápido). */
+function recalcTreatForm(){
+  if(document.getElementById('rValue')){ recalcReceivableTotals(); try{ syncReceivableConsume(); }catch(_){} }
+  else recalcTreatmentTotals();
+}
+function treatmentLineRow(line={}, clinicId){
   const id=line.procedureId||'';
   const p=procedure(id);
   const kind=p.kind==='cirurgico'?'Cirúrgico':'Clínico';
-  return `<div class="treat-line" data-proc="${esc(id)}">
+  const cid=typeof clinicId==='string'?clinicId:treatFormClinicId();
+  const hasOwn=line.practicedValue!=null && line.practicedValue!=='' && Number.isFinite(Number(line.practicedValue));
+  const practiced=hasOwn?Number(line.practicedValue):(cid?Number(clinicPriceFor(id,cid).practicedValue||0):Number(p.price||0));
+  return `<div class="treat-line" data-proc="${esc(id)}"${hasOwn?' data-touched="1"':''}>
     <div class="treat-line-main">
       <strong>${esc(p.name)}</strong>
       <span class="cell-sub">${esc(specialtyName(p.specialty))} · ${kind}</span>
+      <span class="cell-sub tl-rule"></span>
     </div>
-    <input class="input tl-tooth" placeholder="Dente / região" value="${esc(line.tooth||'')}">
-    <button type="button" class="btn small icon-x" onclick="this.closest('.treat-line').remove();recalcTreatmentTotals()" title="Remover">×</button>
+    <input class="input tl-tooth" placeholder="Dente / região" value="${esc(line.tooth||'')}" aria-label="Dente / região">
+    <label class="tl-practiced-wrap"><span>Valor do procedimento</span><input class="input tl-practiced" type="number" step="0.01" min="0" value="${moneyRound(practiced)}" aria-label="Valor do procedimento" oninput="this.closest('.treat-line').dataset.touched='1';recalcTreatForm()"></label>
+    <button type="button" class="btn small icon-x" onclick="this.closest('.treat-line').remove();recalcTreatForm()" title="Remover">×</button>
   </div>`;
 }
 function collectTreatmentLines(){
-  return [...document.querySelectorAll('.treat-line')].map(row=>({
-    procedureId:row.dataset.proc,
-    qty:1,
-    tooth:row.querySelector('.tl-tooth')?.value||''
-  })).filter(x=>x.procedureId);
+  return [...document.querySelectorAll('.treat-line')].map(row=>{
+    const raw=row.querySelector('.tl-practiced')?.value;
+    const line={
+      procedureId:row.dataset.proc,
+      qty:1,
+      tooth:row.querySelector('.tl-tooth')?.value||''
+    };
+    if(raw!=null && raw!=='' && Number.isFinite(Number(raw))) line.practicedValue=moneyRound(Number(raw));
+    return line;
+  }).filter(x=>x.procedureId);
 }
+/** Valores não digitados à mão acompanham a tabela da clínica selecionada. */
+function syncTreatLineDefaults(clinicId){
+  if(!clinicId) return;
+  document.querySelectorAll('.treat-line').forEach(row=>{
+    if(row.dataset.touched) return;
+    const el=row.querySelector('.tl-practiced');
+    if(el) el.value=String(moneyRound(clinicPriceFor(row.dataset.proc,clinicId).practicedValue||0));
+  });
+}
+/** Texto da regra de cada procedimento: percentual, valor fixo ou fixo + %. */
+function treatLineRuleText(procId,clinicId,practiced,share){
+  const billing=billingForClinic(clinicId);
+  const mode=billing?.shareMode||'procedure';
+  const pct=Number(billing?.professionalPercent||0);
+  if(mode==='percent') return `Regra da clínica: ${pct}% de ${brl.format(practiced)} = você recebe ${brl.format(moneyRound(practiced*pct/100))}`;
+  if(mode==='fixed') return `Regra da clínica: valor fixo ${brl.format(billing.fixedAmount||0)} por atendimento`;
+  if(mode==='mixed') return `Regra da clínica: fixo ${brl.format(billing.fixedAmount||0)} + ${pct}% de ${brl.format(practiced)}`;
+  const raw=clinicPriceFor(procId,clinicId);
+  const row=normalizeClinicPrice(raw);
+  if(row.receiveMode==='percent') return `${row.receivePercent}% de ${brl.format(practiced)} = você recebe ${brl.format(share)}`;
+  if(row.receiveMode==='mixed') return `Fixo ${brl.format(row.receiveAmount)} + ${row.receivePercent}% de ${brl.format(practiced)} = você recebe ${brl.format(share)}`;
+  if(isFullValuePrice(raw)) return `Sem regra de repasse nesta clínica: você recebe o valor do procedimento (${brl.format(share)})`;
+  return `Valor fixo por procedimento: você recebe ${brl.format(share)}, independente do valor`;
+}
+function updateTreatLineHints(settled,clinicId){
+  const rows=[...document.querySelectorAll('.treat-line')];
+  rows.forEach((row,i)=>{
+    const el=row.querySelector('.tl-rule');
+    const b=settled?.breakdown?.[i];
+    if(!el) return;
+    el.textContent=clinicId&&b?treatLineRuleText(row.dataset.proc,clinicId,b.practiced,b.baseShare):'';
+  });
+}
+/** Status acompanha o recebido (preserva Retrabalho / Não vai receber / Aguardando acerto). */
+function autoTreatStatus(prefix){
+  const st=document.getElementById(prefix+'Status');
+  if(!st || isSpecialFinancialStatus(st.value)) return;
+  const value=num(prefix+'Value'), rec=num(prefix+'Received');
+  const next=value>0&&rec>=value-0.009?'Faturado / Recebido':rec>0?'Recebido parcial':'À receber';
+  if([...st.options].some(o=>o.value===next||o.text===next)) st.value=next;
+}
+window.recalcTreatForm=recalcTreatForm;
+window.autoTreatStatus=autoTreatStatus;
 function addTreatmentLine(){
   const sel=document.getElementById('fAddProc');
   const id=sel?.value||'';
@@ -1001,8 +1070,8 @@ function addTreatmentLine(){
   const box=document.getElementById('fTreatLines');
   if(!box) return;
   // Permite repetir o mesmo procedimento (ex.: plantio em dentes diferentes)
-  box.insertAdjacentHTML('beforeend', treatmentLineRow({procedureId:id}));
-  recalcTreatmentTotals();
+  box.insertAdjacentHTML('beforeend', treatmentLineRow({procedureId:id}, treatFormClinicId()));
+  if(document.getElementById('rValue')) recalcReceivableTotals(); else recalcTreatmentTotals();
 }
 function migratePatientLines(){
   let n=0;
@@ -1413,23 +1482,24 @@ window.showReceivableDivergences=showReceivableDivergences;
 window.moduleLinkHealth=moduleLinkHealth;
 window.repairModuleLinks=repairModuleLinks;
 window.openModuleHealthModal=openModuleHealthModal;
-function recalcTreatmentTotals(){
+function treatHonorHintText(lines,settled){
+  if(!lines.length) return 'Adicione procedimentos para montar o tratamento.';
+  return `Procedimentos ${brl.format(settled.practiced||0)} → você recebe ${brl.format(settled.receivable)}`+(settled.cardFee?` (cartão −${brl.format(settled.cardFee)})`:'')+(settled.reimbursement?` · reembolso ${brl.format(settled.reimbursement)}`:'')+'. Calculado pela regra de cada procedimento na clínica; pode ajustar.';
+}
+function recalcTreatmentTotals(opts={}){
   const clinicId=getv('fClinic')||getv('rClinic')||'';
+  syncTreatLineDefaults(clinicId);
   const lines=collectTreatmentLines();
   const settled=settleLines(lines,clinicId);
   const valueEl=document.getElementById('fValue')||document.getElementById('rValue');
-  if(valueEl && clinicId){
+  if(valueEl && clinicId && !opts.hintsOnly){
     valueEl.value=String(settled.receivable);
+    autoTreatStatus(valueEl.id==='rValue'?'r':'f');
   }
+  updateTreatLineHints(settled,clinicId);
   const hint=document.getElementById('fHonorHint')||document.getElementById('rHonorHint');
-  if(hint){
-    if(!lines.length){
-      hint.textContent='Adicione procedimentos para montar o tratamento.';
-    }else{
-      const chips=window.ChevalierBilling?ChevalierBilling.chipLabels(billingForClinic(clinicId)).join(' · '):'';
-      hint.textContent=`Você recebe ${brl.format(settled.receivable)}`+(settled.cardFee?` (cartão −${brl.format(settled.cardFee)})`:'')+(settled.reimbursement?` · reembolso ${brl.format(settled.reimbursement)}`:'')+(chips?` · ${chips}`:'');
-    }
-  }
+  if(hint) hint.textContent=treatHonorHintText(lines,settled);
+  if(opts.hintsOnly) return;
   if(document.getElementById('fConsumeList')){
     fillConsumeFromLines(lines,clinicId);
   }
@@ -4703,15 +4773,15 @@ function openPatientModal(origin='',editId='',personId=''){
       <div class="field full form-section-label"><span>Tratamento</span><small>Essencial para o lançamento</small></div>
       <div class="field full"><label>Composição do tratamento</label>
         <p class="field-hint">Monte o caso somando procedimentos (ex.: plantio + enxerto + coroa). Os custos e o honorário são recalculados.</p>
-        <div id="fTreatLines" class="treat-list">${seedLines.map(treatmentLineRow).join('')}</div>
+        <div id="fTreatLines" class="treat-list">${seedLines.map(l=>treatmentLineRow(l,initialClinic)).join('')}</div>
         <div class="treat-add">
           <select id="fAddProc" class="select">${procOptionsGrouped('')}</select>
           <button type="button" class="btn small" onclick="addTreatmentLine()">＋ Adicionar procedimento</button>
         </div>
       </div>
       <div class="field"><label>Data</label><input id="fDate" type="date" class="input" value="${p.date||todayISO()}"></div>
-      <div class="field"><label>Valor / honorário</label><input id="fValue" type="number" step="0.01" class="input" value="${p.value??suggested??''}"><small id="fHonorHint" class="field-hint">Soma dos procedimentos na clínica selecionada.</small></div>
-      <div class="field"><label>Recebido</label><input id="fReceived" type="number" step="0.01" class="input" value="${p.received??0}"></div>
+      <div class="field"><label>Honorário a receber</label><input id="fValue" type="number" step="0.01" class="input" value="${p.value??suggested??''}" oninput="autoTreatStatus('f')"><small id="fHonorHint" class="field-hint">Calculado pela regra de cada procedimento na clínica selecionada.</small></div>
+      <div class="field"><label>Recebido</label><input id="fReceived" type="number" step="0.01" class="input" value="${p.received??0}" oninput="autoTreatStatus('f')"></div>
       <div class="field"><label>Vencimento</label><input id="fDue" type="date" class="input" value="${p.due||addDays(10)}"></div>
       <div class="field"><label>Status financeiro</label><select id="fStatus" class="select">${statusOptions(p.status)}</select></div>
       <div class="field full"><label>Progresso clínico</label><select id="fProgress" class="select">${['Orçamento','Em tratamento','Planejar caso','Solicitar material','Em fila / agendado','Aguardo pós Cirúrgico','Aguardando cicatrização','Aguardando moldagem','Moldagem','Enviado para Laboratório','Aguardando Prova','Aguardando Cimentação','Alta'].map(s=>`<option ${s===(p.progress||'Em tratamento')?'selected':''}>${s}</option>`).join('')}</select></div>
@@ -4774,6 +4844,7 @@ function openPatientModal(origin='',editId='',personId=''){
         clinicId:getv('fClinic'),
         procedureId:lines[0].procedureId,
         lines,
+        practicedValue:moneyRound(lines.reduce((t,l)=>t+Number(l.practicedValue||0)*(Number(l.qty)||1),0)),
         date:getv('fDate'),
         value:num('fValue'),
         received:num('fReceived'),
@@ -4804,6 +4875,9 @@ function openPatientModal(origin='',editId='',personId=''){
   if(!editId){
     onTreatmentPersonChange();
     recalcTreatmentTotals();
+  }else{
+    // edição: mostra a regra de cada procedimento sem mexer no honorário já lançado
+    recalcTreatmentTotals({hintsOnly:true});
   }
 }
 function onTreatmentPersonChange(){
@@ -5449,7 +5523,7 @@ function openReceivableModal(type=''){
     <div class="field full"><label>Clínica</label><select id="rClinic" class="select" onchange="recalcReceivableTotals()">${clinicOptions(initialClinic)}</select></div>
     <div class="field full"><label>Composição do tratamento</label>
       <p class="field-hint">Ex.: plantio + enxerto. Adicione quantos procedimentos precisar.</p>
-      <div id="fTreatLines" class="treat-list">${seedProc?treatmentLineRow({procedureId:seedProc}):''}</div>
+      <div id="fTreatLines" class="treat-list">${seedProc?treatmentLineRow({procedureId:seedProc},initialClinic):''}</div>
       <div class="treat-add">
         <select id="fAddProc" class="select">${procOptionsGrouped('')}</select>
         <button type="button" class="btn small" onclick="addTreatmentLine();recalcReceivableTotals();syncReceivableConsume()">＋ Adicionar</button>
@@ -5461,8 +5535,8 @@ function openReceivableModal(type=''){
       <div class="row-actions" style="margin-top:8px"><button type="button" class="btn small" onclick="document.getElementById('fConsumeList').insertAdjacentHTML('beforeend', consumeRow());refreshConsumeTotals()">＋ Item</button></div>
       <div class="consume-total" id="fConsumeTotal"></div>
     </div>
-    <div class="field"><label>Valor / honorário</label><input id="rValue" type="number" class="input"><small id="rHonorHint" class="field-hint">Soma dos procedimentos × clínica.</small></div>
-    <div class="field"><label>Recebido</label><input id="rReceived" type="number" class="input" value="0"></div>
+    <div class="field"><label>Honorário a receber</label><input id="rValue" type="number" step="0.01" class="input" oninput="autoTreatStatus('r')"><small id="rHonorHint" class="field-hint">Calculado pela regra de cada procedimento na clínica.</small></div>
+    <div class="field"><label>Recebido</label><input id="rReceived" type="number" step="0.01" class="input" value="0" oninput="autoTreatStatus('r')"></div>
     <div class="field"><label>Vencimento</label><input id="rDue" type="date" class="input" value="${addDays(7)}"></div>
     <div class="field"><label>Status</label><select id="rStatus" class="select">${statusOptions()}</select></div>
     <div class="field full"><label>Progresso</label><select id="rProgress" class="select"><option>Orçamento</option><option selected>Em tratamento</option><option>Planejar caso</option><option>Em fila / agendado</option><option>Aguardo pós Cirúrgico</option><option>Aguardando cicatrização</option><option>Aguardando moldagem</option><option>Moldagem</option><option>Enviado para Laboratório</option><option>Alta</option></select></div>
@@ -5531,16 +5605,14 @@ function onReceivablePersonChange(){
 window.onReceivablePersonChange=onReceivablePersonChange;
 function recalcReceivableTotals(){
   const clinicId=getv('rClinic')||'';
+  syncTreatLineDefaults(clinicId);
   const lines=collectTreatmentLines();
   const settled=settleLines(lines,clinicId);
   const valueEl=document.getElementById('rValue');
   const hint=document.getElementById('rHonorHint');
-  if(valueEl && clinicId) valueEl.value=String(settled.receivable);
-  if(hint){
-    hint.textContent=lines.length
-      ? `Você recebe ${brl.format(settled.receivable)}`+(settled.cardFee?` · cartão −${brl.format(settled.cardFee)}`:'')+(settled.reimbursement?` · reembolso ${brl.format(settled.reimbursement)}`:'')
-      : 'Adicione procedimentos.';
-  }
+  if(valueEl && clinicId){ valueEl.value=String(settled.receivable); autoTreatStatus('r'); }
+  updateTreatLineHints(settled,clinicId);
+  if(hint) hint.textContent=treatHonorHintText(lines,settled);
 }
 function openStockModal(prefillId=''){
   const selected=prefillId||(state.materials[0]?.id||'');

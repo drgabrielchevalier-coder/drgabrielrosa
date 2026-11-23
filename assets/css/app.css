@@ -652,12 +652,16 @@
   .consume-total strong{color:var(--text)}
   .treat-list{display:grid;gap:8px;margin:8px 0 10px}
   .treat-line{
-    display:grid;grid-template-columns:1fr minmax(110px,160px) 36px;gap:8px;align-items:center;
+    display:grid;grid-template-columns:1fr minmax(100px,140px) minmax(120px,150px) 36px;gap:8px;align-items:center;
     padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,#fcfbf8,#f7f5ef)
   }
   .treat-line-main strong{display:block;font-size:12px}
   .treat-line-main .cell-sub{display:block;margin-top:2px}
   .treat-line .tl-tooth{height:36px;font-size:12px}
+  .tl-practiced-wrap{display:flex;flex-direction:column;gap:2px;margin:0}
+  .tl-practiced-wrap span{font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .treat-line .tl-practiced{height:36px;font-size:12px}
+  .treat-line .tl-rule{color:#7a5a1c;font-weight:500}
   .treat-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .treat-add .select{flex:1;min-width:200px}
   .orcamento-layout{
@@ -911,6 +915,7 @@
     .orc-line-fields .orc-field-tooth{grid-column:1/-1}
     .treat-line{grid-template-columns:1fr 36px}
     .treat-line .tl-tooth{grid-column:1/-1}
+    .treat-line .tl-practiced-wrap{grid-column:1/-1}
     .bill-layout{grid-template-columns:1fr}
     .bill-preview{position:static}
     .b-fee-row{grid-template-columns:1fr 1fr}

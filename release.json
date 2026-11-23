@@ -1,10 +1,10 @@
 {
-  "version": "2.21.0",
-  "name": "Importação com IA",
+  "version": "2.22.0",
+  "name": "Honorário calculado pelo valor do procedimento",
   "releasedAt": "2026-11-23",
   "changes": [
-    "Importação assistida aceita PDF e foto (folha de honorários): a IA lê o documento, identifica tipo, clínica e período e sugere o mapeamento.",
-    "Planilhas fora do padrão também podem ser interpretadas pela IA; revisão linha a linha com opção de desmarcar antes de confirmar.",
-    "Botão Importar documento na aba Pacientes; status “Pago/Quitado” das folhas passa a entrar como recebido."
+    "Tratamento: cada procedimento tem o campo Valor do procedimento; o Honorário a receber é calculado pela regra da clínica (percentual, valor fixo ou fixo + %).",
+    "Cada procedimento mostra a regra aplicada e quanto você recebe; ao trocar de clínica os valores e regras acompanham.",
+    "Status financeiro acompanha o recebido (À receber, Recebido parcial, Faturado / Recebido), preservando status especiais."
   ]
 }
