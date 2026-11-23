@@ -1,10 +1,10 @@
 {
-  "version": "2.16.0",
-  "name": "Zerar pacientes",
+  "version": "2.17.0",
+  "name": "NF-e também em PDF",
   "releasedAt": "2026-11-23",
   "changes": [
-    "Configurações → Zerar pacientes: apaga pacientes, tratamentos, recebíveis/baixas, próteses e planejamentos para recomeçar o cadastro.",
-    "Mantém custos, folha, agenda, estoque, clínicas e procedimentos; históricos seguem selados.",
-    "Backup JSON automático e confirmação digitando ZERAR antes de apagar."
+    "Importar NF-e aceita o PDF (DANFE) além do XML; os itens são lidos pela IA (OpenAI), inclusive de PDF escaneado.",
+    "Itens vindos do PDF ficam editáveis (quantidade e valor) para conferência antes de aplicar no estoque.",
+    "Aviso quando a mesma nota já foi importada, para não somar o estoque duas vezes."
   ]
 }

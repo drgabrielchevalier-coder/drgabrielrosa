@@ -870,8 +870,8 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
         </div>
         <div class="ai-banner scan-banner">
           <div>
-            <strong>Importar nota fiscal (XML)</strong>
-            <p>Envie o XML da NF-e do fornecedor. O sistema lê quantidade e valor unitário, soma no estoque e recalcula o custo médio — procedimentos que usam o material passam a refletir o novo custo.</p>
+            <strong>Importar nota fiscal (XML ou PDF)</strong>
+            <p>Envie o XML ou o PDF (DANFE) da NF-e do fornecedor. O sistema lê quantidade e valor unitário, soma no estoque e recalcula o custo médio — procedimentos que usam o material passam a refletir o novo custo.</p>
           </div>
           <button class="btn primary" onclick="openNfeImportModal()">Importar NF-e</button>
         </div>

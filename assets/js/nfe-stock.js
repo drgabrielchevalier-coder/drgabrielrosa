@@ -1,5 +1,7 @@
 /**
- * Importação de NF-e (XML) → entrada de estoque + custo médio.
+ * Importação de NF-e (XML ou PDF/DANFE) → entrada de estoque + custo médio.
+ * PDF: o texto (ou a imagem, se escaneado) vai para api/nfe-pdf-ai.php, que devolve
+ * os itens no mesmo formato do parseNfeXml.
  * Regras de materiais controlados: implante, enxerto e componente.
  */
 (function (global) {
@@ -61,7 +63,7 @@
     const parser = new DOMParser();
     const doc = parser.parseFromString(String(xmlText || ''), 'application/xml');
     if (doc.querySelector('parsererror')) {
-      throw new Error('XML inválido — envie o arquivo XML da NF-e (não o DANFE em PDF).');
+      throw new Error('XML inválido — confira o arquivo ou envie o PDF (DANFE).');
     }
     const inf = doc.querySelector('infNFe') || doc.querySelector('NFe infNFe');
     if (!inf) throw new Error('Não encontrei a tag infNFe. Confirme que é XML de NF-e.');
@@ -106,6 +108,102 @@
 
     if (!items.length) throw new Error('A NF-e não trouxe itens de produto.');
     return { meta, items };
+  }
+
+  function isPdfFile(file) {
+    const name = String(file?.name || '').toLowerCase();
+    return file?.type === 'application/pdf' || name.endsWith('.pdf');
+  }
+
+  async function loadPdfJs() {
+    if (global.pdfjsLib) return global.pdfjsLib;
+    if (global.ChevalierScan?.loadPdfJs) return global.ChevalierScan.loadPdfJs();
+    throw new Error('Leitor de PDF indisponível. Recarregue a página.');
+  }
+
+  /**
+   * Lê o DANFE no navegador: texto de todas as páginas (até 8) e, se o PDF for
+   * escaneado (quase sem texto), as primeiras páginas como JPEG para a IA.
+   */
+  async function readPdfForAi(file) {
+    const pdfjsLib = await loadPdfJs();
+    const data = new Uint8Array(await file.arrayBuffer());
+    const pdf = await pdfjsLib.getDocument({ data }).promise;
+    const pages = Math.min(pdf.numPages, 8);
+    const chunks = [];
+    for (let i = 1; i <= pages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      // agrupa por linha (mesma altura) para manter a tabela de produtos legível
+      const rows = new Map();
+      content.items.forEach((it) => {
+        const y = Math.round(it.transform[5]);
+        const key = [...rows.keys()].find((k) => Math.abs(k - y) <= 2) ?? y;
+        if (!rows.has(key)) rows.set(key, []);
+        rows.get(key).push({ x: it.transform[4], s: it.str });
+      });
+      const lines = [...rows.entries()]
+        .sort((a, b) => b[0] - a[0])
+        .map(([, parts]) => parts.sort((a, b) => a.x - b.x).map((p) => p.s).join(' ').replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+      chunks.push(`--- Página ${i} ---\n` + lines.join('\n'));
+    }
+    const text = chunks.join('\n\n');
+    const letters = (text.match(/[A-Za-zÀ-ú0-9]/g) || []).length;
+    const images = [];
+    if (letters < 200) {
+      for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        images.push(canvas.toDataURL('image/jpeg', 0.82));
+      }
+    }
+    return { text: letters < 200 ? '' : text, images, pages: pdf.numPages };
+  }
+
+  /** Chave de acesso (44 dígitos) direto do texto do DANFE, mesmo com espaços. */
+  function findAccessKey(textValue) {
+    const m = String(textValue || '').match(/(?:\d[\s.]*){44}/g) || [];
+    for (const cand of m) {
+      const digits = cand.replace(/\D/g, '');
+      if (digits.length === 44) return digits;
+    }
+    return '';
+  }
+
+  /** Resposta do api/nfe-pdf-ai.php → mesmo formato do parseNfeXml. */
+  function draftFromAi(resp, pdfText) {
+    const meta = { ...(resp?.meta || {}) };
+    if (!meta.key) meta.key = findAccessKey(pdfText);
+    const items = (Array.isArray(resp?.items) ? resp.items : []).map((it, idx) => ({
+      idx: idx + 1,
+      name: String(it.name || '').trim(),
+      qty: num(it.qty),
+      unitCost: num(it.unitCost),
+      total: num(it.total) || num(it.qty) * num(it.unitCost),
+      unit: it.unit || 'UN',
+      barcode: normalizeBarcode(it.barcode),
+      sku: it.sku || '',
+      ncm: it.ncm || '',
+      selected: true,
+      materialId: '',
+      createNew: false,
+    })).filter((it) => it.name && it.qty > 0);
+    if (!items.length) throw new Error('Não encontrei itens de produto nesse PDF.');
+    return { meta, items, source: 'pdf' };
+  }
+
+  /** NF-e já importada antes (mesma chave, ou mesmo número + fornecedor). */
+  function findDuplicateImport(state, meta) {
+    const list = Array.isArray(state?.nfImports) ? state.nfImports : [];
+    if (!meta) return null;
+    return list.find((n) => (meta.key && n.key === meta.key)
+      || (!meta.key && meta.number && n.number === meta.number
+        && String(n.supplier || '').toLowerCase() === String(meta.supplier || '').toLowerCase())) || null;
   }
 
   function scoreMatch(item, m) {
@@ -297,6 +395,11 @@
   global.ChevalierNfe = {
     GATED_RE,
     parseNfeXml,
+    isPdfFile,
+    readPdfForAi,
+    findAccessKey,
+    draftFromAi,
+    findDuplicateImport,
     matchMaterial,
     autoMatchDraft,
     applyImport,

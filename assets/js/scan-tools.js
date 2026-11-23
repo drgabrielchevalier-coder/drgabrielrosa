@@ -520,6 +520,7 @@
   }
 
   global.ChevalierScan = {
+    loadPdfJs,
     stopCamera,
     onlyDigits,
     formatLinha,

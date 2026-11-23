@@ -5283,12 +5283,12 @@ function openNfeImportModal(){
   }
   ensureStockCollections();
   let draft=null;
-  openModal('Importar NF-e (XML)',`
+  openModal('Importar NF-e (XML ou PDF)',`
     <div class="form-grid">
       <div class="field full">
-        <label>Arquivo XML da NF-e</label>
-        <input id="nfeFile" type="file" class="input" accept=".xml,text/xml,application/xml">
-        <p class="field-hint">Use o XML (não o PDF/DANFE). Cada item será associado a um material do estoque ou cadastrado como novo.</p>
+        <label>Arquivo da NF-e (XML ou PDF/DANFE)</label>
+        <input id="nfeFile" type="file" class="input" accept=".xml,text/xml,application/xml,.pdf,application/pdf">
+        <p class="field-hint">O XML é lido direto e é o mais preciso. O PDF (DANFE) é lido pela IA. Nesse caso, confira quantidades e valores antes de aplicar. Cada item será associado a um material do estoque ou cadastrado como novo.</p>
       </div>
       <div class="field full" id="nfeMeta" hidden></div>
       <div class="field full" id="nfeItemsWrap" hidden>
@@ -5300,12 +5300,16 @@ function openNfeImportModal(){
       </div>
     </div>
   `,()=>{
-    if(!draft?.items?.length) return toast('Selecione o XML da NF-e.');
+    if(!draft?.items?.length) return toast('Selecione o XML ou o PDF da NF-e.');
     // sync UI → draft
     draft.items.forEach((it,i)=>{
       const row=document.querySelector(`.nfe-row[data-idx="${i}"]`);
       if(!row) return;
       it.selected=!!row.querySelector('.nfe-sel')?.checked;
+      const qtyEl=row.querySelector('.nfe-qty');
+      const costEl=row.querySelector('.nfe-cost');
+      if(qtyEl) it.qty=Math.max(0, parseMoneyInput(qtyEl.value));
+      if(costEl) it.unitCost=Math.max(0, parseMoneyInput(costEl.value));
       const mode=row.querySelector('.nfe-mode')?.value||'';
       if(mode==='__new__'){
         it.createNew=true;
@@ -5317,6 +5321,7 @@ function openNfeImportModal(){
     });
     const selected=draft.items.filter(it=>it.selected);
     if(!selected.length) return toast('Marque ao menos um item.');
+    if(selected.some(it=>!(it.qty>0))) return toast('Informe a quantidade de cada item marcado.');
     const missing=selected.filter(it=>!it.createNew && !it.materialId);
     if(missing.length) return toast('Associe cada item a um material ou escolha “Cadastrar novo”.');
     const result=ChevalierNfe.applyImport(state, draft, {uid});
@@ -5326,38 +5331,74 @@ function openNfeImportModal(){
   });
   document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
   document.getElementById('modalSave').textContent='Aplicar no estoque';
+  const renderDraft=()=>{
+    const meta=document.getElementById('nfeMeta');
+    const wrap=document.getElementById('nfeItemsWrap');
+    const body=document.getElementById('nfeItemsBody');
+    const fromPdf=draft.source==='pdf';
+    const dup=ChevalierNfe.findDuplicateImport?.(state, draft.meta);
+    if(meta){
+      meta.hidden=false;
+      meta.innerHTML=`<div class="card" style="padding:12px"><strong>NF ${esc(draft.meta.number||'—')}</strong> · série ${esc(draft.meta.series||'—')} · ${esc(draft.meta.date||'—')}<div class="cell-sub">${esc(draft.meta.supplier||'')} · total ${brl.format(draft.meta.total||0)}${fromPdf?' · lida do PDF pela IA':''}</div>`
+        +(fromPdf?`<p class="field-hint" style="margin:8px 0 0">Confira produto, quantidade e valor de cada linha com o DANFE. Você pode corrigir aqui antes de aplicar.</p>`:'')
+        +(dup?`<p class="field-hint" style="margin:8px 0 0;color:var(--red)">Atenção: esta nota parece já ter sido importada em ${esc(fmtDate(String(dup.at||'').slice(0,10)))}. Aplicar de novo soma o estoque outra vez.</p>`:'')
+        +`</div>`;
+    }
+    if(wrap) wrap.hidden=false;
+    if(body){
+      body.innerHTML=draft.items.map((it,i)=>{
+        const selected=it.materialId||(it.createNew?'__new__':'');
+        const opts=[`<option value="__new__" ${selected==='__new__'?'selected':''}>＋ Cadastrar novo material</option>`]
+          .concat(state.materials.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).map(m=>`<option value="${m.id}" ${m.id===selected?'selected':''}>${esc(m.name)} · saldo ${m.stock}</option>`))
+          .join('');
+        const qtyCell=fromPdf?`<input type="number" class="input nfe-qty" min="0" step="any" value="${it.qty}" style="width:84px" aria-label="Quantidade">`:`${it.qty}`;
+        const costCell=fromPdf?`<input type="number" class="input nfe-cost" min="0" step="any" value="${Math.round((Number(it.unitCost)||0)*10000)/10000}" style="width:104px" aria-label="Valor unitário">`:`${brl.format(it.unitCost||0)}`;
+        return `<tr class="nfe-row" data-idx="${i}">
+          <td><input type="checkbox" class="nfe-sel" ${it.selected!==false?'checked':''}></td>
+          <td><strong>${esc(it.name)}</strong><div class="cell-sub">${it.barcode?`EAN ${esc(it.barcode)} · `:''}${esc(it.unit||'UN')}</div></td>
+          <td>${qtyCell}</td>
+          <td>${costCell}</td>
+          <td><select class="select nfe-mode">${opts}</select></td>
+        </tr>`;
+      }).join('');
+    }
+  };
+  const readPdfDraft=async(file)=>{
+    const meta=document.getElementById('nfeMeta');
+    if(meta){ meta.hidden=false; meta.innerHTML=`<div class="card" style="padding:12px"><strong>Lendo o PDF…</strong><div class="cell-sub">A IA está extraindo os itens da nota. Pode levar alguns segundos.</div></div>`; }
+    const pdf=await ChevalierNfe.readPdfForAi(file);
+    const r=await fetch('api/nfe-pdf-ai.php',{
+      method:'POST',
+      headers:csrfHeaders({'Content-Type':'application/json'}),
+      credentials:'same-origin',
+      body:JSON.stringify({text:pdf.text, images:pdf.images, fileName:file.name, csrf:csrfToken()})
+    });
+    let data={};
+    try{ data=await r.json(); applyCsrfFromResponse(data); }catch(_){}
+    if(r.status===401){ location.href='login.php'; throw new Error('Sessão expirada.'); }
+    if(!r.ok || !data.ok) throw new Error(data.error||'Não consegui ler o PDF. Tente o XML da NF-e.');
+    return ChevalierNfe.draftFromAi(data, pdf.text);
+  };
   document.getElementById('nfeFile')?.addEventListener('change', async (ev)=>{
     const file=ev.target.files?.[0];
     if(!file) return;
+    const saveBtn=document.getElementById('modalSave');
+    draft=null;
+    document.getElementById('nfeItemsWrap')?.setAttribute('hidden','');
     try{
-      const text=await file.text();
-      draft=ChevalierNfe.autoMatchDraft(ChevalierNfe.parseNfeXml(text), state.materials);
-      const meta=document.getElementById('nfeMeta');
-      const wrap=document.getElementById('nfeItemsWrap');
-      const body=document.getElementById('nfeItemsBody');
-      if(meta){
-        meta.hidden=false;
-        meta.innerHTML=`<div class="card" style="padding:12px"><strong>NF ${esc(draft.meta.number||'—')}</strong> · série ${esc(draft.meta.series||'—')} · ${esc(draft.meta.date||'—')}<div class="cell-sub">${esc(draft.meta.supplier||'')} · total ${brl.format(draft.meta.total||0)}</div></div>`;
-      }
-      if(wrap) wrap.hidden=false;
-      if(body){
-        body.innerHTML=draft.items.map((it,i)=>{
-          const selected=it.materialId||(it.createNew?'__new__':'');
-          const opts=[`<option value="__new__" ${selected==='__new__'?'selected':''}>＋ Cadastrar novo material</option>`]
-            .concat(state.materials.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).map(m=>`<option value="${m.id}" ${m.id===selected?'selected':''}>${esc(m.name)} · saldo ${m.stock}</option>`))
-            .join('');
-          return `<tr class="nfe-row" data-idx="${i}">
-            <td><input type="checkbox" class="nfe-sel" ${it.selected!==false?'checked':''}></td>
-            <td><strong>${esc(it.name)}</strong><div class="cell-sub">${it.barcode?`EAN ${esc(it.barcode)} · `:''}${esc(it.unit||'UN')}</div></td>
-            <td>${it.qty}</td>
-            <td>${brl.format(it.unitCost||0)}</td>
-            <td><select class="select nfe-mode">${opts}</select></td>
-          </tr>`;
-        }).join('');
-      }
+      if(saveBtn) saveBtn.disabled=true;
+      const parsed=ChevalierNfe.isPdfFile?.(file)
+        ? await readPdfDraft(file)
+        : ChevalierNfe.parseNfeXml(await file.text());
+      draft=ChevalierNfe.autoMatchDraft(parsed, state.materials);
+      renderDraft();
     }catch(err){
       draft=null;
+      const meta=document.getElementById('nfeMeta');
+      if(meta){ meta.hidden=true; meta.innerHTML=''; }
       toast(err.message||'Falha ao ler a NF-e');
+    }finally{
+      if(saveBtn) saveBtn.disabled=false;
     }
   });
 }
