@@ -6124,6 +6124,75 @@ async function wipeOperationalData(opts={}){
   return true;
 }
 window.wipeOperationalData=wipeOperationalData;
+/** Estado sem pacientes: mantém custos, folha, agenda, estoque, clínicas e procedimentos. */
+function buildWipedPatientsState(base){
+  const next=structuredClone(base||state);
+  next.patients=[];
+  next.people=[];
+  next.prostheses=[];
+  next.plans=[];
+  next.importBatches=[];
+  next.imports={...(next.imports&&typeof next.imports==='object'?next.imports:{}),...sealedHistoricoImports()};
+  next.patientsWipedAt=new Date().toISOString();
+  next.schemaVersion=next.schemaVersion||5;
+  return next;
+}
+/** Zera só os pacientes, com backup JSON automático antes. */
+async function wipePatientsData(){
+  const nPatients=(state.patients||[]).length;
+  const nPeople=(state.people||[]).length;
+  const ok=confirm(`Zerar TODOS os pacientes para recomeçar o cadastro?\n\nSerão apagados: ${nPatients} tratamento(s)/recebível(is) com as baixas, ${nPeople} cadastro(s) de paciente, próteses e planejamentos.\nSerão mantidos: custos, folha, agenda, estoque, clínicas e procedimentos.\n\nUm backup (JSON) será baixado antes. Esta ação não tem desfazer.`);
+  if(!ok) return false;
+  const typed=window.prompt('Para confirmar, digite ZERAR:','');
+  if(String(typed||'').trim().toUpperCase()!=='ZERAR'){ toast('Cancelado: nada foi apagado.'); return false; }
+  try{ exportData(); }catch(e){ console.warn('backup antes de zerar pacientes', e); }
+  try{
+    const r=await fetch('api/reset-ops.php',{
+      method:'POST',
+      headers:csrfHeaders({'Content-Type':'application/json'}),
+      credentials:'same-origin',
+      body:JSON.stringify({scope:'patients',csrf:csrfToken()})
+    });
+    let data={};
+    try{data=await r.json(); applyCsrfFromResponse(data);}catch(_){}
+    if(r.status===401){ location.href='login.php'; return false; }
+    if(r.ok && data.ok && data.scope==='patients' && data.state){
+      bindGlobalState(data.state);
+      persistReady=true;
+      localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
+      renderAll();
+      toast(`Pacientes zerados (${data.clearedPatients||0} tratamento(s), ${data.clearedPeople||0} cadastro(s)). Pode começar a cadastrar.`);
+      return true;
+    }
+  }catch(e){ console.warn('reset-ops patients', e); }
+  // Fallback: limpa localmente e grava com __forceWipe no state.php
+  const wiped=buildWipedPatientsState(state);
+  bindGlobalState(wiped);
+  persistReady=true;
+  localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
+  try{
+    const r=await fetch('api/state.php',{
+      method:'POST',
+      headers:csrfHeaders({'Content-Type':'application/json'}),
+      credentials:'same-origin',
+      body:JSON.stringify({...state,__forceWipe:true,csrf:csrfToken()})
+    });
+    let data={};
+    try{data=await r.json(); applyCsrfFromResponse(data);}catch(_){}
+    if(r.status===401){ location.href='login.php'; return false; }
+    if(!r.ok){
+      toast(data?.error||'Falha ao gravar a limpeza no servidor.');
+      return false;
+    }
+  }catch(e){
+    toast('Limpeza local aplicada; servidor indisponível.');
+  }
+  renderAll();
+  toast('Pacientes zerados. Pode começar a cadastrar.');
+  return true;
+}
+window.wipePatientsData=wipePatientsData;
+window.buildWipedPatientsState=buildWipedPatientsState;
 window.buildWipedOperationalState=buildWipedOperationalState;
 const APP_SEARCH_IDS=['globalSearch','patientSearch','prosthSearch','procSearch','oSearch','recvSearch','matDbSearch','procDbSearch','calSearch','planSearch'];
 function loggedInUserLabel(){

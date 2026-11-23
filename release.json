@@ -1,10 +1,10 @@
 {
-  "version": "2.15.1",
-  "name": "Deploy automático + e-mail oficial",
-  "releasedAt": "2026-11-10",
+  "version": "2.16.0",
+  "name": "Zerar pacientes",
+  "releasedAt": "2026-11-23",
   "changes": [
-    "E-mail oficial unificado: drgabrielchevalier@gmail.com (site e recuperação de senha padrão).",
-    "Deploy automático: push em claude/** passa por checagens e vai para main → Hostinger publica.",
-    "Arquivos internos do repositório (.md, scripts, .github) bloqueados para acesso web."
+    "Configurações → Zerar pacientes: apaga pacientes, tratamentos, recebíveis/baixas, próteses e planejamentos para recomeçar o cadastro.",
+    "Mantém custos, folha, agenda, estoque, clínicas e procedimentos; históricos seguem selados.",
+    "Backup JSON automático e confirmação digitando ZERAR antes de apagar."
   ]
 }

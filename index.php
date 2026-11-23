@@ -1084,6 +1084,9 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
               <div class="settings-row"><div class="desc"><strong>Código de barras</strong><span>Lê EAN/código do material para localizar e movimentar estoque.</span></div><span class="badge b-green">Ativo</span></div>
               <div class="settings-row"><div class="desc"><strong>IA gerencial</strong><span>Consultas em linguagem natural sobre lucro e clínicas — evolução futura sobre os dados já conciliados.</span></div><span class="badge b-gray">Próximo</span></div>
               <div class="settings-row"><div class="desc"><strong>Backup local</strong><span>Baixe os dados do protótipo em JSON.</span></div><button class="btn small" onclick="exportData()">Exportar JSON</button></div>
+              <div class="settings-row"><div class="desc"><strong>Zerar pacientes</strong><span>Apaga todos os pacientes, tratamentos, recebíveis e baixas, próteses e planejamentos, para recomeçar o cadastro. Mantém custos, folha, agenda, estoque, clínicas e procedimentos. Baixa um backup antes.</span></div>
+                <button type="button" class="btn small danger" onclick="wipePatientsData()">Zerar pacientes</button>
+              </div>
               <div class="settings-row"><div class="desc"><strong>Zerar dados operacionais</strong><span>Remove pacientes, cobranças, recebimentos, custos e movimentações. Mantém clínicas, procedimentos e itens do estoque com quantidade 0.</span></div>
                 <button type="button" class="btn small danger" onclick="wipeOperationalData()">Zerar agora</button>
               </div>

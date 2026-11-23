@@ -4,6 +4,8 @@ declare(strict_types=1);
 /**
  * POST autenticado: zera dados operacionais no app_state.
  * Preserva clínicas, procedimentos e materiais (estoque = 0).
+ * Body {"scope":"patients"}: zera só os pacientes (mantém custos, folha,
+ * agenda e estoque).
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -25,6 +27,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 }
 
 chevalier_csrf_require();
+
+$body = json_decode(chevalier_request_body() ?: 'null', true);
+$scope = (is_array($body) && ($body['scope'] ?? '') === 'patients') ? 'patients' : 'ops';
 
 try {
     $pdo = chevalier_pdo();
@@ -55,7 +60,12 @@ $beforePatients = isset($existing['patients']) && is_array($existing['patients']
 $beforeMaterials = isset($existing['materials']) && is_array($existing['materials'])
     ? count($existing['materials']) : 0;
 
-$wiped = chevalier_wipe_operational_state($existing);
+$beforePeople = isset($existing['people']) && is_array($existing['people'])
+    ? count($existing['people']) : 0;
+
+$wiped = $scope === 'patients'
+    ? chevalier_wipe_patients_state($existing)
+    : chevalier_wipe_operational_state($existing);
 
 $json = json_encode($wiped, JSON_UNESCAPED_UNICODE);
 if ($json === false || strlen($json) > 8_000_000) {
@@ -71,9 +81,11 @@ $ts = (int) $pdo->query('SELECT UNIX_TIMESTAMP(updated_at) FROM app_state WHERE 
 
 echo json_encode([
     'ok' => true,
+    'scope' => $scope,
     'state' => $wiped,
     'updatedAt' => $ts,
     'clearedPatients' => $beforePatients,
+    'clearedPeople' => $beforePeople,
     'materialsKept' => $beforeMaterials,
     'opsWipeVersion' => chevalier_ops_wipe_version(),
     'csrf' => chevalier_csrf_token(),

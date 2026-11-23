@@ -78,6 +78,33 @@ function chevalier_wipe_operational_state(array $state): array
 }
 
 /**
+ * Zera só os pacientes (recomeçar o cadastro do zero): pacientes/tratamentos
+ * com recebíveis e baixas, cadastro de pessoas, próteses, planejamentos e
+ * lotes de importação. Mantém custos, folha, agenda, estoque, NF-e,
+ * clínicas, procedimentos e materiais. Não altera opsWipeVersion.
+ * Reforça o selo dos históricos para nada ser reimportado.
+ *
+ * @param array<string,mixed> $state
+ * @return array<string,mixed>
+ */
+function chevalier_wipe_patients_state(array $state): array
+{
+    $state['patients'] = [];
+    $state['people'] = [];
+    $state['prostheses'] = [];
+    $state['plans'] = [];
+    $state['importBatches'] = [];
+
+    chevalier_seal_historico_imports($state);
+    $state['patientsWipedAt'] = date('c');
+    if (!isset($state['schemaVersion'])) {
+        $state['schemaVersion'] = 5;
+    }
+
+    return $state;
+}
+
+/**
  * Aplica wipe one-shot se a versão de limpeza do código for maior que a do estado.
  *
  * @param array<string,mixed> $state
