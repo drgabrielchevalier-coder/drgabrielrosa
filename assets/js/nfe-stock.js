@@ -264,6 +264,7 @@
     if (!state.stockLedger) state.stockLedger = [];
     const uidFn = opts.uid || global.uid || (() => Math.random().toString(36).slice(2, 9));
     const applied = [];
+    let costId = '';
     const meta = draft.meta || {};
 
     (draft.items || []).forEach((it) => {
@@ -325,23 +326,32 @@
       if (!state.costs) state.costs = [];
       const sum = applied.reduce((s, a) => s + a.qty * a.unitCost, 0);
       if (sum > 0) {
-        state.costs.unshift({
+        // payment: 'boleto' = será paga em boleto(s) que serão vinculados a esta NF (evita custo em dobro);
+        //          'paid'   = já paga à vista (Pix, cartão, dinheiro) → custo pago agora.
+        const viaBoleto = opts.payment !== 'paid';
+        const today = (global.todayISO && todayISO()) || new Date().toISOString().slice(0, 10);
+        const cost = {
           id: uidFn(),
           desc: `NF-e ${meta.number || meta.key || ''} — ${meta.supplier || 'fornecedor'}`.trim(),
           type: 'INSUMOS',
           center: 'Estoque',
-          date: meta.date || ((global.todayISO && todayISO()) || new Date().toISOString().slice(0, 10)),
-          due: meta.date || ((global.todayISO && todayISO()) || new Date().toISOString().slice(0, 10)),
-          method: 'BOLETO À VISTA',
+          date: meta.date || today,
+          due: meta.date || today,
+          method: viaBoleto ? 'BOLETO PARCELADO' : 'À VISTA',
           value: Math.round(sum * 100) / 100,
-          status: 'PAGO',
+          status: viaBoleto ? 'À PAGAR' : 'PAGO',
           installment: '',
           boletoLine: '',
           nfeKey: meta.key || '',
-        });
+          nfeNumber: meta.number || '',
+          nfeSupplier: meta.supplier || '',
+          awaitingBoletos: viaBoleto,
+        };
+        state.costs.unshift(cost);
+        costId = cost.id;
       }
     }
-    return { applied, count: applied.length };
+    return { applied, count: applied.length, costId };
   }
 
   function validateConsumption(state, items, opts = {}) {

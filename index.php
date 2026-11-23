@@ -787,6 +787,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
         <div class="page-head">
           <div><h2>Custos</h2><p>Despesas operacionais por categoria, vencimento e centro de custo.</p></div>
           <div class="page-actions">
+            <button class="btn" id="costReconcileBtn" onclick="openCostReconcileModal()">⇄ Conciliar NF × boletos</button>
             <button class="btn" onclick="openBoletoScanModal()">⎙ Escanear boleto</button>
             <button class="btn primary" onclick="openCostModal()">＋ Novo custo</button>
           </div>
@@ -1121,6 +1122,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
 <script src="<?= chevalier_asset_url('assets/js/clinic-billing.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/planning-calendar.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/nfe-stock.js') ?>"></script>
+<script src="<?= chevalier_asset_url('assets/js/cost-link.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/app.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/import-assist.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/update-manager.js') ?>" defer></script>

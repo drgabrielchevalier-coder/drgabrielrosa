@@ -1,10 +1,10 @@
 {
-  "version": "2.17.0",
-  "name": "NF-e também em PDF",
+  "version": "2.18.0",
+  "name": "NF-e × boletos sem duplicidade",
   "releasedAt": "2026-11-23",
   "changes": [
-    "Importar NF-e aceita o PDF (DANFE) além do XML; os itens são lidos pela IA (OpenAI), inclusive de PDF escaneado.",
-    "Itens vindos do PDF ficam editáveis (quantidade e valor) para conferência antes de aplicar no estoque.",
-    "Aviso quando a mesma nota já foi importada, para não somar o estoque duas vezes."
+    "Custos: boletos podem ser vinculados à NF-e que pagam; a NF passa a contar só o saldo ainda não coberto, sem somar a compra duas vezes.",
+    "Correlação automática por fornecedor (com apelidos aprendidos), valor das parcelas, parcela do boleto e datas; botão Conciliar NF × boletos.",
+    "Importar NF-e pergunta se a nota será paga em boleto/parcelado ou já foi paga à vista."
   ]
 }

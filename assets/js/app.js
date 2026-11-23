@@ -1919,12 +1919,13 @@ function monthlySeries(count=6){
     const d=new Date(now.getFullYear(), now.getMonth()-i, 1);
     keys.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
   }
+  const linkIdx=costsLinkIndex();
   return keys.map(k=>{
     const pts=state.patients.filter(p=>monthKey(p.date)===k);
     const revenue=pts.reduce((s,p)=>s+Number(p.received||0),0);
     const billed=pts.reduce((s,p)=>s+Number(p.value||0),0);
     const cost=pts.reduce((s,p)=>s+patientCost(p),0);
-    const overhead=state.costs.filter(c=>monthKey(c.date)===k).reduce((s,c)=>s+Number(c.value||0),0);
+    const overhead=state.costs.filter(c=>monthKey(c.date)===k).reduce((s,c)=>s+costEffectiveValue(c,linkIdx),0);
     return {key:k,label:monthLabel(k),revenue,billed,cost,overhead,profit:revenue-cost,cases:pts.length};
   });
 }
@@ -1940,7 +1941,8 @@ function renderDashboard(){
   const fat=patients.reduce((s,p)=>s+Number(p.value||0),0);
   const rec=patients.reduce((s,p)=>s+Number(p.received||0),0);
   const receber=patients.reduce((s,p)=>s+balance(p),0);
-  const custos=patients.reduce((s,p)=>s+patientCost(p),0)+costsPeriod.reduce((s,c)=>s+Number(c.value||0),0);
+  const linkIdx=costsLinkIndex();
+  const custos=patients.reduce((s,p)=>s+patientCost(p),0)+costsPeriod.reduce((s,c)=>s+costEffectiveValue(c,linkIdx),0);
   const lucro=rec-custos;
   const margem=pct(lucro,rec);
   const overdue=state.patients.filter(isOverdue);
@@ -3948,15 +3950,164 @@ function renderClinicClosing(){
     <p class="field-hint" style="padding:12px 16px">Linhas com snapshot preservam a memória de cálculo da época do lançamento. Alterar o contrato da clínica não recalcula estes valores.</p>`;
 }
 window.renderClinicClosing=renderClinicClosing;
+/** Valor do custo nos totais: NF-e coberta por boletos conta só o saldo (evita duplicidade). */
+function costEffectiveValue(c, idx){
+  const L=window.ChevalierCostLink;
+  if(!L) return Number(c?.value||0);
+  return L.effectiveValue(c, idx||L.linkIndex(state.costs||[]));
+}
+function costsLinkIndex(){
+  return window.ChevalierCostLink?window.ChevalierCostLink.linkIndex(state.costs||[]):new Map();
+}
 function renderCosts(){
-  const total=state.costs.reduce((s,c)=>s+Number(c.value||0),0), paid=state.costs.filter(c=>c.status==='PAGO').reduce((s,c)=>s+Number(c.value||0),0);
-  const cats={};state.costs.forEach(c=>cats[c.type]=(cats[c.type]||0)+Number(c.value||0));const largest=Object.entries(cats).sort((a,b)=>b[1]-a[1])[0]?.[0]||'—';
+  const L=window.ChevalierCostLink;
+  const idx=costsLinkIndex();
+  const ev=c=>costEffectiveValue(c,idx);
+  const total=state.costs.reduce((s,c)=>s+ev(c),0), paid=state.costs.filter(c=>c.status==='PAGO').reduce((s,c)=>s+ev(c),0);
+  const cats={};state.costs.forEach(c=>cats[c.type]=(cats[c.type]||0)+ev(c));const largest=Object.entries(cats).sort((a,b)=>b[1]-a[1])[0]?.[0]||'—';
   document.getElementById('costTotal').textContent=brl.format(total);document.getElementById('costPaid').textContent=brl.format(paid);document.getElementById('costOpen').textContent=brl.format(total-paid);document.getElementById('costLargest').textContent=largest;
+  const pending=L?L.reconcileAll(state).length:0;
+  const recBtn=document.getElementById('costReconcileBtn');
+  if(recBtn) recBtn.textContent=pending?`⇄ Conciliar NF × boletos (${pending})`:'⇄ Conciliar NF × boletos';
   document.getElementById('costsTable').innerHTML=state.costs.map(c=>{
-    const sub=[c.installment?`Parcela ${c.installment}`:'',c.boletoLine?'Boleto escaneado':''].filter(Boolean).join(' · ');
-    return `<tr>${td('Descrição',`<strong>${esc(c.desc)}</strong>${sub?`<span class="cell-sub">${esc(sub)}</span>`:''}`)}${td('Tipo',esc(c.type))}${td('Centro',esc(c.center))}${td('Data',fmtDate(c.date))}${td('Vencimento',fmtDate(c.due))}${td('Forma pg.',esc(c.method))}${td('Valor',brl.format(c.value))}${td('Status',badge(c.status))}<td class="actions-cell"><div class="row-actions"><button class="btn small" onclick="toggleCost('${c.id}')">${c.status==='PAGO'?'Reabrir':'Pagar'}</button><button class="btn small" onclick="openCostModal('${c.id}')">Editar</button><button class="btn small danger" onclick="deleteCost('${c.id}')">Excluir</button></div></td></tr>`;
+    const isNf=L?.isNfeCost(c);
+    const isBol=L?.isBoletoCost(c);
+    const subParts=[c.installment?`Parcela ${c.installment}`:'',c.boletoLine?'Boleto escaneado':''];
+    let valueCell=brl.format(c.value);
+    let statusCell=badge(c.status);
+    let linkBtn='';
+    if(isNf){
+      const linked=L.linkedBoletos(c,state.costs);
+      const covered=linked.reduce((s,b)=>s+Number(b.value||0),0);
+      const rem=L.remainingOf(c,idx);
+      if(linked.length){
+        subParts.push(rem<=0.01?`Paga em ${linked.length} boleto(s)`:`${linked.length} boleto(s) · ${brl.format(covered)} de ${brl.format(c.value)} · falta ${brl.format(rem)}`);
+        valueCell=`${brl.format(c.value)}<span class="cell-sub">${rem<=0.01?'conta pelos boletos':`conta ${brl.format(rem)}`}</span>`;
+        statusCell=`<span class="badge ${rem<=0.01?'b-green':'b-amber'}">${rem<=0.01?'Em boletos':'Boletos parciais'}</span>`;
+      }else if(c.awaitingBoletos){
+        subParts.push('Aguardando boletos');
+      }
+      linkBtn=`<button class="btn small" onclick="openNfeLinkModal('${c.id}')">${linked.length?'Boletos':'Vincular boletos'}</button>`;
+    }else if(isBol){
+      if(c.nfeCostId){
+        const nf=state.costs.find(x=>x.id===c.nfeCostId);
+        subParts.push(`Paga ${nf?nf.desc.replace(/\s+—.*$/,''):(c.nfeLabel||'NF-e').replace(/\s+—.*$/,'')}`);
+      }
+      linkBtn=`<button class="btn small" onclick="openBoletoLinkModal('${c.id}')">${c.nfeCostId?'NF-e':'Vincular NF'}</button>`;
+    }
+    const sub=subParts.filter(Boolean).join(' · ');
+    return `<tr>${td('Descrição',`<strong>${esc(c.desc)}</strong>${sub?`<span class="cell-sub">${esc(sub)}</span>`:''}`)}${td('Tipo',esc(c.type))}${td('Centro',esc(c.center))}${td('Data',fmtDate(c.date))}${td('Vencimento',fmtDate(c.due))}${td('Forma pg.',esc(c.method))}${td('Valor',valueCell)}${td('Status',statusCell)}<td class="actions-cell"><div class="row-actions">${linkBtn}<button class="btn small" onclick="toggleCost('${c.id}')">${c.status==='PAGO'?'Reabrir':'Pagar'}</button><button class="btn small" onclick="openCostModal('${c.id}')">Editar</button><button class="btn small danger" onclick="deleteCost('${c.id}')">Excluir</button></div></td></tr>`;
   }).join('');
 }
+function linkReasonHtml(x){
+  return x?.reasons?.length?`<span class="cell-sub">${esc(x.reasons.join(' · '))}</span>`:'';
+}
+/** NF-e → marcar os boletos que a pagam (sugestão pré-marcada). */
+function openNfeLinkModal(nfId){
+  const L=window.ChevalierCostLink; if(!L) return toast('Módulo de vínculo indisponível. Recarregue a página.');
+  const nf=state.costs.find(c=>c.id===nfId); if(!nf) return;
+  const sug=L.suggestBoletosForNfe(nf,state);
+  const linked=L.linkedBoletos(nf,state.costs);
+  const ctxScores=new Map(sug.candidates.map(x=>[x.b.id,x]));
+  const others=state.costs.filter(c=>L.isBoletoCost(c) && !c.nfeCostId && !ctxScores.has(c.id));
+  const rows=[...linked.map(b=>({b,checked:true,info:L.scorePair(b,nf,{costs:state.costs,nfImports:state.nfImports,aliases:state.settings?.supplierAliases})})),
+    ...sug.candidates.map(x=>({b:x.b,checked:sug.ids.includes(x.b.id),info:x})),
+    ...others.map(b=>({b,checked:false,info:null}))];
+  const supplier=L.nfeSupplierOf(nf,state.nfImports);
+  openModal('Boletos desta NF-e',`
+    <div class="card" style="padding:12px;margin-bottom:12px"><strong>${esc(nf.desc)}</strong>
+      <div class="cell-sub">${esc(supplier||'')} · emissão ${fmtDate(nf.date)} · total ${brl.format(nf.value||0)}</div>
+      <p class="field-hint" style="margin:8px 0 0">Marque os boletos que pagam esta nota. A NF passa a contar só o que faltar, e os boletos contam com os vencimentos reais.${sug.exact?' <strong>Sugestão: os boletos marcados fecham o total.</strong>':''}</p>
+    </div>
+    ${rows.length?`<div class="table-wrap"><table>
+      <thead><tr><th></th><th>Boleto</th><th>Vencimento</th><th>Parcela</th><th>Valor</th></tr></thead>
+      <tbody>${rows.map(r=>`<tr>
+        <td><input type="checkbox" class="nfl-sel" value="${r.b.id}" data-v="${Number(r.b.value||0)}" ${r.checked?'checked':''}></td>
+        <td><strong>${esc(r.b.desc)}</strong>${linkReasonHtml(r.info)}</td>
+        <td>${fmtDate(r.b.due)}</td><td>${esc(r.b.installment||'—')}</td><td>${brl.format(r.b.value||0)}</td>
+      </tr>`).join('')}</tbody></table></div>`:`<div class="empty">Nenhum boleto sem vínculo em Custos. Escaneie os boletos desta nota e vincule ao lançar.</div>`}
+    <div class="receive-preview" id="nflSum" style="margin-top:12px"></div>
+  `,()=>{
+    const chosen=new Set([...document.querySelectorAll('.nfl-sel:checked')].map(x=>x.value));
+    linked.forEach(b=>{ if(!chosen.has(b.id)) L.setLink(state,b.id,''); });
+    chosen.forEach(id=>L.setLink(state,id,nf.id));
+    if(chosen.size) nf.awaitingBoletos=false;
+    save();closeModal();renderAll();
+    const rem=L.remainingOf(nf,L.linkIndex(state.costs));
+    toast(chosen.size?(rem<=0.01?'NF-e paga pelos boletos: sem duplicidade em Custos.':`Boletos vinculados. Falta ${brl.format(rem)} desta NF.`):'Vínculos removidos.');
+  });
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  document.getElementById('modalSave').textContent='Salvar vínculo';
+  const refresh=()=>{
+    const sum=[...document.querySelectorAll('.nfl-sel:checked')].reduce((s,x)=>s+Number(x.dataset.v||0),0);
+    const diff=moneyRound(Number(nf.value||0)-sum);
+    const box=document.getElementById('nflSum'); if(!box) return;
+    box.innerHTML=`<div class="receive-preview-grid">
+      <div><small>Boletos marcados</small><strong>${brl.format(sum)}</strong></div>
+      <div><small>Total da NF</small><strong>${brl.format(nf.value||0)}</strong></div>
+      <div><small>${diff>=0?'Falta':'Passou'}</small><strong class="${Math.abs(diff)<=0.05?'ok':'warn'}">${Math.abs(diff)<=0.05?'Fechado':brl.format(Math.abs(diff))}</strong></div>
+    </div>`;
+  };
+  document.querySelectorAll('.nfl-sel').forEach(x=>x.addEventListener('change',refresh));
+  refresh();
+}
+/** Boleto → escolher a NF-e que ele paga. */
+function openBoletoLinkModal(boletoId){
+  const L=window.ChevalierCostLink; if(!L) return toast('Módulo de vínculo indisponível. Recarregue a página.');
+  const b=state.costs.find(c=>c.id===boletoId); if(!b) return;
+  const sug=L.suggestNfeForBoleto(b,state);
+  const best=b.nfeCostId||(sug[0]&&sug[0].score>=45?sug[0].nf.id:'');
+  openModal('NF-e deste boleto',`
+    <div class="card" style="padding:12px;margin-bottom:12px"><strong>${esc(b.desc)}</strong>
+      <div class="cell-sub">${brl.format(b.value||0)} · venc. ${fmtDate(b.due)}${b.installment?` · parcela ${esc(b.installment)}`:''}</div></div>
+    <div class="field full"><label>Esta compra é da NF-e</label>
+      <select id="blNf" class="select"><option value="">— Sem NF-e (custo independente) —</option>${nfeOptionsHtml(sug,best)}</select>
+      <p class="field-hint" id="blWhy"></p></div>
+  `,()=>{
+    const nfId=getv('blNf');
+    L.setLink(state,b.id,nfId);
+    const nf=state.costs.find(c=>c.id===nfId); if(nf) nf.awaitingBoletos=false;
+    save();closeModal();renderAll();
+    toast(nfId?'Boleto vinculado à NF-e: sem duplicidade em Custos.':'Boleto sem vínculo de NF-e.');
+  });
+  const why=()=>{ const x=sug.find(s=>s.nf.id===getv('blNf')); const el=document.getElementById('blWhy'); if(el) el.textContent=x?.reasons?.length?('Correlação: '+x.reasons.join(' · ')):''; };
+  document.getElementById('blNf')?.addEventListener('change',why); why();
+}
+function nfeOptionsHtml(sug,selectedId){
+  const L=window.ChevalierCostLink;
+  const idx=costsLinkIndex();
+  const seen=new Set(sug.map(x=>x.nf.id));
+  const rest=state.costs.filter(c=>L.isNfeCost(c)&&!seen.has(c.id)&&c.id===selectedId);
+  return [...sug.map(x=>x.nf),...rest].map(nf=>{
+    const rem=L.remainingOf(nf,idx);
+    return `<option value="${nf.id}" ${nf.id===selectedId?'selected':''}>${esc(nf.desc)} · ${fmtDate(nf.date)} · falta ${brl.format(rem)} de ${brl.format(nf.value||0)}</option>`;
+  }).join('');
+}
+/** Proposta automática para todas as NFs em aberto. */
+function openCostReconcileModal(){
+  const L=window.ChevalierCostLink; if(!L) return toast('Módulo de vínculo indisponível. Recarregue a página.');
+  const plan=L.reconcileAll(state);
+  const nfsOpen=state.costs.filter(c=>L.isNfeCost(c)&&L.remainingOf(c,costsLinkIndex())>0.01);
+  const byId=id=>state.costs.find(c=>c.id===id)||{};
+  openModal('Conciliar NF-e × boletos',`
+    <p class="field-hint" style="margin-top:0">Cada NF-e lançada no estoque também entra em Custos, e os boletos da mesma compra entram de novo. Vincule os boletos à NF para contar uma vez só. A correlação usa fornecedor (e apelidos aprendidos), valor das parcelas, parcela informada no boleto e datas. Confira antes de aplicar.</p>
+    ${plan.length?plan.map((p,i)=>{const nf=byId(p.nfId);return `<div class="card" style="padding:12px;margin:10px 0">
+      <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" class="rc-sel" value="${i}" checked style="margin-top:3px">
+      <span><strong>${esc(nf.desc)}</strong> · ${brl.format(nf.value||0)}<span class="cell-sub">${p.exact?'Fecha o total':'Parcial'}: ${p.boletoIds.length} boleto(s) somando ${brl.format(p.sum)}${p.exact?'':` (falta ${brl.format(Math.max(0,p.remaining-p.sum))})`}</span>
+      <span class="cell-sub">${p.boletoIds.map(id=>{const b=byId(id);return `${esc(b.desc)} ${brl.format(b.value||0)} venc. ${fmtDate(b.due)}`;}).join(' · ')}</span></span></label></div>`;}).join(''):`<div class="empty">Nenhuma correlação automática encontrada.${nfsOpen.length?` Há ${nfsOpen.length} NF-e em aberto: use “Vincular boletos” na linha da nota para escolher manualmente.`:''}</div>`}
+  `,()=>{
+    const sel=[...document.querySelectorAll('.rc-sel:checked')].map(x=>plan[Number(x.value)]).filter(Boolean);
+    if(!sel.length){ closeModal(); return; }
+    sel.forEach(p=>{ p.boletoIds.forEach(id=>L.setLink(state,id,p.nfId)); const nf=byId(p.nfId); if(nf) nf.awaitingBoletos=false; });
+    save();closeModal();renderAll();
+    toast(`${sel.length} NF-e conciliada(s) com os boletos.`);
+  });
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  document.getElementById('modalSave').textContent=plan.length?'Aplicar vínculos':'Fechar';
+}
+window.openNfeLinkModal=openNfeLinkModal;
+window.openBoletoLinkModal=openBoletoLinkModal;
+window.openCostReconcileModal=openCostReconcileModal;
 function renderPayroll(){
   document.getElementById('payrollTable').innerHTML=state.payroll.map(f=>`<tr>${td('Profissional',`<strong>${esc(f.name)}</strong>`)}${td('Tipo',esc(f.type))}${td('Competência',esc(f.period))}${td('Centro',esc(f.center))}${td('Valor',brl.format(f.value))}${td('Status',badge(f.status))}<td class="actions-cell">${acts(`openPayrollModal('${f.id}')`,`deletePayroll('${f.id}')`)}</td></tr>`).join('');
   const total=state.payroll.reduce((s,f)=>s+Number(f.value||0),0), paid=state.payroll.filter(f=>f.status==='Pago').reduce((s,f)=>s+Number(f.value||0),0);
@@ -4302,7 +4453,14 @@ function deleteProcedure(id){
   if(n){toast('Há pacientes usando este procedimento. Altere-os antes de excluir.');return;}
   confirmDelete('Excluir este procedimento e sua ficha de custo?',()=>{state.procedures=state.procedures.filter(x=>x.id!==id);});
 }
-function deleteCost(id){confirmDelete('Excluir este custo?',()=>{state.costs=state.costs.filter(x=>x.id!==id);});}
+function deleteCost(id){
+  const c=state.costs.find(x=>x.id===id);
+  const nLinked=c&&window.ChevalierCostLink?.isNfeCost(c)?window.ChevalierCostLink.linkedBoletos(c,state.costs).length:0;
+  confirmDelete(nLinked?`Excluir este custo? Os ${nLinked} boleto(s) vinculados continuam em Custos, sem vínculo.`:'Excluir este custo?',()=>{
+    window.ChevalierCostLink?.unlinkAllFrom(state,id);
+    state.costs=state.costs.filter(x=>x.id!==id);
+  });
+}
 function deletePayroll(id){confirmDelete('Excluir este lançamento de folha?',()=>{state.payroll=state.payroll.filter(x=>x.id!==id);});}
 function deleteMaterial(id){
   const used=state.procedures.some(p=>(p.items||[]).some(i=>i.materialId===id));
@@ -5123,7 +5281,7 @@ function openCostModal(editId=''){
   const c=state.costs.find(x=>x.id===editId)||{};
   openModal(editId?'Editar custo':'Novo custo',`<div class="form-grid"><div class="field full"><label>Descrição / beneficiário</label><input id="xDesc" class="input" value="${esc(c.desc||'')}"></div><div class="field"><label>Tipo</label><select id="xType" class="select">${types.map(x=>`<option ${x===c.type?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Centro de custo</label><select id="xCenter" class="select"><option>Geral</option>${state.clinics.map(cl=>`<option ${cl.name===(c.center||'')?'selected':''}>${esc(cl.name)}</option>`).join('')}</select></div><div class="field"><label>Data</label><input id="xDate" type="date" class="input" value="${c.date||todayISO()}"></div><div class="field"><label>Vencimento</label><input id="xDue" type="date" class="input" value="${c.due||addDays(7)}"></div><div class="field"><label>Forma de pagamento</label><select id="xMethod" class="select">${['PIX','BOLETO À VISTA','BOLETO PARCELADO','CRÉDITO','DÉBITO','DINHEIRO'].map(x=>`<option ${x===c.method?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Valor</label><input id="xValue" type="number" step="0.01" class="input" value="${c.value??''}"></div><div class="field"><label>Parcela</label><input id="xInstallment" class="input" value="${esc(c.installment||'')}" placeholder="Ex.: 2/6"></div><div class="field"><label>Status</label><select id="xStatus" class="select">${['À PAGAR','PAGO','PARCELADO','ATRASADO'].map(x=>`<option ${x===c.status?'selected':''}>${x}</option>`).join('')}</select></div>${c.boletoLine?`<div class="field full"><label>Linha digitável</label><input class="input" value="${esc(c.boletoLine)}" disabled></div>`:''}</div>`,()=>{
     if(!getv('xDesc'))return toast('Informe a descrição.');
-    const obj={id:editId||uid(),desc:getv('xDesc'),type:getv('xType'),center:getv('xCenter'),date:getv('xDate'),due:getv('xDue'),method:getv('xMethod'),value:num('xValue'),status:getv('xStatus'),installment:getv('xInstallment'),boletoLine:c.boletoLine||''};
+    const obj={...c,id:editId||uid(),desc:getv('xDesc'),type:getv('xType'),center:getv('xCenter'),date:getv('xDate'),due:getv('xDue'),method:getv('xMethod'),value:num('xValue'),status:getv('xStatus'),installment:getv('xInstallment'),boletoLine:c.boletoLine||''};
     if(editId) state.costs=state.costs.map(x=>x.id===editId?obj:x); else state.costs.unshift(obj);
     save();closeModal();renderAll();toast('Custo salvo.');
   })
@@ -5290,6 +5448,14 @@ function openNfeImportModal(){
         <input id="nfeFile" type="file" class="input" accept=".xml,text/xml,application/xml,.pdf,application/pdf">
         <p class="field-hint">O XML é lido direto e é o mais preciso. O PDF (DANFE) é lido pela IA. Nesse caso, confira quantidades e valores antes de aplicar. Cada item será associado a um material do estoque ou cadastrado como novo.</p>
       </div>
+      <div class="field full">
+        <label>Pagamento da nota</label>
+        <select id="nfePayment" class="select">
+          <option value="boleto" selected>Boleto / parcelado: vou vincular os boletos desta NF</option>
+          <option value="paid">Já paga à vista (Pix, cartão, dinheiro)</option>
+        </select>
+        <p class="field-hint">Com boleto, a NF entra em Custos como “a pagar” e deixa de contar quando os boletos dela forem vinculados. Assim a compra não conta duas vezes.</p>
+      </div>
       <div class="field full" id="nfeMeta" hidden></div>
       <div class="field full" id="nfeItemsWrap" hidden>
         <label>Itens da nota</label>
@@ -5324,10 +5490,17 @@ function openNfeImportModal(){
     if(selected.some(it=>!(it.qty>0))) return toast('Informe a quantidade de cada item marcado.');
     const missing=selected.filter(it=>!it.createNew && !it.materialId);
     if(missing.length) return toast('Associe cada item a um material ou escolha “Cadastrar novo”.');
-    const result=ChevalierNfe.applyImport(state, draft, {uid});
+    const payment=getv('nfePayment')||'boleto';
+    const result=ChevalierNfe.applyImport(state, draft, {uid, payment});
     if(!result.count) return toast('Nenhum item aplicado.');
     save();closeModal();renderAll();
     toast(`NF-e importada: ${result.count} item(ns) entraram no estoque. Custos de procedimento atualizados.`);
+    // boletos desta compra já lançados antes? oferece o vínculo na hora
+    const L=window.ChevalierCostLink;
+    const nfCost=result.costId&&state.costs.find(c=>c.id===result.costId);
+    if(payment==='boleto' && L && nfCost && L.suggestBoletosForNfe(nfCost,state).ids.length){
+      setTimeout(()=>openNfeLinkModal(nfCost.id),350);
+    }
   });
   document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
   document.getElementById('modalSave').textContent='Aplicar no estoque';
@@ -5513,6 +5686,7 @@ function askBoletoProceed(parsed){
       </dl>
     </div>
     ${conflicts.length?`<div class="conflict-box"><strong>Possível duplicata</strong><ul>${conflicts.slice(0,4).map(c=>`<li>${esc(c.desc)} · ${brl.format(c.value)} · venc. ${fmtDate(c.due)}</li>`).join('')}</ul></div>`:''}
+    ${boletoNfeFieldHtml(draft)}
     <p class="field-hint" style="margin-top:12px">Deseja lançar este boleto em Custos?</p>
   `,()=>saveBoletoAsCost(true));
   document.getElementById('modalSave').textContent=conflicts.length?'Prosseguir mesmo assim':'Prosseguir e lançar';
@@ -5531,7 +5705,18 @@ function askBoletoProceed(parsed){
   }
 }
 let __boletoPendingDraft=null;
+/** Seletor "Este boleto paga a NF-e…" com a melhor correlação pré-selecionada. */
+function boletoNfeFieldHtml(draft){
+  const L=window.ChevalierCostLink; if(!L) return '';
+  const sug=L.suggestNfeForBoleto({id:'__draft',...draft},state);
+  if(!sug.length) return '';
+  const best=sug[0].score>=45?sug[0].nf.id:'';
+  return `<div class="field full" style="margin-top:12px"><label>Este boleto paga a NF-e</label>
+    <select id="bNfeLink" class="select"><option value="">— Sem NF-e (custo independente) —</option>${nfeOptionsHtml(sug,best)}</select>
+    <p class="field-hint">${best?`Sugestão: ${esc(sug[0].reasons.join(' · '))}. Vincular evita contar a compra duas vezes.`:'Se for de uma nota já importada no estoque, escolha a NF-e para não contar a compra duas vezes.'}</p></div>`;
+}
 function saveBoletoAsCost(force=false){
+  const nfeLinkId=getv('bNfeLink');
   const draft=force && __boletoPendingDraft ? __boletoPendingDraft : boletoDraftFromFields();
   if(!draft) return toast('Ferramenta de leitura indisponível.');
   if(!draft.desc) return toast('Informe o beneficiário / descrição.');
@@ -5563,10 +5748,16 @@ function saveBoletoAsCost(force=false){
     installment:draft.installment||'',
     boletoLine:draft.boletoLine||''
   });
+  if(nfeLinkId && window.ChevalierCostLink){
+    window.ChevalierCostLink.setLink(state,state.costs[0].id,nfeLinkId);
+    const nf=state.costs.find(c=>c.id===nfeLinkId); if(nf) nf.awaitingBoletos=false;
+  }
   __boletoPendingDraft=null;
   save();closeModal();renderAll();go('custos');
-  toast('Boleto lançado em Custos.');
+  toast(nfeLinkId?'Boleto lançado e vinculado à NF-e (sem duplicidade).':'Boleto lançado em Custos.');
 }
+/** Atualiza o aviso do leitor só se a janela ainda estiver aberta. */
+function setBoletoScanStatus(msg){ const el=document.getElementById('bScanStatus'); if(el) el.textContent=msg; }
 function openBoletoScanModal(prefill=null){
   if(!window.ChevalierScan) return toast('Ferramenta de leitura indisponível.');
   const types=['BOLETO','IMPLANTE','LAB','BIOMATERIAL','INSUMOS','COMPONENTES','EQUIPAMENTO','ALUGUEL','IMPOSTO E CRO','Consultoria'];
@@ -5638,7 +5829,7 @@ function openBoletoScanModal(prefill=null){
         <dt>Vencimento</dt><dd>${parsed.due?fmtDate(parsed.due):'—'}</dd>
       </dl>`;
     }
-    document.getElementById('bScanStatus').textContent='Código de barras identificado.';
+    setBoletoScanStatus('Código de barras identificado.');
     askBoletoProceed(parsed);
   };
 
@@ -5669,10 +5860,10 @@ function openBoletoScanModal(prefill=null){
       if(video) video.hidden=false;
       await ChevalierScan.startCamera(video,{wide:true});
       scanning=true;
-      document.getElementById('bScanStatus').textContent='Câmera ativa — alinhe a faixa retangular no código de barras.';
+      setBoletoScanStatus('Câmera ativa — alinhe a faixa retangular no código de barras.');
       loop();
     }catch(err){
-      document.getElementById('bScanStatus').textContent='Sem acesso à câmera. Importe foto/PDF ou cole a linha digitável.';
+      setBoletoScanStatus('Sem acesso à câmera. Importe foto/PDF ou cole a linha digitável.');
       toast('Permita a câmera ou importe um documento.');
     }
   };
@@ -5680,7 +5871,7 @@ function openBoletoScanModal(prefill=null){
   document.getElementById('bStartCam')?.addEventListener('click',startCam);
   document.getElementById('bStopCam')?.addEventListener('click',()=>{
     scanning=false; ChevalierScan.stopCamera();
-    document.getElementById('bScanStatus').textContent='Câmera parada.';
+    setBoletoScanStatus('Câmera parada.');
   });
   document.getElementById('bFile')?.addEventListener('change',async e=>{
     const file=e.target.files?.[0]; if(!file) return;
