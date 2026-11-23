@@ -130,7 +130,9 @@
       reimburseLab: r.reimburseLab != null ? !!r.reimburseLab : undefined,
       validFrom: String(r.validFrom || ''),
       validTo: String(r.validTo || ''),
-      notes: String(r.notes || '')
+      notes: String(r.notes || ''),
+      // agrupamento da regra (ex.: "Cirurgia de implante"), criado pela IA ou pelo usuário
+      category: String(r.category || '')
     };
   }
 

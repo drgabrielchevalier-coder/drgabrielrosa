@@ -661,6 +661,8 @@
   .tl-practiced-wrap{display:flex;flex-direction:column;gap:2px;margin:0}
   .tl-practiced-wrap span{font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
   .treat-line .tl-practiced{height:36px;font-size:12px}
+  .bill-cat-table{margin:4px 0 8px}
+  .bill-cat-table td,.bill-cat-table th{font-size:12px}
   .treat-line .tl-rule{color:#7a5a1c;font-weight:500}
   .treat-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .treat-add .select{flex:1;min-width:200px}

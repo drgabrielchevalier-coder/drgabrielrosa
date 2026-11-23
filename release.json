@@ -1,10 +1,10 @@
 {
-  "version": "2.22.0",
-  "name": "Honorário calculado pelo valor do procedimento",
+  "version": "2.23.0",
+  "name": "Regra da clínica por categoria",
   "releasedAt": "2026-11-23",
   "changes": [
-    "Tratamento: cada procedimento tem o campo Valor do procedimento; o Honorário a receber é calculado pela regra da clínica (percentual, valor fixo ou fixo + %).",
-    "Cada procedimento mostra a regra aplicada e quanto você recebe; ao trocar de clínica os valores e regras acompanham.",
-    "Status financeiro acompanha o recebido (À receber, Recebido parcial, Faturado / Recebido), preservando status especiais."
+    "Interpretar com IA separa a regra da clínica em categorias (ex.: implante R$ 490 fixo, enxerto R$ 157, coroa sobre implante R$ 410, endodontia 35%) e a regra dos demais procedimentos (ex.: 27%).",
+    "A IA recebe o catálogo e já indica quais procedimentos pertencem a cada categoria; o resumo aparece em Como você divide o valor e as regras na aba Por procedimento.",
+    "No tratamento, cada procedimento usa a regra da sua categoria, mesmo com vários procedimentos no mesmo caso."
   ]
 }

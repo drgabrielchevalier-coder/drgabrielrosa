@@ -438,6 +438,14 @@ function settleLines(lines,clinicId,settleOpts={}){
     return {receivable:0,netShare:0,reimbursement:0,cardFee:0,grossShare:0,practiced:0,costs:{materials:0,components:0,lab:0,total:0},profit:0,breakdown:[],ruleSource:'clinic',calcSteps:[],ruleSnap:null};
   }
   const billing=billingForClinic(clinicId);
+  // Regras por procedimento/categoria (vigentes) → aplicadas linha a linha, mesmo com vários procedimentos
+  const asOf=settleOpts.asOf||todayISO();
+  const procRules=(billing.procedureRules||[]).filter(r=>r.shareMode && r.shareMode!=='procedure'
+    && (!r.validFrom||asOf>=r.validFrom) && (!r.validTo||asOf<=r.validTo));
+  const perLine=procRules.length>0;
+  const ruleShare=(r,practicedLine,q)=>r.shareMode==='fixed'?moneyRound(Number(r.fixedAmount||0)*q)
+    :r.shareMode==='percent'?moneyRound(practicedLine*Number(r.professionalPercent||0)/100)
+    :moneyRound(Number(r.fixedAmount||0)*q+practicedLine*Number(r.professionalPercent||0)/100);
   // Agrega praticado + share base por linha, BOM total uma vez
   let practiced=0, baseShare=0;
   const breakdown=[];
@@ -447,14 +455,23 @@ function settleLines(lines,clinicId,settleOpts={}){
     const hasOverride=l.practicedValue!=null && l.practicedValue!=='' && Number.isFinite(Number(l.practicedValue));
     const unitPracticed=hasOverride?Number(l.practicedValue):Number(row.practicedValue||0);
     const linePracticed=moneyRound(unitPracticed*q);
-    const lineShare=(l.honorarium!=null && l.honorarium!=='')
-      ? moneyRound(Number(l.honorarium)*q)
-      : isFullValuePrice(row)
+    let lineShare, rule=null, ruleKind='';
+    if(l.honorarium!=null && l.honorarium!==''){
+      lineShare=moneyRound(Number(l.honorarium)*q); ruleKind='manual';
+    }else if(perLine && (rule=procRules.find(r=>r.procedureId===l.procedureId))){
+      lineShare=ruleShare(rule,linePracticed,q); ruleKind='category';
+    }else if(perLine && ['percent','fixed','mixed'].includes(billing.shareMode)){
+      rule=billing; lineShare=ruleShare(billing,linePracticed,q); ruleKind='default';
+    }else{
+      lineShare=isFullValuePrice(row)
         ? moneyRound(unitPracticed*q)
         : moneyRound(honorariumFromPrice({...row,practicedValue:unitPracticed})*q);
+    }
     practiced+=linePracticed;
     baseShare+=lineShare;
-    breakdown.push({procedureId:l.procedureId,practiced:linePracticed,baseShare:lineShare,unitPracticed});
+    breakdown.push({procedureId:l.procedureId,practiced:linePracticed,baseShare:lineShare,unitPracticed,ruleKind,
+      ruleLabel:ruleKind==='category'?(rule.category||'Regra do procedimento'):ruleKind==='default'?'Demais procedimentos':'',
+      ruleMode:rule?.shareMode||'',rulePercent:rule?Number(rule.professionalPercent||0):0,ruleFixed:rule?Number(rule.fixedAmount||0):0});
   });
   practiced=moneyRound(practiced);
   baseShare=moneyRound(baseShare);
@@ -462,18 +479,18 @@ function settleLines(lines,clinicId,settleOpts={}){
   if(!window.ChevalierBilling){
     return {receivable:baseShare,netShare:baseShare,reimbursement:0,cardFee:0,grossShare:baseShare,practiced,costs:{materials:bom.materials,components:bom.components,lab:bom.lab,total:bom.total},profit:baseShare-bom.total,breakdown,ruleSource:'clinic',calcSteps:[],ruleSnap:null};
   }
-  // Uma linha: aplica regra específica do procedimento. Várias: regra padrão da clínica sobre o agregado
-  // (exceções por linha ficam para Fase 3 — evita alterar consolidação histórica).
-  const procedureId=list.length===1?list[0].procedureId:'';
+  // Com regras por categoria, o honorário já foi resolvido linha a linha: o motor só aplica taxa e reembolsos.
+  // Sem elas: uma linha aplica a regra específica do procedimento; várias, a regra padrão da clínica.
+  const procedureId=!perLine&&list.length===1?list[0].procedureId:'';
   const settled=ChevalierBilling.settleCase({
     practiced, baseShare,
     components:bom.components, materials:bom.materials, lab:bom.lab,
     procedureId,
-    asOf:settleOpts.asOf||todayISO(),
+    asOf,
     paymentMethod:settleOpts.paymentMethod||'',
     installments:settleOpts.installments,
     exception:settleOpts.exception||null
-  },billing);
+  },perLine?{...billing,shareMode:'procedure',procedureRules:[]}:billing);
   return {...settled,breakdown};
 }
 function honorariumForLines(lines,clinicId){
@@ -1050,7 +1067,15 @@ function updateTreatLineHints(settled,clinicId){
     const el=row.querySelector('.tl-rule');
     const b=settled?.breakdown?.[i];
     if(!el) return;
-    el.textContent=clinicId&&b?treatLineRuleText(row.dataset.proc,clinicId,b.practiced,b.baseShare):'';
+    if(!clinicId||!b){ el.textContent=''; return; }
+    if(b.ruleKind==='category'||b.ruleKind==='default'){
+      const how=b.ruleMode==='fixed'?`valor fechado: você recebe ${brl.format(b.baseShare)}`
+        :b.ruleMode==='percent'?`${b.rulePercent}% de ${brl.format(b.practiced)} = você recebe ${brl.format(b.baseShare)}`
+        :`fixo ${brl.format(b.ruleFixed)} + ${b.rulePercent}% de ${brl.format(b.practiced)} = você recebe ${brl.format(b.baseShare)}`;
+      el.textContent=`${b.ruleLabel}: ${how}`;
+      return;
+    }
+    el.textContent=treatLineRuleText(row.dataset.proc,clinicId,b.practiced,b.baseShare);
   });
 }
 /** Status acompanha o recebido (preserva Retrabalho / Não vai receber / Aguardando acerto). */
@@ -4947,7 +4972,8 @@ function collectClinicBillingFromForm(){
     fixedAmount:Number(row.querySelector('.b-proc-fixed')?.value||0),
     validFrom:row.querySelector('.b-proc-from')?.value||'',
     validTo:row.querySelector('.b-proc-to')?.value||'',
-    notes:row.querySelector('.b-proc-notes')?.value||''
+    notes:row.querySelector('.b-proc-notes')?.value||'',
+    category:row.querySelector('.b-proc-cat')?.value||''
   })).filter(r=>r.procedureId);
   return window.ChevalierBilling.normalizeBilling({
     shareMode,
@@ -5020,7 +5046,8 @@ function procedureRuleRowHtml(rule={},procs){
   const opts=(procs||state.procedures||[]).map(p=>`<option value="${esc(p.id)}" ${p.id===r.procedureId?'selected':''}>${esc(p.name)}</option>`).join('');
   return `<div class="b-proc-rule" data-rule-id="${esc(r.id||uid())}">
     <div class="form-grid">
-      <div class="field full"><label>Procedimento</label><select class="select b-proc-id" onchange="refreshClinicBillingPreview()"><option value="">Selecione…</option>${opts}</select></div>
+      <div class="field"><label>Procedimento</label><select class="select b-proc-id" onchange="refreshClinicBillingPreview()"><option value="">Selecione…</option>${opts}</select></div>
+      <div class="field"><label>Categoria</label><input class="input b-proc-cat" value="${esc(r.category||'')}" placeholder="Ex.: Cirurgia de implante" oninput="refreshClinicBillingPreview()"></div>
       <div class="field"><label>Modelo</label>
         <select class="select b-proc-mode" onchange="refreshClinicBillingPreview()">
           <option value="percent" ${r.shareMode==='percent'?'selected':''}>Percentual</option>
@@ -5046,10 +5073,73 @@ function addClinicProcedureRule(){
 }
 window.addClinicProcedureRule=addClinicProcedureRule;
 
+function billingRuleText(r){
+  if(r.shareMode==='fixed') return `Valor fechado ${brl.format(r.fixedAmount||0)} por procedimento`;
+  if(r.shareMode==='percent') return `${r.professionalPercent}% do valor do procedimento`;
+  if(r.shareMode==='mixed') return `Fixo ${brl.format(r.fixedAmount||0)} + ${r.professionalPercent}%`;
+  return 'Conforme a ficha de cada procedimento';
+}
+/** Regras por procedimento agrupadas pela categoria (mesma categoria + mesma regra). */
+function billingCategoryGroups(billing){
+  const groups=new Map();
+  (billing.procedureRules||[]).forEach(r=>{
+    if(!r.shareMode || r.shareMode==='procedure') return;
+    const label=r.category||'Sem categoria';
+    const key=`${label}|${r.shareMode}|${r.professionalPercent}|${r.fixedAmount}`;
+    if(!groups.has(key)) groups.set(key,{label,rule:r,procs:[]});
+    groups.get(key).procs.push(procedure(r.procedureId).name);
+  });
+  return [...groups.values()];
+}
+function renderBillingCategorySummary(billing){
+  const box=document.getElementById('bCategorySummary');
+  const groups=billingCategoryGroups(billing);
+  const lbl=document.getElementById('bShareModeLabel');
+  if(lbl) lbl.textContent=groups.length?'Demais procedimentos (sem categoria)':'Base do honorário';
+  if(!box) return;
+  if(!groups.length){ box.innerHTML=''; return; }
+  box.innerHTML=`<div class="table-wrap bill-cat-table"><table>
+    <thead><tr><th>Categoria</th><th>Como você recebe</th><th>Procedimentos</th></tr></thead>
+    <tbody>${groups.map(g=>`<tr>${td('Categoria',`<strong>${esc(g.label)}</strong>`)}${td('Como você recebe',esc(billingRuleText(g.rule)))}${td('Procedimentos',`<span title="${esc(g.procs.join(', '))}">${g.procs.length} · ${esc(g.procs.slice(0,3).join(', '))}${g.procs.length>3?'…':''}</span>`)}</tr>`).join('')}
+      <tr>${td('Categoria','<strong>Demais procedimentos</strong>')}${td('Como você recebe',esc(billingRuleText(billing)))}${td('Procedimentos','todos os outros')}</tr>
+    </tbody></table></div>
+    <p class="field-hint">Cada procedimento do tratamento usa a regra da sua categoria; os demais seguem a regra abaixo. Ajuste uma categoria na aba <a href="#" onclick="setClinicBillingTab('procedimentos');return false">Por procedimento</a>.</p>`;
+}
+const BILLING_CAT_STOP=new Set(['cirurgia','cirurgias','procedimento','procedimentos','demais','outros','para','com','sobre','pacote','de','da','do','das','dos','e']);
+function normTxt(v){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();}
+/** Plano B quando a IA não listou os procedimentos de uma categoria: procura pelo nome. */
+function matchProceduresForCategory(cat,used){
+  const words=[...(cat.keywords||[]), ...String(cat.label||'').split(/[^\p{L}0-9]+/u)]
+    .map(normTxt).filter(w=>w.length>3 && !BILLING_CAT_STOP.has(w));
+  if(!words.length) return [];
+  // radical: "endodontia" acha "endodôntico"; também olha a especialidade do procedimento
+  const stems=words.map(w=>w.length>6?w.slice(0,w.length-3):w);
+  return state.procedures.filter(p=>{
+    if(used.has(p.id)) return false;
+    const hay=normTxt(`${p.name} ${specialtyName(p.specialty||'')}`);
+    return stems.some(w=>hay.includes(w));
+  }).map(p=>p.id);
+}
+/** Categorias da IA → regras por procedimento (category = rótulo). */
+function categoriesToProcedureRules(categories){
+  const used=new Set();
+  const rules=[];
+  (categories||[]).forEach(cat=>{
+    let ids=(cat.procedureIds||[]).filter(id=>state.procedures.some(p=>p.id===id) && !used.has(id));
+    if(!ids.length) ids=matchProceduresForCategory(cat,used);
+    ids.forEach(id=>{
+      used.add(id);
+      rules.push({id:uid(),procedureId:id,shareMode:cat.shareMode,professionalPercent:Number(cat.professionalPercent||0),fixedAmount:Number(cat.fixedAmount||0),category:cat.label||'',notes:''});
+    });
+  });
+  return rules;
+}
 function refreshClinicBillingPreview(){
   if(!window.ChevalierBilling) return;
   toggleClinicBillingFields();
   const billing=collectClinicBillingFromForm();
+  renderBillingCategorySummary(billing);
+  const catGroups=billingCategoryGroups(billing);
   const name=getv('cNamePreview')||'Clínica';
   const summary=ChevalierBilling.humanSummary(billing,name);
   const box=document.getElementById('bPreview');
@@ -5057,6 +5147,7 @@ function refreshClinicBillingPreview(){
     const steps=(summary.settlement.calcSteps||[]).map(s=>`<li><span>${esc(s.label)}</span><strong>${brl.format(s.amount)}</strong></li>`).join('');
     box.innerHTML=`
       <div class="bill-preview-head">Como o algoritmo entende</div>
+      ${catGroups.length?`<ul class="bill-preview-list">${catGroups.map(g=>`<li><strong>${esc(g.label)}</strong>: ${esc(billingRuleText(g.rule))} (${g.procs.length} proc.)</li>`).join('')}<li><strong>Demais procedimentos</strong>: ${esc(billingRuleText(billing))}</li></ul>`:''}
       <ul class="bill-preview-list">${summary.bullets.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
       <p class="bill-example">${esc(summary.example)}</p>
       <p class="field-hint">Repasse: ${esc(ChevalierBilling.payoutLabel(billing))}</p>
@@ -5070,7 +5161,7 @@ function refreshClinicBillingPreview(){
       <ul class="bill-calc-steps">${steps}</ul>`;
   }
   const sumEl=document.getElementById('bAiSummary');
-  if(sumEl && !sumEl.dataset.locked) sumEl.value=billing.aiSummary||ChevalierBilling.formulaLines(billing).join(' · ');
+  if(sumEl && !sumEl.dataset.locked) sumEl.value=billing.aiSummary||(catGroups.length?[...catGroups.map(g=>`${g.label}: ${billingRuleText(g.rule)}`),`Demais: ${billingRuleText(billing)}`].join(' · '):ChevalierBilling.formulaLines(billing).join(' · '));
   const pane=document.querySelector('.bill-pane:not([hidden])')?.dataset.billPane;
   if(pane==='simulador') refreshClinicBillingSimulator();
 }
@@ -5204,8 +5295,9 @@ function openClinicBillingModal(clinicId){
             </div>
           </div>
           <div class="bill-section-title">Como você divide o valor</div>
+          <div id="bCategorySummary"></div>
           <div class="form-grid">
-            <div class="field full"><label>Base do honorário</label>
+            <div class="field full"><label id="bShareModeLabel">Base do honorário</label>
               <select id="bShareMode" class="select" onchange="refreshClinicBillingPreview()">
                 <option value="procedure" ${billing.shareMode==='procedure'?'selected':''}>Conforme cada procedimento (ficha)</option>
                 <option value="percent" ${billing.shareMode==='percent'?'selected':''}>Porcentagem do valor praticado</option>
@@ -5345,7 +5437,7 @@ async function interpretClinicBillingAi(){
       method:'POST',
       headers:csrfHeaders({'Content-Type':'application/json'}),
       credentials:'same-origin',
-      body:JSON.stringify({text,clinicName:getv('cNamePreview'),csrf:csrfToken()})
+      body:JSON.stringify({text,clinicName:getv('cNamePreview'),procedures:state.procedures.map(p=>({id:p.id,name:p.name,specialty:specialtyName(p.specialty||'')})),csrf:csrfToken()})
     });
     const data=await res.json().catch(()=>({}));
     applyCsrfFromResponse(data);
@@ -5359,8 +5451,13 @@ async function interpretClinicBillingAi(){
       toast(data.error||'Falha na OpenAI.');
       return;
     }
-    applyBillingToForm({...data.billing, notes:text});
-    toast(`OpenAI interpretou a regra${data.model?' · '+data.model:''}.`);
+    const cats=Array.isArray(data.billing.categories)?data.billing.categories:[];
+    const procedureRules=cats.length?categoriesToProcedureRules(cats):collectClinicBillingFromForm().procedureRules;
+    applyBillingToForm({...data.billing, notes:text, procedureRules});
+    const nCats=billingCategoryGroups({procedureRules}).length;
+    toast(nCats
+      ? `IA separou ${nCats} categoria(s) com ${procedureRules.length} procedimento(s) + regra dos demais. Revise e salve.`
+      : `OpenAI interpretou a regra${data.model?' · '+data.model:''}. Revise e salve.`);
   }catch(e){
     toast('Falha de rede ao chamar a OpenAI.');
   }finally{

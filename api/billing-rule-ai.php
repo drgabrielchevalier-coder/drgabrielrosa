@@ -6,6 +6,7 @@ declare(strict_types=1);
  */
 require_once __DIR__ . '/auth-lib.php';
 require_once __DIR__ . '/openai-lib.php';
+require_once __DIR__ . '/billing-rule-ai-lib.php';
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store');
 
@@ -50,22 +51,49 @@ if (!chevalier_openai_configured()) {
     exit;
 }
 
+// catálogo de procedimentos (id, nome, especialidade) para a IA separar as categorias
+$catalog = [];
+$validIds = [];
+foreach (array_slice(is_array($data['procedures'] ?? null) ? $data['procedures'] : [], 0, 500) as $p) {
+    if (!is_array($p)) {
+        continue;
+    }
+    $id = mb_substr(trim((string) ($p['id'] ?? '')), 0, 80);
+    $name = mb_substr(trim((string) ($p['name'] ?? '')), 0, 120);
+    if ($id === '' || $name === '') {
+        continue;
+    }
+    $validIds[] = $id;
+    $spec = mb_substr(trim((string) ($p['specialty'] ?? '')), 0, 40);
+    $catalog[] = $id . ' | ' . $name . ($spec !== '' ? ' | ' . $spec : '');
+}
+
 $clinic = $clinicName !== '' ? $clinicName : 'a clínica';
 $prompt = "Você configura o algoritmo de cobrança de um cirurgião-dentista em prestação de serviço. "
-    . "Clínica: {$clinic}. Regra descrita pelo usuário:\n\"\"\"{$text}\"\"\"\n"
-    . "Responda SOMENTE JSON com: shareMode (procedure|percent|fixed|mixed), professionalPercent (0-100), "
-    . "fixedAmount (number), cardFeeEnabled (bool), cardFeePercent (0-100), cardFeeOn (share|practiced), "
-    . "cardFeePaidBy (doctor|clinic|split), materialsPaidBy (doctor|clinic), reimburseComponents (bool), "
-    . "reimburseMaterials (bool), reimburseLab (bool), "
-    . "notes (string curta), aiSummary (string curta em português), examplePracticed (number), exampleComponents (number). "
-    . "Exemplo: implante 3000, 50% profissional, 10% cartão na parte do profissional, reembolso de componentes "
-    . "→ shareMode=percent, professionalPercent=50, cardFeeEnabled=true, cardFeePercent=10, cardFeeOn=share, "
-    . "reimburseComponents=true, materialsPaidBy=clinic.";
+    . "Clínica: {$clinic}. Regra descrita pelo usuário:\n\"\"\"{$text}\"\"\"\n\n"
+    . "A regra pode ter VÁRIAS partes com cobranças diferentes por tipo de procedimento "
+    . "(ex.: valor fechado para cirurgia de implante, outro para enxerto, % para endodontia, % para os demais). "
+    . "Separe cada parte em uma categoria. Responda SOMENTE JSON:\n"
+    . "{\"categories\":[{\"label\":\"nome curto da categoria\",\"shareMode\":\"fixed|percent|mixed\","
+    . "\"fixedAmount\":número (R$ que o dentista recebe por procedimento, se fixo/misto),"
+    . "\"professionalPercent\":número 0-100 (se percentual/misto),"
+    . "\"procedureIds\":[ids do catálogo abaixo que pertencem a esta categoria],"
+    . "\"keywords\":[palavras que identificam a categoria]}],"
+    . "\"default\":{\"label\":\"Demais procedimentos\",\"shareMode\":\"percent|fixed|mixed|procedure\",\"professionalPercent\":número,\"fixedAmount\":número},"
+    . "\"cardFeeEnabled\":bool,\"cardFeePercent\":0-100,\"cardFeeOn\":\"share|practiced\",\"cardFeePaidBy\":\"doctor|clinic|split\","
+    . "\"materialsPaidBy\":\"doctor|clinic\",\"reimburseComponents\":bool,\"reimburseMaterials\":bool,\"reimburseLab\":bool,"
+    . "\"aiSummary\":\"resumo curto em português\"}\n"
+    . "Regras: \"default\" é o que vale para os procedimentos não citados (\"demais procedimentos\"); "
+    . "se o texto não disser nada sobre os demais, use shareMode \"procedure\" (cada um segue a própria ficha). "
+    . "Coloque cada procedimento do catálogo em no máximo uma categoria, a mais específica "
+    . "(ex.: \"Coroa sobre implante\" é prótese/coroa, NÃO cirurgia de implante; \"Implante + enxerto (pacote)\" fica na cirurgia de implante, "
+    . "a menos que o texto diga outra coisa). Não invente valores que não estão no texto."
+    . ($catalog ? "\n\nCatálogo (id | nome | especialidade):\n" . implode("\n", $catalog) : '');
 
 $res = chevalier_openai_chat([
-    ['role' => 'system', 'content' => 'Extraia regras financeiras odontológicas em JSON. Português do Brasil. Interprete o texto do usuário — sem resposta genérica.'],
+    ['role' => 'system', 'content' => 'Extraia regras financeiras odontológicas em JSON, separando categorias de procedimentos. Português do Brasil. Interprete o texto do usuário — sem resposta genérica.'],
     ['role' => 'user', 'content' => $prompt],
-], ['json' => true, 'max_tokens' => 800, 'temperature' => 0.2, 'timeout' => 60]);
+], ['json' => true, 'max_tokens' => 4000, 'temperature' => 0.1, 'timeout' => 90]);
 
 if (!$res['ok']) {
     http_response_code(502);
@@ -79,7 +107,8 @@ if (!is_array($billing)) {
     echo json_encode(['ok' => false, 'error' => 'OpenAI não retornou JSON válido'], JSON_UNESCAPED_UNICODE);
     exit;
 }
-$billing['notes'] = $billing['notes'] ?? $text;
+$billing = chevalier_billing_ai_normalize($billing, $validIds);
+$billing['notes'] = $text;
 $billing['version'] = 1;
 
 echo json_encode([
