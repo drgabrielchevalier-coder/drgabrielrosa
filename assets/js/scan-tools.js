@@ -265,12 +265,16 @@
       const wr = wrapEl.getBoundingClientRect();
       const gr = guideEl.getBoundingClientRect();
       if (wr.width && wr.height) {
-        const scaleX = w / wr.width;
-        const scaleY = h / wr.height;
-        sx = Math.max(0, Math.floor((gr.left - wr.left) * scaleX));
-        sy = Math.max(0, Math.floor((gr.top - wr.top) * scaleY));
-        sw = Math.min(w - sx, Math.floor(gr.width * scaleX));
-        sh = Math.min(h - sy, Math.floor(gr.height * scaleY));
+        // O vídeo é exibido com object-fit: cover (centralizado e cortado). Converte a faixa-guia da tela
+        // para pixels do vídeo considerando esse corte — no iPhone a câmera vem "em pé" e o corte é grande.
+        const isVideo = !!videoOrCanvas.videoWidth;
+        const s = isVideo ? Math.max(wr.width / w, wr.height / h) : Math.min(wr.width / w, wr.height / h);
+        const ox = (wr.width - w * s) / 2;
+        const oy = (wr.height - h * s) / 2;
+        sx = Math.max(0, Math.floor((gr.left - wr.left - ox) / s));
+        sy = Math.max(0, Math.floor((gr.top - wr.top - oy) / s));
+        sw = Math.max(1, Math.min(w - sx, Math.floor(gr.width / s)));
+        sh = Math.max(1, Math.min(h - sy, Math.floor(gr.height / s)));
       }
     }
 

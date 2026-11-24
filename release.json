@@ -1,10 +1,9 @@
 {
-  "version": "2.29.0",
-  "name": "Estoque desativado (materiais e custos)",
+  "version": "2.29.1",
+  "name": "Leitor de boleto no iPhone",
   "releasedAt": "2026-11-24",
   "changes": [
-    "Controle de estoque desligado: tratamentos com implante, enxerto ou componente salvam sem exigir item em estoque e não baixam saldo.",
-    "Materiais seguem com preço, embalagem e custo unitário, entrando no custo dos procedimentos e tratamentos; página Estoque e alertas de estoque mínimo ficam ocultos.",
-    "Importar NF-e agora também em Custos (agrupa boletos e atualiza o custo dos materiais). Nada foi apagado: dá para religar em Configurações → Controle de estoque."
+    "Escanear boleto no iPhone: a imagem da câmera agora preenche o quadro inteiro, centralizada, em vez de aparecer pequena e cortada no topo.",
+    "A área lida pelo leitor passa a ser exatamente a faixa-guia que aparece na tela, também com a câmera em pé do celular."
   ]
 }
