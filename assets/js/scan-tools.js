@@ -290,7 +290,7 @@
     let detector;
     try {
       detector = new global.BarcodeDetector({
-        formats: ['itf', 'code_128', 'codabar', 'code_39'],
+        formats: ['itf', 'code_128', 'codabar', 'code_39', 'ean_13', 'ean_8', 'upc_a'],
       });
     } catch {
       try {
@@ -307,71 +307,114 @@
     }
   }
 
-  async function detectWithZXing(canvas) {
-    try {
-      const ZXing = await loadZXing();
-      if (!zxingReader) {
-        const hints = new Map();
-        const formats = [
-          ZXing.BarcodeFormat.ITF,
-          ZXing.BarcodeFormat.CODE_128,
-          ZXing.BarcodeFormat.CODE_39,
-          ZXing.BarcodeFormat.CODABAR,
-        ];
-        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-        zxingReader = new ZXing.BrowserMultiFormatReader(hints);
-      }
-      const result = await zxingReader.decodeFromCanvas(canvas);
-      if (result?.getText) {
-        return [{ raw: result.getText(), format: String(result.getBarcodeFormat?.() || 'zxing') }];
-      }
-    } catch {
-      /* no code */
-    }
-    return [];
+  let zxingHints = null;
+
+  /** Reduz o canvas se for gigante (foto de 12 MP) — mantém resolução suficiente para barras finas. */
+  function limitCanvas(canvas, maxW) {
+    if (!canvas || canvas.width <= maxW) return canvas;
+    const s = maxW / canvas.width;
+    const c = document.createElement('canvas');
+    c.width = Math.round(canvas.width * s);
+    c.height = Math.max(1, Math.round(canvas.height * s));
+    c.getContext('2d').drawImage(canvas, 0, 0, c.width, c.height);
+    return c;
   }
 
-  async function detectBarcodeFromSource(source, opts = {}) {
-    const wrap = opts.wrapEl;
-    const guide = opts.guideEl;
-    const cropped = cropGuideRegion(source, guide, wrap) || (() => {
-      const c = document.createElement('canvas');
-      const w = source.videoWidth || source.width;
-      const h = source.videoHeight || source.height;
-      c.width = w;
-      c.height = h;
-      c.getContext('2d').drawImage(source, 0, 0);
-      return c;
-    })();
-
-    let codes = await detectWithBarcodeDetector(cropped);
-    if (!codes.length) codes = await detectWithBarcodeDetector(source);
-    if (!codes.length) codes = await detectWithZXing(cropped);
-    if (!codes.length) {
-      // tenta full frame com contraste
-      const full = document.createElement('canvas');
-      const w = source.videoWidth || source.width;
-      const h = source.videoHeight || source.height;
-      full.width = w;
-      full.height = h;
-      const ctx = full.getContext('2d');
-      ctx.drawImage(source, 0, 0);
-      const img = ctx.getImageData(0, 0, w, h);
-      for (let i = 0; i < img.data.length; i += 4) {
-        const g = img.data[i] * 0.3 + img.data[i + 1] * 0.59 + img.data[i + 2] * 0.11;
-        const v = g > 140 ? 255 : 0;
-        img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+  /**
+   * ZXing (biblioteca reserva — única opção no iPhone, que não tem BarcodeDetector).
+   * Obs.: a 0.21.3 não tem decodeFromCanvas; decodifica via MultiFormatReader + HybridBinarizer.
+   */
+  async function detectWithZXing(canvas) {
+    if (!canvas || !canvas.width || !canvas.height) return [];
+    let ZXing;
+    try { ZXing = await loadZXing(); } catch (e) { console.warn('ZXing indisponível', e); return []; }
+    if (!zxingHints) {
+      zxingHints = new Map();
+      zxingHints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+        ZXing.BarcodeFormat.ITF,
+        ZXing.BarcodeFormat.CODE_128,
+        ZXing.BarcodeFormat.CODE_39,
+        ZXing.BarcodeFormat.CODABAR,
+        ZXing.BarcodeFormat.EAN_13,
+        ZXing.BarcodeFormat.EAN_8,
+        ZXing.BarcodeFormat.UPC_A,
+      ]);
+      zxingHints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    }
+    const attempt = (Binarizer) => {
+      try {
+        const reader = new ZXing.MultiFormatReader();
+        reader.setHints(zxingHints);
+        const lum = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
+        const result = reader.decode(new ZXing.BinaryBitmap(new Binarizer(lum)));
+        if (result && result.getText) return [{ raw: result.getText(), format: String(result.getBarcodeFormat?.() ?? 'zxing') }];
+      } catch (e) {
+        /* NotFoundException = sem código nesta imagem */
       }
-      ctx.putImageData(img, 0, 0);
-      codes = await detectWithZXing(full);
+      return [];
+    };
+    let out = attempt(ZXing.HybridBinarizer);
+    if (!out.length && ZXing.GlobalHistogramBinarizer) out = attempt(ZXing.GlobalHistogramBinarizer);
+    return out;
+  }
+
+  function sourceToCanvas(source) {
+    if (source instanceof HTMLCanvasElement) return source;
+    const c = document.createElement('canvas');
+    c.width = source.videoWidth || source.width;
+    c.height = source.videoHeight || source.height;
+    c.getContext('2d').drawImage(source, 0, 0);
+    return c;
+  }
+
+  /** Faixas horizontais sobrepostas (o código do boleto é uma faixa larga): ajuda em fotos grandes. */
+  function horizontalBands(canvas, n) {
+    const out = [];
+    const h = Math.ceil(canvas.height / n);
+    for (let i = 0; i < n; i++) {
+      const y = Math.max(0, Math.round(i * h - h * 0.25));
+      const bh = Math.min(canvas.height - y, Math.round(h * 1.5));
+      const c = document.createElement('canvas');
+      c.width = canvas.width; c.height = bh;
+      c.getContext('2d').drawImage(canvas, 0, y, canvas.width, bh, 0, 0, canvas.width, bh);
+      out.push(c);
+    }
+    return out;
+  }
+
+  /**
+   * opts.guideEl/wrapEl: só para a câmera ao vivo (recorta a faixa-guia que aparece na tela).
+   * opts.full: foto/PDF — lê a imagem inteira (o código pode estar em qualquer lugar).
+   */
+  async function detectBarcodeFromSource(source, opts = {}) {
+    const live = !!(opts.guideEl && opts.wrapEl) && !opts.full;
+    if (live) {
+      const cropped = cropGuideRegion(source, opts.guideEl, opts.wrapEl);
+      let codes = cropped ? await detectWithBarcodeDetector(cropped) : [];
+      if (!codes.length) codes = await detectWithBarcodeDetector(source);
+      if (!codes.length && cropped) codes = await detectWithZXing(limitCanvas(cropped, 2400));
+      return codes;
+    }
+    const canvas = sourceToCanvas(source);
+    let codes = await detectWithBarcodeDetector(canvas);
+    if (codes.length) return codes;
+    if (opts.quick) return detectWithZXing(limitCanvas(canvas, 1600)); // câmera sem faixa-guia: 1 tentativa por quadro
+    const big = limitCanvas(canvas, 2400);
+    codes = await detectWithZXing(big);
+    if (!codes.length) codes = await detectWithZXing(limitCanvas(canvas, 1400));
+    if (!codes.length) {
+      for (const band of horizontalBands(big, 4)) {
+        codes = await detectWithZXing(band);
+        if (codes.length) break;
+      }
     }
     return codes;
   }
 
   async function detectBarcodeFromVideo(video, opts) {
     if (!video || video.readyState < 2) return null;
-    const codes = await detectBarcodeFromSource(video, opts || {});
+    const o = opts || {};
+    const codes = await detectBarcodeFromSource(video, o.guideEl ? o : { ...o, quick: true });
     return codes.length ? codes : null;
   }
 
@@ -382,7 +425,7 @@
     canvas.height = bmp.height;
     canvas.getContext('2d').drawImage(bmp, 0, 0);
     bmp.close?.();
-    return detectBarcodeFromSource(canvas, opts || {});
+    return detectBarcodeFromSource(canvas, { ...(opts || {}), full: true });
   }
 
   async function startCamera(videoEl, opts = {}) {
@@ -391,8 +434,9 @@
       audio: false,
       video: {
         facingMode: { ideal: 'environment' },
-        width: { ideal: opts.wide ? 1920 : 1280 },
-        height: { ideal: opts.wide ? 1080 : 720 },
+        // código do boleto tem barras finas: peça o máximo (iPhone em pé entrega ~2160 px de largura em 4K)
+        width: { ideal: opts.wide ? 3840 : 1280 },
+        height: { ideal: opts.wide ? 2160 : 720 },
         focusMode: { ideal: 'continuous' },
       },
     };
@@ -441,7 +485,7 @@
       bmp.close?.();
     }
 
-    let codes = await detectBarcodeFromSource(canvas, opts);
+    let codes = await detectBarcodeFromSource(canvas, { ...opts, full: true });
     for (const c of codes) {
       const parsed = parseBoletoDigits(c.raw);
       if (parsed) return { parsed, source: 'barcode', codes };

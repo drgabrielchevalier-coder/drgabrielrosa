@@ -1,9 +1,10 @@
 {
-  "version": "2.29.1",
-  "name": "Leitor de boleto no iPhone",
+  "version": "2.29.2",
+  "name": "Leitor de código de barras corrigido",
   "releasedAt": "2026-11-24",
   "changes": [
-    "Escanear boleto no iPhone: a imagem da câmera agora preenche o quadro inteiro, centralizada, em vez de aparecer pequena e cortada no topo.",
-    "A área lida pelo leitor passa a ser exatamente a faixa-guia que aparece na tela, também com a câmera em pé do celular."
+    "Leitor de boleto volta a ler o código de barras no iPhone: a leitura reserva (ZXing) usava uma função que não existe na biblioteca e falhava sempre.",
+    "Câmera pede resolução máxima (até 4K) para as barras finas do boleto; foto/PDF importado é lido por inteiro, não só a faixa da tela.",
+    "Código de barras de materiais (EAN/UPC) também passa a ser reconhecido."
   ]
 }

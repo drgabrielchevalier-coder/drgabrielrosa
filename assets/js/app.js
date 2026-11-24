@@ -6474,7 +6474,7 @@ function openBoletoScanModal(prefill=null){
       if(video) video.hidden=false;
       await ChevalierScan.startCamera(video,{wide:true});
       scanning=true;
-      setBoletoScanStatus('Câmera ativa — alinhe a faixa retangular no código de barras.');
+      setBoletoScanStatus('Câmera ativa — encaixe o código de barras na faixa, preenchendo a largura, com boa luz e sem reflexo. Se não ler em alguns segundos, use “Importar foto / PDF” → Tirar foto.');
       loop();
     }catch(err){
       setBoletoScanStatus('Sem acesso à câmera. Importe foto/PDF ou cole a linha digitável.');
