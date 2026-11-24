@@ -355,10 +355,109 @@ function storeLocalState(){
     sync.localFull=false;
   }catch(e){
     sync.localFull=true;
-    try{ localStorage.removeItem('chevalier_gestao_backup_local'); localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state)); sync.localFull=false; }catch(_){}
+    // Conectado ao banco, a cópia local é só cache: a cópia de segurança (dados que o banco não tem) vale mais.
+    if(!persistReady){ try{ localStorage.removeItem('chevalier_gestao_backup_local'); localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state)); sync.localFull=false; }catch(_){} }
     console.warn('cópia local não coube no aparelho', e);
   }
 }
+/* ---------- Cópia de segurança do aparelho + junção com o banco ----------
+ * Antes de trocar os dados deste aparelho pelos do banco, guarda o que só existe aqui (nunca descarta em silêncio).
+ * "Juntar" acrescenta ao banco só o que falta (sem apagar nem alterar o que já está lá), evitando duplicar
+ * tratamento/paciente/custo com mesmo nome, clínica, data e valor.
+ */
+const BACKUP_KEY='chevalier_gestao_backup_local';
+const SEED_REMINDERS=new Set(['reavaliar planejamento cbct','entrega protetico / prova','lembrete de retorno pos-cirurgico']);
+const MERGE_KEYS=['people','patients','costs','procedures','materials','payroll','prostheses','reminders','plans','importBatches','nfImports','stockLedger'];
+const MERGE_LABELS={people:'pacientes cadastrados',patients:'tratamentos',costs:'custos',procedures:'procedimentos',materials:'materiais',payroll:'folha',prostheses:'próteses',reminders:'lembretes',plans:'planos',importBatches:'lotes de importação',nfImports:'NF-e importadas',stockLedger:'movimentos de estoque'};
+function mergeNorm(v){ return String(v??'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
+function mergeSig(key,x){
+  if(!x||typeof x!=='object') return '';
+  if(key==='people') return 'pe|'+mergeNorm(x.name)+'|'+(x.clinicId||'');
+  if(key==='patients') return 'pa|'+mergeNorm(x.name)+'|'+(x.clinicId||'')+'|'+(x.date||'')+'|'+Number(x.value||0).toFixed(2);
+  if(key==='costs') return 'co|'+mergeNorm(x.desc)+'|'+(x.due||x.date||'')+'|'+Number(x.value||0).toFixed(2)+'|'+(x.kind||'');
+  if(key==='procedures'||key==='materials') return key+'|'+mergeNorm(x.name);
+  if(key==='reminders') return 're|'+mergeNorm(x.title)+'|'+(x.date||'')+'|'+(x.time||'');
+  return '';
+}
+/** O que existe em `local` e não existe em `base` (por id e por assinatura). */
+function stateDiff(local, base){
+  const out={total:0,byKey:{},items:{},personMap:{}};
+  if(!local||!base) return out;
+  MERGE_KEYS.forEach(key=>{
+    const L=Array.isArray(local[key])?local[key]:[];
+    const B=Array.isArray(base[key])?base[key]:[];
+    if(!L.length) return;
+    const ids=new Set(B.map(x=>x&&x.id).filter(Boolean));
+    const sigs=new Map();
+    B.forEach(x=>{ const g=mergeSig(key,x); if(g) sigs.set(g,x); });
+    const add=[];
+    L.forEach(x=>{
+      if(!x||typeof x!=='object') return;
+      if(x.id && ids.has(x.id)) return;
+      if(key==='reminders' && SEED_REMINDERS.has(mergeNorm(x.title))) return; // exemplos criados em cada aparelho
+
+      const g=mergeSig(key,x);
+      if(g && sigs.has(g)){ if(key==='people' && x.id) out.personMap[x.id]=sigs.get(g).id; return; }
+      if(g) sigs.set(g,x);
+      add.push(x);
+    });
+    if(add.length){ out.items[key]=add; out.byKey[key]=add.length; out.total+=add.length; }
+  });
+  return out;
+}
+function diffSummary(d){
+  return Object.entries(d.byKey).map(([k,n])=>`${n} ${MERGE_LABELS[k]||k}`).join(', ');
+}
+function readLocalBackup(){
+  try{ const b=JSON.parse(localStorage.getItem(BACKUP_KEY)||'null'); return b&&b.state?b:null; }catch(_){ return null; }
+}
+/** Guarda a cópia deste aparelho se ela tem algo que o banco não tem. Não troca um backup maior por um menor. */
+function backupLocalBeforeReplace(serverState, reason){
+  try{
+    const d=stateDiff(state, serverState);
+    if(!d.total) return 0;
+    const old=readLocalBackup();
+    if(old){ const od=stateDiff(old.state, serverState); if(od.total>d.total) return od.total; }
+    const json=JSON.stringify({at:new Date().toISOString(),reason,state});
+    try{ localStorage.setItem(BACKUP_KEY,json); }
+    catch(_){ localStorage.removeItem('chevalier_gestao_v1'); localStorage.setItem(BACKUP_KEY,json); } // a cópia principal vai ser trocada pela do banco
+    return d.total;
+  }catch(e){ console.warn('backup local', e); return 0; }
+}
+/** Acrescenta ao estado atual (do banco) o que só existe na cópia deste aparelho. Nada é apagado. */
+function mergeBackupIntoState(){
+  const b=readLocalBackup();
+  if(!b) return 0;
+  const d=stateDiff(b.state, state);
+  if(!d.total) return 0;
+  const peopleIds=new Set((state.people||[]).map(x=>x.id));
+  Object.entries(d.items).forEach(([key,list])=>{
+    if(!Array.isArray(state[key])) state[key]=[];
+    list.forEach(x=>{
+      const copy=structuredClone(x);
+      if(copy.personId && d.personMap[copy.personId]) copy.personId=d.personMap[copy.personId];
+      state[key].push(copy);
+      if(key==='people') peopleIds.add(copy.id);
+    });
+  });
+  (state.patients||[]).forEach(p=>{ if(p.personId && !peopleIds.has(p.personId) && d.personMap[p.personId]) p.personId=d.personMap[p.personId]; });
+  return d.total;
+}
+async function confirmMergeBackup(){
+  const n=mergeBackupIntoState();
+  closeModal();
+  if(!n){ toast('Nada a juntar: o banco já tem tudo da cópia deste aparelho.'); return; }
+  try{ ensurePeople(); }catch(_){}
+  save();
+  renderAll();
+  toast(`Juntei ${n} item(ns) da cópia deste aparelho ao banco. Os outros aparelhos recebem ao abrir o app.`);
+}
+window.confirmMergeBackup=confirmMergeBackup;
+function discardLocalBackup(){
+  try{ localStorage.removeItem(BACKUP_KEY); }catch(_){}
+  closeModal(); toast('Cópia deste aparelho descartada.');
+}
+window.discardLocalBackup=discardLocalBackup;
 /** Explica por que não conectou (para o indicador e o aviso). */
 function describeSyncError(status, data, err){
   if(data?.needsSetup) return 'O banco de dados não está configurado no servidor (falta a senha do MySQL). Enquanto isso, cada aparelho guarda só os próprios dados.';
@@ -385,6 +484,16 @@ async function openSyncDiagnostics(){
     else { noteSyncError(r.status,d,null); line=sync.lastError; }
   }catch(e){ noteSyncError(0,null,e); line=sync.lastError; }
   const kb=(()=>{ try{ return Math.round((localStorage.getItem('chevalier_gestao_v1')||'').length/1024); }catch(_){ return 0; } })();
+  const bk=readLocalBackup();
+  const bd=bk&&persistReady&&!sync.offline?stateDiff(bk.state,state):null;
+  const mergeHtml=bd&&bd.total?`<div class="field-hint" style="margin-top:12px;padding:12px;border:1px solid var(--line,#ddd);border-radius:12px">
+      <strong>Cópia guardada deste aparelho</strong> (${esc(new Date(bk.at).toLocaleString('pt-BR'))}) tem ${bd.total} item(ns) que não estão no banco: ${esc(diffSummary(bd))}.
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button type="button" class="btn primary" onclick="confirmMergeBackup()">Juntar ao banco</button>
+        <button type="button" class="btn" onclick="if(confirm('Descartar a cópia deste aparelho? Os itens dela não irão para o banco.')) discardLocalBackup()">Descartar cópia</button>
+      </div>
+      <div style="margin-top:6px">Juntar só acrescenta o que falta; nada do banco é apagado ou alterado.</div>
+    </div>`:'';
   openModal('Conexão com o banco',`
     <div class="detail-grid">
       <div><span>Situação</span><strong>${sync.offline||!persistReady?'Sem conexão com o banco':'Conectado e sincronizado'}</strong></div>
@@ -393,7 +502,9 @@ async function openSyncDiagnostics(){
       <div><span>Alterações ainda não enviadas</span><strong>${sync.dirty?'Sim':'Não'}</strong></div>
       <div><span>Última gravação no banco</span><strong>${sync.lastOkAt?new Date(sync.lastOkAt).toLocaleString('pt-BR'):'—'}</strong></div>
       <div><span>Cópia local</span><strong>${kb} KB${sync.localFull?' · não coube no aparelho':''}</strong></div>
+      <div><span>Dados mostrados aqui</span><strong>${(state.people||[]).length} pacientes · ${(state.patients||[]).length} tratamentos · ${(state.costs||[]).length} custos</strong></div>
     </div>
+    ${mergeHtml}
     ${sync.lastError?`<p class="field-hint" style="margin-top:12px"><strong>Último problema:</strong> ${esc(sync.lastError)}</p>`:''}
     ${sync.needsSetup?`<p class="field-hint">Para ligar o banco, abra <a href="api/setup.php">Configurar banco de dados</a> e informe a senha do MySQL (hPanel → Bancos de dados). Faça isso no aparelho que tem os dados mais completos: ele envia a cópia dele ao banco e os outros passam a usá-la.</p>`:''}
   `,()=>{ closeModal(); sync.lastCheck=0; reconnectState(); });
@@ -467,11 +578,15 @@ async function loadLatestState(reason){
     if(r.status===401){ location.href='login.php'; return false; }
     const data=await r.json().catch(()=>({}));
     applyCsrfFromResponse(data);
+    if(r.ok && data.ok && !data.state){
+      // banco recém-ligado e ainda vazio: este aparelho envia a cópia dele
+      sync.lastError=''; sync.needsSetup=false; persistReady=true; sync.offline=false; state._rev=0;
+      await pushState();
+      return true;
+    }
     if(!r.ok || !data.ok || !data.state){ noteSyncError(r.status,data,null); throw new Error(data?.error||('HTTP '+r.status)); }
     sync.lastError=''; sync.needsSetup=false; sync.lastOkAt=Date.now();
-    if(reason==='conflict' || (reason==='reconnect' && sync.dirty)){
-      try{ localStorage.setItem('chevalier_gestao_backup_local',JSON.stringify({at:new Date().toISOString(),reason,state})); }catch(_){}
-    }
+    const kept=backupLocalBeforeReplace(data.state, reason);
     bindGlobalState(data.state);
     state._rev=Number(data.rev||data.state._rev||0);
     persistReady=true;
@@ -480,6 +595,7 @@ async function loadLatestState(reason){
     try{ ensureSettings(); ensureStockCollections(); ensureClinicPrices(); ensureProstheses(); }catch(_){}
     renderAll();
     refreshSyncBadge();
+    if(kept) setTimeout(()=>toast(`Este aparelho tinha ${kept} item(ns) que não estão no banco. Guardei: toque no indicador do topo para juntar.`),1800);
     if(reason==='conflict') toast('Outro aparelho alterou os dados. Carreguei a versão mais recente do banco: confira e refaça a última alteração, se precisar.');
     else if(reason==='reconnect') toast('Conectado ao banco: dados atualizados.');
     else if(reason==='newer') toast('Dados atualizados com as alterações feitas em outro aparelho.');
@@ -7453,6 +7569,8 @@ async function boot(){
       try{ data=await r.json(); }catch(parseErr){ noteSyncError(r.status,null,parseErr); throw parseErr; }
       applyCsrfFromResponse(data);
       if(data.ok && data.state){
+        const kept=backupLocalBeforeReplace(data.state,'boot');
+        if(kept) setTimeout(()=>toast(`Este aparelho tinha ${kept} item(ns) que não estão no banco. Guardei: toque no indicador do topo para juntar.`),1200);
         bindGlobalState(data.state);
         state._rev=Number(data.rev||data.state._rev||0);
         persistReady=true;
@@ -7466,7 +7584,7 @@ async function boot(){
           method:'POST',
           headers:csrfHeaders({'Content-Type':'application/json'}),
           credentials:'same-origin',
-          body:JSON.stringify({...state,csrf:csrfToken()})
+          body:JSON.stringify({...state,__baseRev:0,csrf:csrfToken()})
         }).then(async res=>{try{const d=await res.json(); applyCsrfFromResponse(d); if(d?.rev) state._rev=Number(d.rev);}catch(_){}});
       }
     }
