@@ -663,6 +663,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           </div>
           <div class="page-actions">
             <button type="button" class="btn" onclick="setReceivablesTab('fechamento')">Fechamento</button>
+            <button type="button" class="btn" onclick="openBatchReceiveModal()" title="Cole a lista de repasses (data, paciente, valor) e baixe vários recebíveis de uma vez">⇊ Baixa em lote</button>
             <button class="btn primary" onclick="openReceivableModal()">＋ Novo recebível</button>
           </div>
         </div>
@@ -1143,6 +1144,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
 <script src="<?= chevalier_asset_url('assets/js/planning-calendar.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/nfe-stock.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/cost-link.js') ?>"></script>
+<script src="<?= chevalier_asset_url('assets/js/batch-receive.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/app.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/import-assist.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/update-manager.js') ?>" defer></script>

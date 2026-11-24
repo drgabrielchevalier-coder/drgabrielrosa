@@ -6732,6 +6732,134 @@ function commitReceivePayment(patientId){
     : `Baixa parcial de ${brl.format(amt)} · saldo ${brl.format(open)}.`);
   openChargeSheet(p.id);
 }
+/**
+ * Baixa programática (mesmas regras de commitReceivePayment): valor original intocado, nunca acima
+ * do saldo, histórico em payments[] e status sincronizado. Devolve o valor efetivamente baixado.
+ */
+function applyReceivablePayment(p, opts={}){
+  if(!p) return 0;
+  syncPatientPaymentStatus(p);
+  const saldo=balance(p);
+  if(saldo<=0) return 0;
+  const amt=moneyRound(Math.min(saldo, Math.max(0, Number(opts.amount||0))));
+  if(amt<=0) return 0;
+  const original=moneyRound(p.value||0);
+  const before=moneyRound(p.received||0);
+  const date=opts.date||todayISO();
+  p.received=moneyRound(Math.min(original, before+amt));
+  syncPatientPaymentStatus(p);
+  const open=balance(p);
+  p.lastPaymentDate=date;
+  if(!Array.isArray(p.payments)) p.payments=[];
+  p.payments.push({
+    id:uid(),
+    date,
+    amount:amt,
+    mode:open<=0?'total':'parcial',
+    balanceAfter:open,
+    method:opts.method||'',
+    note:opts.note||'',
+    by:opts.by||'',
+    receipt:opts.receipt||'',
+    voided:false
+  });
+  return amt;
+}
+/* ---------- Baixa em lote (repasse da clínica) ---------- */
+function batchReceiveCases(clinicId){
+  return (state.patients||[]).filter(p=>balance(p)>0.009 && !/n[aã]o vai receber/i.test(String(p.status||'')) && (!clinicId||p.clinicId===clinicId)).map(p=>({
+    id:p.id,
+    personKey:p.personId||('n:'+personNameKey(p.name)),
+    name:(p.personId&&personById(p.personId)?.name)||p.name,
+    date:p.date||'',
+    balance:balance(p),
+    label:`${patientProcedureLabel(p)} · ${fmtDate(p.date)}`
+  }));
+}
+function openBatchReceiveModal(){
+  window.__batchReceive={overrides:{},plan:null};
+  const methodOpts=(window.ChevalierBilling?.PAYMENT_METHODS||[{id:'transfer',label:'Transferência'},{id:'pix',label:'Pix'}])
+    .map(m=>`<option value="${esc(m.id)}" ${m.id==='transfer'?'selected':''}>${esc(m.label)}</option>`).join('');
+  openModal('Baixa em lote',`
+    <p class="field-hint" style="margin-top:0">Cole a lista de valores abatidos (data, paciente, valor), por exemplo o repasse da clínica. O sistema cruza cada linha com os honorários a receber do paciente, do mais antigo para o mais novo, sem passar do saldo. Nada é lançado antes de você confirmar.</p>
+    <div class="form-grid">
+      <div class="field full"><label>Lista (tabela copiada, uma linha por baixa)</label>
+        <textarea id="brText" class="textarea" rows="6" placeholder="| 03/11 | Nome do paciente | R$ 138,87 |&#10;05/11	Outro paciente	277,00"></textarea></div>
+      <div class="field"><label>Clínica (procurar só nela)</label><select id="brClinic" class="select"><option value="">Todas</option>${clinicOptions('')}</select></div>
+      <div class="field"><label>Forma de pagamento</label><select id="brMethod" class="select">${methodOpts}</select></div>
+      <div class="field full"><label>Observação das baixas</label><input id="brNote" class="input" value="Baixa em lote (repasse)"></div>
+    </div>
+    <div id="brReview" style="margin-top:12px"></div>
+  `,()=>commitBatchReceive());
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  document.getElementById('modalSave').textContent='Lançar baixas';
+  ['brText','brClinic'].forEach(id=>document.getElementById(id)?.addEventListener(id==='brText'?'input':'change',()=>{ window.__batchReceive.overrides={}; refreshBatchReceive(); }));
+}
+function refreshBatchReceive(){
+  const ctx=window.__batchReceive; const box=document.getElementById('brReview');
+  if(!ctx||!box||!window.ChevalierBatchReceive) return;
+  const B=window.ChevalierBatchReceive;
+  const rows=B.parseRows(getv('brText'),todayISO());
+  if(!rows.length){ box.innerHTML=getv('brText').trim()?'<div class="empty">Não reconheci linhas com data, paciente e valor.</div>':''; ctx.plan=null; return; }
+  const cases=batchReceiveCases(getv('brClinic'));
+  const plan=B.planBatch(rows,cases,ctx.overrides);
+  ctx.plan=plan;
+  const persons=[...new Map(cases.map(c=>[c.personKey,c.name])).entries()].sort((a,b)=>a[1].localeCompare(b[1],'pt-BR'));
+  const badgeFor=r=>({ok:'<span class="badge b-green">OK</span>',excess:'<span class="badge b-amber">Excede saldo</span>',ambiguous:'<span class="badge b-amber">Escolha o paciente</span>',unmatched:'<span class="badge b-red">Não encontrado</span>',nobalance:'<span class="badge b-red">Sem saldo</span>',skip:'<span class="badge b-gray">Ignorada</span>'})[r.status]||'';
+  const count=k=>plan.rows.filter(r=>r.status===k).length;
+  box.innerHTML=`<div class="detail-grid" style="margin-bottom:10px">
+      <div><span>Linhas</span><strong>${plan.rows.length}</strong></div>
+      <div><span>Total da lista</span><strong>${brl.format(plan.total)}</strong></div>
+      <div><span>Será baixado</span><strong>${brl.format(plan.applied)}</strong></div>
+      <div><span>Fica pendente</span><strong>${brl.format(plan.pending)}</strong></div>
+      <div><span>Para resolver</span><strong>${count('ambiguous')+count('unmatched')+count('excess')+count('nobalance')}</strong></div>
+    </div>
+    <div class="table-wrap" style="max-height:420px;overflow:auto"><table>
+      <thead><tr><th>Data</th><th>Na lista</th><th>Paciente no sistema</th><th>Baixa em</th><th>Valor</th><th>Situação</th></tr></thead>
+      <tbody>${plan.rows.map((r,i)=>{
+        const sel=r.status==='skip'?'__skip':(r.personKey||'');
+        const cand=r.candidates.map(c=>`<option value="${esc(c.key)}" ${c.key===sel?'selected':''}>${esc(c.name)} · em aberto ${brl.format(c.open)}</option>`).join('');
+        const others=persons.filter(([k])=>!r.candidates.some(c=>c.key===k)).map(([k,n])=>`<option value="${esc(k)}" ${k===sel?'selected':''}>${esc(n)}</option>`).join('');
+        const alloc=r.allocations.length?r.allocations.map(a=>`<div>${brl.format(a.amount)} → ${esc(a.label)}<span class="cell-sub">saldo ${brl.format(a.before)} → ${brl.format(a.after)}</span></div>`).join('')+(r.leftover>0.009?`<span class="cell-sub" style="color:var(--red)">${brl.format(r.leftover)} sem saldo para baixar</span>`:''):'<span class="cell-sub">—</span>';
+        return `<tr>${td('Data',fmtDate(r.date))}${td('Na lista',`<strong>${esc(r.name)}</strong>`)}
+          ${td('Paciente no sistema',`<select class="select br-person" data-row="${i}" style="min-width:200px"><option value="">— escolher —</option>${cand}${others?`<optgroup label="Outros com saldo em aberto">${others}</optgroup>`:''}<option value="__skip" ${sel==='__skip'?'selected':''}>Ignorar esta linha</option></select>`)}
+          ${td('Baixa em',alloc)}${td('Valor',brl.format(r.amount))}${td('Situação',badgeFor(r))}</tr>`;
+      }).join('')}</tbody></table></div>
+    <p class="field-hint">Quando o paciente tem mais de um tratamento em aberto, a baixa vai para o mais antigo e o que sobrar passa para o próximo. O que exceder o saldo não é lançado.</p>`;
+  box.querySelectorAll('.br-person').forEach(el=>el.addEventListener('change',()=>{
+    const i=Number(el.dataset.row);
+    if(el.value) ctx.overrides[i]=el.value; else delete ctx.overrides[i];
+    // a escolha vale para as outras linhas com o mesmo nome que ainda não foram resolvidas
+    const B=window.ChevalierBatchReceive, rowsNow=ctx.plan?.rows||[], nm=B.norm(rowsNow[i]?.name);
+    if(el.value && el.value!=='__skip') rowsNow.forEach((r,j)=>{
+      if(j!==i && ctx.overrides[j]==null && B.norm(r.name)===nm && (r.status==='ambiguous'||r.status==='unmatched')) ctx.overrides[j]=el.value;
+    });
+    refreshBatchReceive();
+  }));
+}
+function commitBatchReceive(){
+  const ctx=window.__batchReceive;
+  refreshBatchReceive();
+  const plan=ctx?.plan;
+  if(!plan) return toast('Cole a lista de baixas.');
+  const pending=plan.rows.filter(r=>r.status==='ambiguous'||r.status==='unmatched');
+  if(pending.length && !confirm(`${pending.length} linha(s) sem paciente definido não serão lançadas. Continuar com as demais?`)) return;
+  const method=getv('brMethod'), note=getv('brNote').trim()||'Baixa em lote';
+  const by=document.getElementById('sidebarUser')?.textContent||'';
+  let n=0, total=0;
+  plan.rows.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))||a.line-b.line).forEach(r=>{
+    r.allocations.forEach(a=>{
+      const p=state.patients.find(x=>x.id===a.caseId);
+      const done=applyReceivablePayment(p,{amount:a.amount,date:r.date||todayISO(),method,note:`${note} · ${r.name}`,by});
+      if(done>0){ n++; total+=done; }
+    });
+  });
+  if(!n) return toast('Nenhuma baixa lançada.');
+  save();closeModal();renderAll();
+  toast(`${n} baixa(s) lançada(s) · ${brl.format(moneyRound(total))}${plan.pending>0.009?` · ${brl.format(plan.pending)} ficou pendente`:''}.`);
+}
+window.openBatchReceiveModal=openBatchReceiveModal;
+window.applyReceivablePayment=applyReceivablePayment;
 /** Estorno autorizado: mantém o registro histórico e reabre o saldo. */
 function voidPatientPayment(patientId, paymentId){
   const p=state.patients.find(x=>x.id===patientId); if(!p) return;
