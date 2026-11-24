@@ -7,7 +7,7 @@
  */
 (function (global) {
   const PATIENT_FIELDS = [
-    { id: 'Nome', label: 'Nome / Paciente', required: true, aliases: ['Nome', 'Paciente', 'Patient', 'Client'] },
+    { id: 'Nome', label: 'Nome / Paciente', required: true, aliases: ['Nome', 'Paciente', 'Patient', 'Client', 'Propriedade'] },
     { id: 'Honorários', label: 'Honorários', required: false, aliases: ['Honorários', 'Honorarios', 'A receber', 'Valor honorário'] },
     { id: 'Valor', label: 'Valor praticado', required: false, aliases: ['Valor', 'Valor Procedimento', 'Valor procedimento', 'Praticado'] },
     { id: 'Data', label: 'Data', required: false, aliases: ['Data', 'Date'] },
@@ -40,6 +40,7 @@
 
   function normHeader(h) {
     return String(h || '')
+      .replace(/^\ufeff/, '')
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
@@ -326,6 +327,183 @@
     return { kind, mappedRows, validation, data, split, map };
   }
 
+  /* ---------- Procedimentos escritos à mão → catálogo (IA) ---------- */
+  function procKey(text) {
+    return normHeader(text).replace(/\s+/g, ' ').trim();
+  }
+  function procName(id) {
+    return (global.procedure ? global.procedure(id).name : id) || id;
+  }
+  function procMatchCache() {
+    const st = global.state || {};
+    if (!st.settings || typeof st.settings !== 'object') st.settings = {};
+    if (!st.settings.procTextMap || typeof st.settings.procTextMap !== 'object') st.settings.procTextMap = {};
+    return st.settings.procTextMap;
+  }
+  /** Uma entrada por descrição distinta (ex.: "Rasp c/ prof + Rest 24"), com quantas linhas a usam. */
+  function procMatchEntries(draft) {
+    const wiz = global.__importWizard;
+    if (!wiz.pm) wiz.pm = { list: [], byKey: {}, state: 'idle', done: 0, error: '' };
+    const pm = wiz.pm;
+    const cache = procMatchCache();
+    selectedNew(draft).concat(draft.split.neu).forEach((r) => {
+      const text = String(r.observation || '').trim();
+      const key = procKey(text);
+      if (!key) return;
+      if (!pm.byKey[key]) {
+        const cached = cache[key];
+        const entry = { key, text, count: 0, items: cached ? cached.map((x) => ({ ...x })) : null, source: cached ? 'aprendido' : '' };
+        pm.byKey[key] = entry;
+        pm.list.push(entry);
+      }
+    });
+    pm.list.forEach((e) => { e.count = 0; });
+    draft.split.neu.forEach((r) => { const e = pm.byKey[procKey(r.observation)]; if (e) e.count++; });
+    pm.list.sort((a, b) => b.count - a.count || a.text.localeCompare(b.text, 'pt-BR'));
+    return pm;
+  }
+  async function runProcMatch() {
+    const wiz = global.__importWizard;
+    const pm = wiz?.pm;
+    if (!pm || pm.state === 'running') return;
+    const todo = pm.list.filter((e) => !e.items);
+    if (!todo.length) { pm.state = 'done'; return; }
+    pm.state = 'running'; pm.done = 0; pm.error = '';
+    const catalog = (global.state?.procedures || []).map((p) => ({ id: p.id, name: p.name, specialty: global.specialtyName ? global.specialtyName(p.specialty || '') : (p.specialty || '') }));
+    try {
+      for (let i = 0; i < todo.length; i += 60) {
+        const chunk = todo.slice(i, i + 60);
+        const r = await fetch('api/procedure-match-ai.php', {
+          method: 'POST',
+          headers: global.csrfHeaders ? global.csrfHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ texts: chunk.map((e) => e.text), procedures: catalog, csrf: global.csrfToken ? global.csrfToken() : '' }),
+        });
+        let data = {};
+        try { data = await r.json(); global.applyCsrfFromResponse?.(data); } catch (_) {}
+        if (r.status === 401) { location.href = 'login.php'; return; }
+        if (!r.ok || !data.ok) throw new Error(data.error || 'A IA não conseguiu interpretar os procedimentos.');
+        chunk.forEach((e, j) => { e.items = (data.results?.[j] || []).map((x) => ({ ...x })); e.source = 'ia'; });
+        pm.done += chunk.length;
+        if (wiz.step === 3) rerenderKeepScroll();
+      }
+      pm.state = 'done';
+    } catch (e) {
+      pm.state = 'error';
+      pm.error = e.message || String(e);
+    }
+    if (global.__importWizard === wiz && wiz.step === 3) rerenderKeepScroll();
+  }
+  function itemLabel(it) {
+    return it.procedureId ? procName(it.procedureId) : `＋ novo: ${it.newName}`;
+  }
+  function entrySummary(e) {
+    if (!e || !e.items) return '';
+    if (!e.items.length) return 'Procedimento livre (sem correspondência)';
+    return e.items.map((it) => itemLabel(it) + (it.tooth ? ` · ${it.tooth}` : '')).join(' + ');
+  }
+  function procMatchHtml(draft) {
+    const pm = procMatchEntries(draft);
+    if (!pm.list.length) return '';
+    const pending = pm.list.filter((e) => !e.items).length;
+    const head = pm.state === 'running'
+      ? `<p class="field-hint"><strong>A IA está interpretando os procedimentos…</strong> ${pm.done} de ${pm.list.filter((e) => e.source !== 'aprendido').length} descrição(ões).</p>`
+      : pm.state === 'error'
+        ? `<div class="warning-banner">${esc(pm.error)} ${pending ? 'As descrições sem interpretação entram como estão hoje (procedimento estimado pelo texto).' : ''}</div>`
+        : `<p class="field-hint">Cada descrição diferente aparece uma vez; o que você ajustar vale para todas as linhas com o mesmo texto e fica aprendido para as próximas importações.</p>`;
+    const opts = (global.state?.procedures || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+      .map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+    const rows = pm.list.map((e, idx) => {
+      const chips = !e.items
+        ? '<span class="cell-sub">aguardando…</span>'
+        : e.items.length
+          ? e.items.map((it, j) => `<span class="pm-chip ${it.procedureId ? '' : 'is-new'}">${esc(itemLabel(it))}
+              <input class="pm-tooth" data-e="${idx}" data-j="${j}" value="${esc(it.tooth || '')}" placeholder="dente" aria-label="Dente / região">
+              <button type="button" class="pm-x" onclick="ChevalierImport.pmRemove(${idx},${j})" aria-label="Remover">×</button></span>`).join('')
+          : '<span class="cell-sub">Sem correspondência: entra como procedimento livre</span>';
+      return `<tr>
+        <td><strong>${esc(e.text)}</strong><span class="cell-sub">${e.count} linha(s)${e.source === 'aprendido' ? ' · aprendido' : e.source === 'ia' ? ' · IA' : ''}</span></td>
+        <td class="pm-cell">${chips}
+          <select class="select pm-add" data-e="${idx}" aria-label="Adicionar procedimento"><option value="">＋ adicionar procedimento…</option>${opts}</select></td>
+      </tr>`;
+    }).join('');
+    return `<h3 class="section-title" style="margin-top:14px">Procedimentos interpretados</h3>${head}
+      <div class="table-wrap" style="max-height:320px;overflow:auto"><table class="pm-table">
+        <thead><tr><th>Como está escrito</th><th>Procedimentos do sistema (dente)</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      <p class="field-hint">“＋ novo” = procedimento que não existe no catálogo; ele é criado ao confirmar (valores zerados, para você precificar depois). Remova o chip se não quiser criar.</p>`;
+  }
+  /** Redesenha a etapa mantendo a rolagem (lista de procedimentos e janela). */
+  function rerenderKeepScroll() {
+    const list = document.querySelector('.pm-table')?.parentElement;
+    const scroller = document.getElementById('importWizardBody')?.closest('.modal-body') || document.querySelector('#modalRoot .modal');
+    const a = list ? list.scrollTop : 0;
+    const b = scroller ? scroller.scrollTop : 0;
+    renderWizardBody();
+    const list2 = document.querySelector('.pm-table')?.parentElement;
+    if (list2) list2.scrollTop = a;
+    if (scroller) scroller.scrollTop = b;
+  }
+  function bindProcMatch(box) {
+    const pm = global.__importWizard?.pm;
+    if (!pm) return;
+    box.querySelectorAll('.pm-tooth').forEach((el) => el.addEventListener('input', () => {
+      const it = pm.list[Number(el.dataset.e)]?.items?.[Number(el.dataset.j)];
+      if (it) it.tooth = el.value.trim();
+    }));
+    box.querySelectorAll('.pm-add').forEach((el) => el.addEventListener('change', () => {
+      const e = pm.list[Number(el.dataset.e)];
+      if (!el.value || !e) return;
+      e.items = (e.items || []).concat([{ procedureId: el.value, tooth: '' }]);
+      rerenderKeepScroll();
+    }));
+  }
+  /** Ao confirmar: cria os procedimentos novos, grava o aprendizado e monta as linhas de cada lançamento. */
+  function applyProcMatch(records) {
+    const wiz = global.__importWizard;
+    const pm = wiz?.pm;
+    if (!pm || !pm.list.length) return { created: 0, linked: 0 };
+    const st = global.state;
+    const cache = procMatchCache();
+    const byName = new Map((st.procedures || []).map((p) => [procKey(p.name), p.id]));
+    let created = 0;
+    const resolve = (it) => {
+      if (it.procedureId) return it.procedureId;
+      const k = procKey(it.newName);
+      if (byName.has(k)) return byName.get(k);
+      const id = 'proc-ia-' + (global.uid ? global.uid() : Date.now().toString(36));
+      st.procedures.push({ id, name: it.newName, specialty: it.specialty || 'clinica', kind: it.kind || 'clinico', price: 0, extra: 0, items: [], clinicPrices: [], createdBy: 'import-ia' });
+      byName.set(k, id);
+      created++;
+      return id;
+    };
+    pm.list.forEach((e) => {
+      if (!e.items) return;
+      e.items = e.items.map((it) => ({ procedureId: resolve(it), tooth: it.tooth || '' }));
+      // só aprende o que teve vínculo: sem correspondência a IA tenta de novo na próxima (catálogo pode ter mudado)
+      if (e.items.length) cache[e.key] = e.items.map((it) => ({ procedureId: it.procedureId, tooth: it.tooth }));
+      else delete cache[e.key];
+    });
+    if (created) global.ensureClinicPrices?.();
+    let linked = 0;
+    records.forEach((r) => {
+      const e = pm.byKey[procKey(r.observation)];
+      if (!e || !e.items || !e.items.length) return;
+      r.lines = e.items.map((it) => ({ procedureId: it.procedureId, tooth: it.tooth || '' }));
+      r.procedureId = r.lines[0].procedureId;
+      r.tooth = r.lines[0].tooth;
+      linked++;
+    });
+    return { created, linked };
+  }
+
+  function existingPeopleMatches(records, clinicId) {
+    const key = global.personNameKey || ((n) => normHeader(n));
+    const counts = new Map();
+    (global.state?.people || []).filter((pe) => pe.clinicId === clinicId).forEach((pe) => { const k = key(pe.name); counts.set(k, (counts.get(k) || 0) + 1); });
+    return records.filter((r) => counts.get(key(r.name)) === 1).length;
+  }
+
   function selectedNew(draft) {
     const ex = global.__importWizard?.excluded;
     return (draft?.split?.neu || []).filter((r) => !(ex && ex.has(r.importId)));
@@ -353,7 +531,7 @@
     const body = rows.slice(0, 300).map((r) => {
       const cells = isCost
         ? `<td><strong>${esc(r.desc)}</strong></td><td>${esc(fmtDateBR(r.date))}</td><td>${esc(fmtDateBR(r.due))}</td><td>${esc(r.type || '')}</td><td>${esc(fmtMoneyBR(r.value))}</td><td>${esc(r.status || '')}</td>`
-        : `<td><strong>${esc(r.name)}</strong></td><td>${esc(fmtDateBR(r.date))}</td><td>${esc(String(r.observation || '').slice(0, 70))}</td><td>${esc(fmtMoneyBR(r.value))}</td><td>${esc(fmtMoneyBR(r.received))}</td><td>${esc(r.status || '')}</td>`;
+        : `<td><strong>${esc(r.name)}</strong></td><td>${esc(fmtDateBR(r.date))}</td><td>${(() => { const e = wiz.pm?.byKey?.[procKey(r.observation)]; const sum = entrySummary(e); return sum ? `<strong>${esc(sum)}</strong><span class="cell-sub">${esc(String(r.observation || '').slice(0, 70))}</span>` : esc(String(r.observation || '').slice(0, 70)); })()}</td><td>${esc(fmtMoneyBR(r.value))}</td><td>${esc(fmtMoneyBR(r.received))}</td><td>${esc(r.status || '')}</td>`;
       return `<tr><td><input type="checkbox" class="import-row-sel" value="${esc(r.importId)}" ${ex.has(r.importId) ? '' : 'checked'} aria-label="Importar esta linha"></td>${cells}</tr>`;
     }).join('');
     const total = rows.filter((r) => !ex.has(r.importId)).reduce((s, r) => s + Number(r.value || 0), 0);
@@ -463,10 +641,15 @@
         ${v.errors.length ? `<div class="warning-banner"><strong>${v.errors.length} erro(s)</strong><ul>${v.errors.slice(0, 8).map((e) => `<li>L${e.line}: ${esc(e.message)}</li>`).join('')}</ul></div>` : ''}
         ${v.warnings.length ? `<p class="field-hint">${v.warnings.length} aviso(s) — ex.: valores vazios.</p>` : ''}
         <p class="field-hint">Duplicatas (mesmo <code>importId</code>) serão ignoradas — nenhum registro existente será sobrescrito.</p>
+        ${draft.kind !== 'costs' ? procMatchHtml(draft) : ''}
         ${reviewTableHtml(draft)}
         <div class="row-actions" style="margin-top:12px">
           <button type="button" class="btn" onclick="ChevalierImport.setStep(2)">Voltar</button>
         </div>`;
+      if (draft.kind !== 'costs') {
+        bindProcMatch(box);
+        if (wiz.pm && wiz.pm.state === 'idle') runProcMatch();
+      }
       const refreshSel = () => {
         const sel = draft.split.neu.filter((r) => !wiz.excluded.has(r.importId));
         const cnt = document.getElementById('importSelCount');
@@ -501,6 +684,9 @@
         <div><span>Ignorados (duplicata)</span><strong>${draft.split.dup.length}</strong></div>
         <div><span>Erros de validação</span><strong>${draft.validation.errors.length}</strong></div>
         ${draft.kind !== 'costs' ? `<div><span>Clínica</span><strong>${esc(global.clinic?.(wiz.clinicId)?.name || wiz.clinicId || '—')}</strong></div>` : ''}
+        ${draft.kind !== 'costs' && wiz.pm?.list?.length ? `<div><span>Procedimentos interpretados</span><strong>${wiz.pm.list.filter((e) => e.items && e.items.length).length} de ${wiz.pm.list.length} descrições</strong></div>
+        <div><span>Procedimentos novos a criar</span><strong>${new Set(wiz.pm.list.flatMap((e) => (e.items || []).filter((it) => !it.procedureId).map((it) => procKey(it.newName)))).size}</strong></div>` : ''}
+        ${draft.kind !== 'costs' ? `<div><span>Lançamentos em cadastros existentes</span><strong>${existingPeopleMatches(selectedNew(draft), wiz.clinicId)}</strong></div>` : ''}
       </div>
       <p class="field-hint" style="margin-top:12px">Ao confirmar, o lote é registrado em Configurações → Importações. Operação idempotente e append-only.</p>
       <div class="row-actions" style="margin-top:12px">
@@ -521,6 +707,7 @@
     wiz.kindMode = document.getElementById('importKind')?.value || 'auto';
     wiz.clinicId = document.getElementById('importClinic')?.value || '';
     wiz.ai = null;
+    wiz.pm = null;
     wiz.excluded = new Set();
     try {
       const lower = f.name.toLowerCase();
@@ -642,7 +829,12 @@
       return;
     }
     // Only import NEW records — never overwrite
-    const data = { ...draft.data, records: selectedNew(draft) };
+    if (draft.kind !== 'costs' && wiz.pm?.state === 'running') {
+      global.toast?.('Aguarde a IA terminar de interpretar os procedimentos.');
+      return;
+    }
+    const data = { ...draft.data, records: selectedNew(draft).map((r) => ({ ...r })) };
+    const pmResult = draft.kind !== 'costs' ? applyProcMatch(data.records) : { created: 0, linked: 0 };
     let patients = 0;
     let costs = 0;
     const errors = [...draft.validation.errors];
@@ -654,7 +846,8 @@
           global.importHistoricoPatients?.(data, {
             clinicId: wiz.clinicId,
             origin: data.origin,
-            sourceTag: 'assist-upload:' + wiz.clinicId
+            sourceTag: 'assist-upload:' + wiz.clinicId,
+            linkPeople: true
           }) || 0;
       }
       // Vincular people[] e reparar relações
@@ -670,6 +863,8 @@
         valid: draft.validation.valid,
         added: patients + costs,
         via: wiz.ai ? 'ia' : 'planilha',
+        proceduresCreated: pmResult.created,
+        proceduresLinked: pmResult.linked,
         excluded: draft.split.neu.length - data.records.length,
         skippedDup: draft.split.dup.length,
         errors: errors.length,
@@ -693,7 +888,7 @@
       global.__lastImportReport = report;
       global.toast?.(
         batch.added
-          ? `Importação: +${patients} casos, +${costs} custos · ${batch.skippedDup} duplicata(s) ignorada(s).`
+          ? `Importação: +${patients} casos, +${costs} custos${pmResult.created ? ` · ${pmResult.created} procedimento(s) novo(s) no catálogo` : ''} · ${batch.skippedDup} duplicata(s) ignorada(s).`
           : `Nada novo. ${batch.skippedDup} duplicata(s) ignorada(s).`
       );
       // Offer report download lightly
@@ -754,6 +949,12 @@
   }
 
   global.ChevalierImport = {
+    pmRemove(e, j) {
+      const entry = global.__importWizard?.pm?.list?.[e];
+      if (!entry?.items) return;
+      entry.items.splice(j, 1);
+      rerenderKeepScroll();
+    },
     openWizard,
     setStep: setWizardStep,
     nextStepFromUi,

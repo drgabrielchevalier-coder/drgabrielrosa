@@ -661,6 +661,13 @@
   .tl-practiced-wrap{display:flex;flex-direction:column;gap:2px;margin:0}
   .tl-practiced-wrap span{font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
   .treat-line .tl-practiced{height:36px;font-size:12px}
+  .pm-table td{vertical-align:top}
+  .pm-cell{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .pm-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 10px;border:1px solid var(--line);border-radius:999px;background:#f7f4ee;font-size:12px}
+  .pm-chip.is-new{border-color:#d9b36a;background:#fbf3e2}
+  .pm-chip .pm-tooth{width:64px;height:26px;border:1px solid var(--line);border-radius:8px;padding:0 6px;font-size:11px;background:#fff}
+  .pm-chip .pm-x{border:0;background:none;cursor:pointer;font-size:14px;line-height:1;color:var(--muted);padding:0 4px}
+  .pm-cell .pm-add{height:34px;min-height:34px;padding-top:0;padding-bottom:0;line-height:32px;font-size:12px;max-width:260px}
   .bill-cat-table{margin:4px 0 8px}
   .bill-cat-table td,.bill-cat-table th{font-size:12px}
   .treat-line .tl-rule{color:#7a5a1c;font-weight:500}

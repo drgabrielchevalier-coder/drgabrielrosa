@@ -1,10 +1,10 @@
 {
-  "version": "2.24.0",
-  "name": "Cadastro de pacientes em lote",
+  "version": "2.25.0",
+  "name": "Importação: IA interpreta os procedimentos",
   "releasedAt": "2026-11-24",
   "changes": [
-    "Pacientes → Cadastrar lista de pacientes: lê CSV/XLSX/TXT (ou nomes colados) e cria só o cadastro com nome e clínica, sem tratamentos.",
-    "Ignora quem já está cadastrado na clínica, une grafias com/sem 'da/de/dos' e deixa nomes parecidos desmarcados para revisão.",
-    "Nova visão Cadastros na aba Pacientes, com busca, filtro por clínica e atalho para criar tratamento."
+    "Na revisão da importação, a IA interpreta descrições escritas à mão (ex.: Rasp c/ prof + Rest 24) e vincula a procedimentos do catálogo com o dente.",
+    "Quadro por descrição para ajustar (remover, adicionar, dente); o que você confirma fica aprendido e procedimentos que faltam podem ser criados.",
+    "Lançamentos importados usam o cadastro do paciente que já existe na clínica; coluna Propriedade (Notion) reconhecida como nome."
   ]
 }

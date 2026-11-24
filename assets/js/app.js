@@ -7297,9 +7297,24 @@ async function fetchHistoricoJson(file){
   return null;
 }
 
+/** Divide um total entre n linhas (centavos certos: a última leva o resto). */
+function splitMoney(total,n){
+  const t=moneyRound(total); if(n<=1) return [t];
+  const part=Math.floor(t/n*100)/100;
+  return Array.from({length:n},(_,i)=>i<n-1?part:moneyRound(t-part*(n-1)));
+}
 function applyHistoricoPatientFields(patient, rec){
+  const known=id=>Array.isArray(state.procedures) && state.procedures.some(p=>p.id===id);
+  const recLines=Array.isArray(rec.lines)?rec.lines.filter(l=>l&&known(l.procedureId)):[];
+  if(recLines.length){
+    // vários procedimentos interpretados (ex.: raspagem + profilaxia + restauração 24): honorário e praticado do lançamento divididos entre as linhas
+    const hon=splitMoney(Number(rec.value||0),recLines.length);
+    const pra=splitMoney(Number(rec.practicedValue||0),recLines.length);
+    patient.lines=recLines.map((l,i)=>({procedureId:l.procedureId,qty:1,tooth:String(l.tooth||''),honorarium:hon[i],practicedValue:pra[i]}));
+    patient.procedureId=patient.lines[0].procedureId;
+  }else{
   let procId=rec.procedureId||patient.procedureId||'proc-historico-livre';
-  if(Array.isArray(state.procedures) && !state.procedures.some(p=>p.id===procId)) procId='proc-historico-livre';
+  if(Array.isArray(state.procedures) && !known(procId)) procId='proc-historico-livre';
   patient.procedureId=procId;
   patient.lines=[{
     procedureId:procId,
@@ -7308,6 +7323,7 @@ function applyHistoricoPatientFields(patient, rec){
     honorarium:Number(rec.value||0),
     practicedValue:Number(rec.practicedValue||0)
   }];
+  }
   patient.date=rec.date||patient.date||todayISO();
   patient.value=Number(rec.value||0);
   patient.received=Number(rec.received||0);
@@ -7334,6 +7350,18 @@ function importHistoricoPatients(data, meta){
   const clinicId=data.clinicId||meta.clinicId||'particular';
   const origin=data.origin||meta.origin||(clinicId==='particular'?'Particular':'Prestação');
   const sourceTag=meta.sourceTag||'historico-csv';
+  // Importação assistida: usa o cadastro que já existe (mesmo nome, mesma clínica, sem ambiguidade)
+  // e um cadastro só para as várias linhas do mesmo paciente. Históricos antigos seguem 1 caso = 1 pessoa.
+  const linkPeople=!!meta.linkPeople;
+  const peopleByKey=new Map();
+  if(linkPeople){
+    const seen=new Map();
+    state.people.filter(pe=>pe.clinicId===clinicId).forEach(pe=>{
+      const k=personNameKey(pe.name); if(!k) return;
+      seen.set(k,(seen.get(k)||0)+1); peopleByKey.set(k,pe);
+    });
+    seen.forEach((n,k)=>{ if(n>1) peopleByKey.delete(k); }); // homônimos: não escolhe sozinho
+  }
   let touched=0;
   data.records.forEach(rec=>{
     if(!rec?.importId) return;
@@ -7349,15 +7377,20 @@ function importHistoricoPatients(data, meta){
     }
     let procId=rec.procedureId||'proc-historico-livre';
     if(!state.procedures.some(p=>p.id===procId)) procId='proc-historico-livre';
-    // 1 pessoa por caso importado — nunca funde por nome
-    const pe=emptyPerson({
-      name:rec.name,
-      clinicId,
-      vinculo:personVinculoFromOrigin(origin),
-      notes:rec.notes||rec.observation||'',
-      createdAt:rec.date||todayISO()
-    });
-    state.people.push(pe);
+    const nameKey=linkPeople?personNameKey(rec.name):'';
+    let pe=nameKey?peopleByKey.get(nameKey):null;
+    if(!pe){
+      // 1 pessoa por caso importado — nunca funde por nome (exceto importação assistida, acima)
+      pe=emptyPerson({
+        name:rec.name,
+        clinicId,
+        vinculo:personVinculoFromOrigin(origin),
+        notes:linkPeople?'':(rec.notes||rec.observation||''),
+        createdAt:rec.date||todayISO()
+      });
+      state.people.push(pe);
+      if(nameKey) peopleByKey.set(nameKey,pe);
+    }
     const patient=applyHistoricoPatientFields({
       id:uid(),
       personId:pe.id,
