@@ -94,7 +94,7 @@ function normStatus(fin, honor) {
   if (/retrabalho/.test(fl)) return { status: 'Retrabalho', received: 0 };
   if (/aguardando acerto/.test(fl)) return { status: 'Aguardando acerto', received: 0 };
   if (/parcial|recebido parte/.test(fl)) return { status: 'Recebido parcial', received: Math.round(honor * 50) / 100 };
-  if (/acordo/.test(fl)) return { status: 'Faturado / Recebido', received: honor };
+  // ACORDO = combinado, ainda não recebido → À receber
   if (/faturado|recebido/.test(fl) && !/n[aã]o recebeu/.test(fl)) return { status: 'Faturado / Recebido', received: honor };
   return { status: 'À receber', received: 0 };
 }

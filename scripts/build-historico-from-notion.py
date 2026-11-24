@@ -188,9 +188,7 @@ def fin_status(fin: str, honor: float) -> tuple[str, float]:
         return "Aguardando acerto", 0.0
     if re.search(r"parcial|recebido parte", fl):
         return "Recebido parcial", round(honor * 0.5, 2)
-    # Acordo no Notion = quitado por acordo → gráficos como recebido
-    if re.search(r"acordo", fl):
-        return "Faturado / Recebido", honor
+    # ACORDO no Notion = combinado, ainda não recebido → "À receber"
     if re.search(r"faturado|recebido", fl) and not re.search(r"n[aã]o recebeu", fl):
         return "Faturado / Recebido", honor
     return "À receber", 0.0
@@ -557,7 +555,7 @@ def main():
         "mapping": {
             "financeiro": {
                 "Faturado / Recebido ($)": "Faturado / Recebido",
-                "ACORDO": "Faturado / Recebido",
+                "ACORDO": "À receber",
                 "Aguardando Acerto": "Aguardando acerto",
                 "NAO VAI RECEBER": "Não vai receber",
                 "Recebido Parte": "Recebido parcial",

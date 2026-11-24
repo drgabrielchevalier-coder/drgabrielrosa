@@ -1,11 +1,8 @@
 {
-  "version": "2.30.2",
-  "name": "Juntar dados dos aparelhos no banco",
+  "version": "2.30.3",
+  "name": "ACORDO entra como a receber",
   "releasedAt": "2026-11-24",
   "changes": [
-    "Ao conectar ao banco, o aparelho não descarta mais o que só ele tinha: guarda uma cópia e avisa.",
-    "No indicador do topo, “Juntar ao banco” acrescenta ao banco os pacientes, tratamentos e custos que só existiam naquele aparelho, sem apagar nem alterar nada e sem duplicar nomes iguais na mesma clínica.",
-    "O diagnóstico mostra quantos pacientes, tratamentos e custos o aparelho está exibindo, para comparar o celular com o computador.",
-    "Banco recém-ligado (vazio) não aparece mais como Sem conexão."
+    "Na importação de honorários do Notion, o status ACORDO passa a entrar como “À receber” (combinado, ainda não recebido), e não mais como recebido."
   ]
 }
