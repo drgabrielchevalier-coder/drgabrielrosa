@@ -1,10 +1,10 @@
 {
-  "version": "2.28.0",
-  "name": "Gráfico com Lucro, Bruto e Custos",
+  "version": "2.29.0",
+  "name": "Estoque desativado (materiais e custos)",
   "releasedAt": "2026-11-24",
   "changes": [
-    "Dashboard: caixinhas acima do gráfico para escolher Lucro, Bruto e/ou Custos; a escolha fica salva.",
-    "Legenda com as mesmas cores das linhas: Lucro bege-laranja, Bruto verde, Custos azul (validadas para daltonismo).",
-    "Bruto = recebido no mês, Custos = custos dos tratamentos + despesas, Lucro = Bruto − Custos (igual ao card Lucro)."
+    "Controle de estoque desligado: tratamentos com implante, enxerto ou componente salvam sem exigir item em estoque e não baixam saldo.",
+    "Materiais seguem com preço, embalagem e custo unitário, entrando no custo dos procedimentos e tratamentos; página Estoque e alertas de estoque mínimo ficam ocultos.",
+    "Importar NF-e agora também em Custos (agrupa boletos e atualiza o custo dos materiais). Nada foi apagado: dá para religar em Configurações → Controle de estoque."
   ]
 }

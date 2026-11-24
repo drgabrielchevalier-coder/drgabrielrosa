@@ -139,7 +139,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <span class="nav-chevron" aria-hidden="true"></span>
         </button>
         <div class="nav-items" id="navItems-materiais" role="group" aria-labelledby="navLabel-materiais">
-          <button type="button" class="nav-btn" data-page="estoque" title="Estoque"><span class="nav-icon" aria-hidden="true">▦</span><span class="nav-btn-label">Estoque</span></button>
+          <button type="button" class="nav-btn" data-page="estoque" title="Estoque" data-stock-only><span class="nav-icon" aria-hidden="true">▦</span><span class="nav-btn-label">Estoque</span></button>
           <button type="button" class="nav-btn" data-page="materiais" title="Catálogo de materiais"><span class="nav-icon" aria-hidden="true">⬡</span><span class="nav-btn-label">Catálogo de materiais</span></button>
           <button type="button" class="nav-btn" data-page="banco" data-tab="materiais" title="Banco de custos"><span class="nav-icon" aria-hidden="true">▣</span><span class="nav-btn-label">Banco de custos</span></button>
           <button type="button" class="nav-btn" data-page="procedimentos" title="Procedimentos"><span class="nav-icon" aria-hidden="true">✦</span><span class="nav-btn-label">Procedimentos</span></button>
@@ -317,7 +317,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
               <button type="button" class="btn" onclick="go('recebiveis')">Recebíveis</button>
               <button type="button" class="btn" onclick="go('prestacao')">Prestação</button>
               <button type="button" class="btn" onclick="go('trabalhos')">Produção</button>
-              <button type="button" class="btn" onclick="go('estoque')">Estoque</button>
+              <button type="button" class="btn" onclick="go('estoque')" data-stock-only>Estoque</button>
               <button type="button" class="btn primary" onclick="openQuickModal()">＋ Novo</button>
             </div>
           </div>
@@ -802,6 +802,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <div><h2>Custos</h2><p>Despesas operacionais por categoria, vencimento e centro de custo.</p></div>
           <div class="page-actions">
             <button class="btn" id="costReconcileBtn" onclick="openCostReconcileModal()">⇄ Conciliar NF × boletos</button>
+            <button class="btn" onclick="openNfeImportModal()" title="Compra do fornecedor: agrupa os boletos e atualiza o custo dos materiais">⇪ Importar NF-e</button>
             <button class="btn" onclick="openBoletoScanModal()">⎙ Escanear boleto</button>
             <button class="btn primary" onclick="openCostModal()">＋ Novo custo</button>
           </div>
@@ -1052,7 +1053,8 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
             <div class="card-body">
               <div class="settings-row"><div class="desc"><strong>Calcular margem automaticamente</strong><span>Atualiza lucro e margem sempre que custos ou recebimentos mudarem.</span></div><div class="toggle on" id="setAutoMargin" role="switch" aria-checked="true" onclick="toggleSetting('autoMargin', this)"></div></div>
               <div class="settings-row"><div class="desc"><strong>Alertar recebíveis vencidos</strong><span>Destaca cobranças com vencimento anterior à data atual.</span></div><div class="toggle on" id="setAlertOverdue" role="switch" aria-checked="true" onclick="toggleSetting('alertOverdue', this)"></div></div>
-              <div class="settings-row"><div class="desc"><strong>Alertar estoque mínimo</strong><span>Sinaliza materiais cujo saldo atingiu o mínimo configurado.</span></div><div class="toggle on" id="setAlertStock" role="switch" aria-checked="true" onclick="toggleSetting('alertStock', this)"></div></div>
+              <div class="settings-row"><div class="desc"><strong>Controle de estoque</strong><span>Saldo, estoque mínimo, baixa automática ao lançar tratamento e exigência de implante/enxerto/componente em estoque. Desligado: ficam só materiais (preço e custo) e custos; nada é apagado.</span></div><div class="toggle" id="setStockEnabled" role="switch" aria-checked="false" onclick="toggleSetting('stockEnabled', this)"></div></div>
+              <div class="settings-row" data-stock-only><div class="desc"><strong>Alertar estoque mínimo</strong><span>Sinaliza materiais cujo saldo atingiu o mínimo configurado.</span></div><div class="toggle on" id="setAlertStock" role="switch" aria-checked="true" onclick="toggleSetting('alertStock', this)"></div></div>
               <div class="settings-row"><div class="desc"><strong>Ratear custos fixos</strong><span>Preparado para cálculo de lucro líquido por centro de resultado.</span></div><div class="toggle" id="setAllocateFixed" role="switch" aria-checked="false" onclick="toggleSetting('allocateFixed', this)"></div></div>
             </div>
           </div>

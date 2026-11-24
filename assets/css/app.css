@@ -1073,3 +1073,5 @@
     .table-wrap td{flex-wrap:wrap}
     .table-wrap td:before{flex:0 0 100%;max-width:100%;margin-bottom:2px}
   }
+/* Controle de estoque desligado: esconde o que só faz sentido com saldo */
+body.stock-off [data-stock-only]{display:none!important}

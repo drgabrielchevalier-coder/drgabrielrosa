@@ -111,7 +111,14 @@ function applyCsrfFromResponse(data){
   if(data && typeof data.csrf==='string' && data.csrf) window.CHEVALIER_CSRF=data.csrf;
 }
 function defaultSettings(){
-  return {autoMargin:true,alertOverdue:true,alertStock:true,allocateFixed:false};
+  return {autoMargin:true,alertOverdue:true,alertStock:true,allocateFixed:false,stockEnabled:false};
+}
+/**
+ * Controle de estoque (saldo, mínimo, baixa por tratamento, exigência de item em estoque).
+ * Desligado por padrão: ficam só materiais (preço/custo unitário) e custos. Nada é apagado; religável em Configurações.
+ */
+function stockEnabled(){
+  return !!(state?.settings && state.settings.stockEnabled===true);
 }
 function ensureSettings(){
   state.settings={...defaultSettings(),...(state.settings&&typeof state.settings==='object'?state.settings:{})};
@@ -132,7 +139,7 @@ function toggleSetting(key, el){
 }
 function renderSettings(){
   ensureSettings();
-  const map={setAutoMargin:'autoMargin',setAlertOverdue:'alertOverdue',setAlertStock:'alertStock',setAllocateFixed:'allocateFixed'};
+  const map={setAutoMargin:'autoMargin',setAlertOverdue:'alertOverdue',setAlertStock:'alertStock',setAllocateFixed:'allocateFixed',setStockEnabled:'stockEnabled'};
   Object.entries(map).forEach(([id,key])=>{
     const el=document.getElementById(id);
     if(!el) return;
@@ -277,7 +284,7 @@ function collectNotifications(){
       go:'prestacao'
     }));
   }
-  if(getSetting('alertStock')){
+  if(stockEnabled() && getSetting('alertStock')){
     state.materials.filter(m=>Number(m.stock)<=Number(m.min)).forEach(m=>items.push({
       title:`Estoque baixo · ${m.name}`,
       sub:`Saldo ${m.stock} · mínimo ${m.min}`,
@@ -1540,9 +1547,11 @@ function fillConsumeFromLines(lines,clinicId){
   const gate=treatmentNeedsStockGate(lines);
   const hint=document.getElementById('fConsumeGateHint');
   if(hint){
-    hint.textContent=gate
-      ? 'Selecione implante, enxerto e/ou componente com saldo em estoque. O sistema bloqueia quantidade acima do saldo.'
-      : 'Itens da ficha do procedimento. Implante, enxerto e componente exigem saldo.';
+    hint.textContent=!stockEnabled()
+      ? 'Materiais da ficha do procedimento: entram no custo do tratamento. Ajuste ou acrescente itens se precisar.'
+      : gate
+        ? 'Selecione implante, enxerto e/ou componente com saldo em estoque. O sistema bloqueia quantidade acima do saldo.'
+        : 'Itens da ficha do procedimento. Implante, enxerto e componente exigem saldo.';
   }
   if(gate){
     const block=list?.closest('details.progressive-block');
@@ -1839,6 +1848,7 @@ function isGatedStockMaterial(m){
   return !!(window.ChevalierNfe?.isGatedMaterial?.(m));
 }
 function treatmentNeedsStockGate(lines){
+  if(!stockEnabled()) return false;
   if(window.ChevalierNfe?.treatmentNeedsStockGate){
     return ChevalierNfe.treatmentNeedsStockGate(lines, procedure);
   }
@@ -1853,6 +1863,7 @@ function creditMapFromItems(items){
   return map;
 }
 function validateStockForSave(items, opts={}){
+  if(!stockEnabled()) return {ok:true};
   ensureStockCollections();
   if(!window.ChevalierNfe?.validateConsumption){
     return {ok:true};
@@ -1861,15 +1872,15 @@ function validateStockForSave(items, opts={}){
 }
 function materialSelect(selected='', {stockAware=false}={}){
   return state.materials.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).map(m=>{
-    const gate=isGatedStockMaterial(m);
+    const gate=stockEnabled()&&isGatedStockMaterial(m);
     const tag=gate?` · estoque ${Number(m.stock||0)}`:'';
-    const label=`${m.name} · ${brl.format(m.unitCost)}${stockAware||gate?tag:''}`;
+    const label=`${m.name} · ${brl.format(m.unitCost)}${(stockAware&&stockEnabled())||gate?(tag||` · estoque ${Number(m.stock||0)}`):''}`;
     return `<option value="${m.id}" ${m.id===selected?'selected':''}>${esc(label)}</option>`;
   }).join('');
 }
 function consumeRow(item={}){
   const m=material(item.materialId||'');
-  const stockHint=item.materialId?` · saldo ${Number(m.stock||0)}`:'';
+  const stockHint=item.materialId&&stockEnabled()?` · saldo ${Number(m.stock||0)}`:'';
   return `<div class="consume-row"><select class="select ci-mat" onchange="refreshConsumeTotals()">${materialSelect(item.materialId||'',{stockAware:true})}</select><input class="input ci-qty" type="number" min="0" step="0.01" value="${item.qty??1}" oninput="refreshConsumeTotals()" title="Quantidade${stockHint}"><input class="input ci-total" disabled value=""><button type="button" class="btn small icon-x" onclick="this.parentElement.remove();refreshConsumeTotals()">×</button></div>`;
 }
 function collectConsumeItems(){
@@ -1908,6 +1919,7 @@ function fillConsumeFromProcedure(procId){
   refreshConsumeTotals();
 }
 function applyStockConsumption(items, reverse=false){
+  if(!stockEnabled()) return; // estoque desligado: materiais só entram no custo, sem baixar saldo
   (items||[]).forEach(it=>{
     const m=state.materials.find(x=>x.id===it.materialId);
     if(!m) return;
@@ -2212,7 +2224,7 @@ function renderDashboard(){
       go:'trabalhos'
     });
   }
-  const lowStock=getSetting('alertStock')?state.materials.filter(m=>Number(m.stock)<=Number(m.min)):[];
+  const lowStock=stockEnabled()&&getSetting('alertStock')?state.materials.filter(m=>Number(m.stock)<=Number(m.min)):[];
   if(lowStock.length){
     attention.push({
       kind:'amber',
@@ -4681,6 +4693,7 @@ function renderStock(){
 }
 function renderAll(){
   ensureSettings();
+  document.body.classList.toggle('stock-off', !stockEnabled());
   ensureProstheses();
   try{
     if(window.ChevalierPlan){ChevalierPlan.ensureCollections();ChevalierPlan.seedDefaults();ChevalierPlan.bindUi();}
@@ -4883,6 +4896,7 @@ function runNavAction(action){
 
 function go(page, preferGroupKey){
   if(!page) return;
+  if(page==='estoque' && !stockEnabled()) page='materiais';
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+page)?.classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b=>{
@@ -5110,10 +5124,10 @@ function openPatientModal(origin='',editId='',personId=''){
       <div class="field"><label>Status financeiro</label><select id="fStatus" class="select">${statusOptions(p.status)}</select></div>
       <div class="field full"><label>Progresso clínico</label><select id="fProgress" class="select">${['Orçamento','Em tratamento','Planejar caso','Solicitar material','Em fila / agendado','Aguardo pós Cirúrgico','Aguardando cicatrização','Aguardando moldagem','Moldagem','Enviado para Laboratório','Aguardando Prova','Aguardando Cimentação','Alta'].map(s=>`<option ${s===(p.progress||'Em tratamento')?'selected':''}>${s}</option>`).join('')}</select></div>
       <details class="field full progressive-block" ${(editId||needsGate)?'open':''}>
-        <summary>Materiais do estoque <span class="cell-sub">${needsGate?'obrigatório para implante / enxerto / componente':'da composição — baixa o saldo'}</span></summary>
+        <summary>${stockEnabled()?'Materiais do estoque':'Materiais e custos'} <span class="cell-sub">${needsGate?'obrigatório para implante / enxerto / componente':stockEnabled()?'da composição — baixa o saldo':'da composição — entram no custo do tratamento'}</span></summary>
         <div class="form-grid" style="margin-top:12px">
           <div class="field full"><label>Consumo de materiais</label>
-            <p class="field-hint" id="fConsumeGateHint">${needsGate?'Selecione implante, enxerto e/ou componente com saldo em estoque. O sistema bloqueia quantidade acima do saldo.':'Itens da ficha do procedimento. Implante, enxerto e componente exigem saldo.'}</p>
+            <p class="field-hint" id="fConsumeGateHint">${needsGate?'Selecione implante, enxerto e/ou componente com saldo em estoque. O sistema bloqueia quantidade acima do saldo.':stockEnabled()?'Itens da ficha do procedimento. Implante, enxerto e componente exigem saldo.':'Materiais da ficha do procedimento: entram no custo do tratamento. Ajuste ou acrescente itens se precisar.'}</p>
             <div id="fConsumeList" class="consume-list">${(seedConsume.length?seedConsume:[{}]).map(consumeRow).join('')}</div>
             <div class="row-actions" style="margin-top:8px"><button type="button" class="btn small" onclick="document.getElementById('fConsumeList').insertAdjacentHTML('beforeend', consumeRow())">＋ Item</button><button type="button" class="btn small" onclick="recalcTreatmentTotals()">Recalcular da composição</button></div>
             <div class="consume-total" id="fConsumeTotal"></div>
@@ -5839,7 +5853,7 @@ function openProcedureModal(editId=''){
     if(!getv('pName'))return toast('Informe o nome do procedimento.');
     const items=collectProcItems();
     const obj={id:editId||uid(),name:getv('pName'),specialty:getv('pSpecialty')||'clinica',kind:getv('pKind')||'clinico',price:num('pPrice'),extra:num('pExtra'),items,clinicPrices:collectClinicPrices()};
-    if(window.ChevalierNfe?.procedureNeedsStockGate?.(obj)){
+    if(stockEnabled() && window.ChevalierNfe?.procedureNeedsStockGate?.(obj)){
       const gated=items.filter(it=>isGatedStockMaterial(material(it.materialId)));
       if(!gated.length){
         return toast('Procedimento de implante/enxerto/componente precisa listar os materiais do estoque utilizados.');
@@ -5887,7 +5901,7 @@ function openCostModal(editId=''){
 function openMaterialModal(editId=''){
   const m=state.materials.find(x=>x.id===editId)||{};
   const typeOpts=catalogTypeOptions(m.type||'');
-  openModal(editId?'Editar material':'Novo material',`<div class="form-grid"><div class="field full"><label>Material</label><input id="mName" class="input" value="${esc(m.name||'')}"></div><div class="field"><label>Marca</label><input id="mBrand" class="input" value="${esc(m.brand||'')}"></div><div class="field"><label>Categoria</label><select id="mType" class="select"><option value="">Selecione…</option>${typeOpts}</select><small class="field-hint">Cirurgia, implante, prótese, endodontia e uso comum.</small></div><div class="field"><label>Fornecedor</label><input id="mSupplier" class="input" value="${esc(m.supplier||'')}"></div><div class="field full"><label>Código de barras (EAN / interno)</label><input id="mBarcode" class="input" value="${esc(m.barcode||'')}" placeholder="Escaneie ou digite o código"><small class="field-hint">Usado pelo leitor para localizar o material no estoque.</small></div><div class="field"><label>Embalagem</label><input id="mPack" class="input" value="${esc(m.pack||'')}" placeholder="Ex.: 50 tubetes" oninput="document.getElementById('mUnit').value=unitCostFromPack(Number(document.getElementById('mPrice').value||0),this.value)"></div><div class="field"><label>Preço total da embalagem</label><input id="mPrice" type="number" step="0.01" class="input" value="${m.price??''}" oninput="document.getElementById('mUnit').value=unitCostFromPack(Number(this.value||0),document.getElementById('mPack').value)"></div><div class="field"><label>Custo unitário fracionado</label><input id="mUnit" type="number" step="0.001" class="input" value="${m.unitCost??''}"><small class="field-hint">Calculado automaticamente: preço ÷ unidades da embalagem.</small></div><div class="field"><label>Quantidade atual</label><input id="mStock" type="number" class="input" value="${m.stock??0}"></div><div class="field"><label>Estoque mínimo</label><input id="mMin" type="number" class="input" value="${m.min??1}"></div></div>`,()=>{
+  openModal(editId?'Editar material':'Novo material',`<div class="form-grid"><div class="field full"><label>Material</label><input id="mName" class="input" value="${esc(m.name||'')}"></div><div class="field"><label>Marca</label><input id="mBrand" class="input" value="${esc(m.brand||'')}"></div><div class="field"><label>Categoria</label><select id="mType" class="select"><option value="">Selecione…</option>${typeOpts}</select><small class="field-hint">Cirurgia, implante, prótese, endodontia e uso comum.</small></div><div class="field"><label>Fornecedor</label><input id="mSupplier" class="input" value="${esc(m.supplier||'')}"></div><div class="field full"><label>Código de barras (EAN / interno)</label><input id="mBarcode" class="input" value="${esc(m.barcode||'')}" placeholder="Escaneie ou digite o código"><small class="field-hint">Usado pelo leitor para localizar o material.</small></div><div class="field"><label>Embalagem</label><input id="mPack" class="input" value="${esc(m.pack||'')}" placeholder="Ex.: 50 tubetes" oninput="document.getElementById('mUnit').value=unitCostFromPack(Number(document.getElementById('mPrice').value||0),this.value)"></div><div class="field"><label>Preço total da embalagem</label><input id="mPrice" type="number" step="0.01" class="input" value="${m.price??''}" oninput="document.getElementById('mUnit').value=unitCostFromPack(Number(this.value||0),document.getElementById('mPack').value)"></div><div class="field"><label>Custo unitário fracionado</label><input id="mUnit" type="number" step="0.001" class="input" value="${m.unitCost??''}"><small class="field-hint">Calculado automaticamente: preço ÷ unidades da embalagem.</small></div><div class="field" ${stockEnabled()?'':'hidden'}><label>Quantidade atual</label><input id="mStock" type="number" class="input" value="${m.stock??0}"></div><div class="field" ${stockEnabled()?'':'hidden'}><label>Estoque mínimo</label><input id="mMin" type="number" class="input" value="${m.min??1}"></div></div>`,()=>{
     if(!getv('mName'))return toast('Informe o material.');
     const pack=getv('mPack'); const price=num('mPrice');
     const obj={id:editId||uid(),name:getv('mName'),brand:getv('mBrand'),type:getv('mType'),supplier:getv('mSupplier'),barcode:getv('mBarcode').trim(),pack,price,unitCost:num('mUnit')||unitCostFromPack(price,pack)||price,stock:num('mStock'),min:num('mMin'),updated:todayISO()};
@@ -5925,8 +5939,8 @@ function openReceivableModal(type=''){
         <button type="button" class="btn small" onclick="addTreatmentLine();recalcReceivableTotals();syncReceivableConsume()">＋ Adicionar</button>
       </div>
     </div>
-    <div class="field full"><label>Materiais do estoque</label>
-      <p class="field-hint">${needsGate?'Obrigatório: informe implante / enxerto / componente com saldo.':'Baixa automática do estoque conforme o consumo.'}</p>
+    <div class="field full"><label>${stockEnabled()?'Materiais do estoque':'Materiais e custos'}</label>
+      <p class="field-hint">${needsGate?'Obrigatório: informe implante / enxerto / componente com saldo.':stockEnabled()?'Baixa automática do estoque conforme o consumo.':'Materiais usados: entram no custo do tratamento.'}</p>
       <div id="fConsumeList" class="consume-list">${(bom.items.length?bom.items:[{}]).map(consumeRow).join('')}</div>
       <div class="row-actions" style="margin-top:8px"><button type="button" class="btn small" onclick="document.getElementById('fConsumeList').insertAdjacentHTML('beforeend', consumeRow());refreshConsumeTotals()">＋ Item</button></div>
       <div class="consume-total" id="fConsumeTotal"></div>
@@ -6011,6 +6025,8 @@ function recalcReceivableTotals(){
   if(hint) hint.textContent=treatHonorHintText(lines,settled);
 }
 function openStockModal(prefillId=''){
+  // estoque desligado: o código de barras abre o cadastro do material (preço/custo)
+  if(!stockEnabled()) return prefillId?openMaterialModal(prefillId):toast('Controle de estoque desligado (Configurações). Os materiais seguem só com preço e custo.');
   const selected=prefillId||(state.materials[0]?.id||'');
   openModal('Movimentar estoque',`<div class="form-grid"><div class="field full"><label>Material</label><select id="sMaterial" class="select">${state.materials.map(m=>`<option value="${m.id}" ${m.id===selected?'selected':''}>${esc(m.name)} · saldo ${m.stock}${m.barcode?' · '+esc(m.barcode):''}</option>`).join('')}</select></div><div class="field"><label>Movimento</label><select id="sType" class="select"><option value="in">Entrada</option><option value="out">Saída / consumo</option></select></div><div class="field"><label>Quantidade</label><input id="sQty" type="number" class="input" value="1"></div><div class="field"><label>Custo unitário (entrada)</label><input id="sUnitCost" type="number" step="0.001" class="input" placeholder="Opcional — recalcula custo médio"></div></div>`,()=>{
     const m=state.materials.find(x=>x.id===getv('sMaterial'));if(!m)return;
@@ -6042,7 +6058,7 @@ function openNfeImportModal(){
       <div class="field full">
         <label>Arquivo da NF-e (XML ou PDF/DANFE)</label>
         <input id="nfeFile" type="file" class="input" accept=".xml,text/xml,application/xml,.pdf,application/pdf">
-        <p class="field-hint">O XML é lido direto e é o mais preciso. O PDF (DANFE) é lido pela IA. Nesse caso, confira quantidades e valores antes de aplicar. Cada item será associado a um material do estoque ou cadastrado como novo.</p>
+        <p class="field-hint">O XML é lido direto e é o mais preciso. O PDF (DANFE) é lido pela IA. Nesse caso, confira quantidades e valores antes de aplicar. Cada item será associado a um material cadastrado ou cadastrado como novo; o custo unitário do material é atualizado.</p>
       </div>
       <div class="field full">
         <label>Pagamento da nota</label>
@@ -6056,7 +6072,7 @@ function openNfeImportModal(){
       <div class="field full" id="nfeItemsWrap" hidden>
         <label>Itens da nota</label>
         <div class="table-wrap"><table>
-          <thead><tr><th></th><th>Produto</th><th>Qtd</th><th>R$ un.</th><th>Material no estoque</th></tr></thead>
+          <thead><tr><th></th><th>Produto</th><th>Qtd</th><th>R$ un.</th><th>${stockEnabled()?'Material no estoque':'Material'}</th></tr></thead>
           <tbody id="nfeItemsBody"></tbody>
         </table></div>
       </div>
@@ -6090,7 +6106,9 @@ function openNfeImportModal(){
     const result=ChevalierNfe.applyImport(state, draft, {uid, payment});
     if(!result.count) return toast('Nenhum item aplicado.');
     save();closeModal();renderAll();
-    toast(`NF-e importada: ${result.count} item(ns) entraram no estoque. Custos de procedimento atualizados.`);
+    toast(stockEnabled()
+      ? `NF-e importada: ${result.count} item(ns) entraram no estoque. Custos de procedimento atualizados.`
+      : `NF-e importada: ${result.count} item(ns) · custos dos materiais atualizados. A compra está em Custos.`);
     // boletos desta compra já lançados antes? oferece o vínculo na hora
     const L=window.ChevalierCostLink;
     const nfCost=result.costId&&state.costs.find(c=>c.id===result.costId);
@@ -6099,7 +6117,7 @@ function openNfeImportModal(){
     }
   });
   document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
-  document.getElementById('modalSave').textContent='Aplicar no estoque';
+  document.getElementById('modalSave').textContent=stockEnabled()?'Aplicar no estoque':'Importar NF-e';
   const renderDraft=()=>{
     const meta=document.getElementById('nfeMeta');
     const wrap=document.getElementById('nfeItemsWrap');
@@ -6118,7 +6136,7 @@ function openNfeImportModal(){
       body.innerHTML=draft.items.map((it,i)=>{
         const selected=it.materialId||(it.createNew?'__new__':'');
         const opts=[`<option value="__new__" ${selected==='__new__'?'selected':''}>＋ Cadastrar novo material</option>`]
-          .concat(state.materials.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).map(m=>`<option value="${m.id}" ${m.id===selected?'selected':''}>${esc(m.name)} · saldo ${m.stock}</option>`))
+          .concat(state.materials.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).map(m=>`<option value="${m.id}" ${m.id===selected?'selected':''}>${esc(m.name)}${stockEnabled()?` · saldo ${m.stock}`:` · ${brl.format(m.unitCost||0)}`}</option>`))
           .join('');
         const qtyCell=fromPdf?`<input type="number" class="input nfe-qty" min="0" step="any" value="${it.qty}" style="width:84px" aria-label="Quantidade">`:`${it.qty}`;
         const costCell=fromPdf?`<input type="number" class="input nfe-cost" min="0" step="any" value="${Math.round((Number(it.unitCost)||0)*10000)/10000}" style="width:104px" aria-label="Valor unitário">`:`${brl.format(it.unitCost||0)}`;
@@ -6514,7 +6532,7 @@ function handleBarcodeLookup(code){
       box.innerHTML=`<div><strong>${esc(hit.name)}</strong><div class="cell-sub">${esc(hit.brand||'')} · estoque ${hit.stock} · ${esc(hit.barcode||'')}</div></div>
         <div class="row-actions">
           <button type="button" class="btn small" onclick="closeModal();openMaterialModal('${hit.id}')">Editar</button>
-          <button type="button" class="btn small primary" onclick="closeModal();openStockModal('${hit.id}')">Movimentar</button>
+          <button type="button" class="btn small primary" onclick="closeModal();openStockModal('${hit.id}')">${stockEnabled()?'Movimentar':'Abrir material'}</button>
         </div>`;
     }
     document.getElementById('bcCode').value=raw;
@@ -6635,7 +6653,7 @@ function openQuickModal(){
   }else if(page==='estoque' || page==='materiais'){
     ctx.push(`<button type="button" class="btn primary" style="height:80px;justify-content:center" onclick="closeModal();openNfeImportModal()">Importar NF-e</button>`);
     ctx.push(`<button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openMaterialModal()">Material</button>`);
-    ctx.push(`<button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openStockModal()">Movimentar estoque</button>`);
+    if(stockEnabled()) ctx.push(`<button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openStockModal()">Movimentar estoque</button>`);
   }
   const rest=`
     <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openPersonModal()">Paciente</button>
