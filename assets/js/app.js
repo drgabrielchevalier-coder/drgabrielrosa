@@ -2030,6 +2030,78 @@ function dashTimeGreeting(){
   if(hour<18) return 'Boa tarde';
   return 'Boa noite';
 }
+/** Valor curto para o eixo: R$ 1,2 mil · R$ 15 mil · R$ 800. */
+function brlShort(v){
+  const a=Math.abs(v), sig=v<0?'−':'';
+  if(a>=1e6) return `${sig}R$ ${(a/1e6).toLocaleString('pt-BR',{maximumFractionDigits:1})} mi`;
+  if(a>=1e3) return `${sig}R$ ${(a/1e3).toLocaleString('pt-BR',{maximumFractionDigits:a>=1e4?0:1})} mil`;
+  return `${sig}R$ ${Math.round(a)}`;
+}
+function niceStep(range,count){
+  const raw=range/Math.max(1,count), mag=Math.pow(10,Math.floor(Math.log10(raw||1))), n=raw/mag;
+  return (n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*mag;
+}
+/**
+ * Lucro bruto × custos em linhas (SVG): 2 séries, um eixo só, grade discreta, rótulo direto no último
+ * ponto, hover com linha-guia + tooltip e tabela oculta para leitor de tela.
+ */
+function renderMonthlyLineChart(el, months){
+  const series=[
+    {key:'profit',label:'Lucro bruto',color:'#a8802a',values:months.map(m=>moneyRound(m.profit))},
+    {key:'cost',label:'Custos',color:'#3b72b8',values:months.map(m=>moneyRound(m.cost+m.overhead))}
+  ];
+  const all=series.flatMap(s=>s.values);
+  let lo=Math.min(0,...all), hi=Math.max(1,...all);
+  const step=niceStep(hi-lo,4);
+  lo=Math.floor(lo/step)*step; hi=Math.ceil(hi/step)*step; if(hi===lo) hi=lo+step;
+  const W=640,H=230,L=58,R=92,T=14,B=30, iw=W-L-R, ih=H-T-B;
+  const x=i=>L+(months.length<=1?iw/2:(i*iw)/(months.length-1));
+  const y=v=>T+ih-((v-lo)/(hi-lo))*ih;
+  const ticks=[]; for(let v=lo; v<=hi+step/2; v+=step) ticks.push(v);
+  const grid=ticks.map(v=>`<line x1="${L}" x2="${L+iw}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="${v===0?'#cfc6b4':'#ece6da'}" stroke-width="1"/>
+    <text x="${L-8}" y="${(y(v)+3.5).toFixed(1)}" text-anchor="end" class="lc-axis">${esc(brlShort(v))}</text>`).join('');
+  const xl=months.map((m,i)=>`<text x="${x(i).toFixed(1)}" y="${H-10}" text-anchor="middle" class="lc-axis">${esc(m.label)}</text>`).join('');
+  // rótulos diretos no fim das linhas, afastados se ficarem colados
+  const lastY=series.map(s=>y(s.values[s.values.length-1]||0));
+  if(Math.abs(lastY[0]-lastY[1])<14){ const mid=(lastY[0]+lastY[1])/2, up=lastY[0]<=lastY[1]?0:1; lastY[up]=mid-7; lastY[1-up]=mid+7; }
+  const lines=series.map((s,si)=>{
+    const pts=s.values.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const dots=s.values.map((v,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="4" fill="${s.color}" stroke="#fffdf9" stroke-width="2"/>`).join('');
+    const lx=x(s.values.length-1)+10;
+    return `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>${dots}
+      <text x="${lx.toFixed(1)}" y="${(lastY[si]+3.5).toFixed(1)}" class="lc-label">${esc(s.label)}</text>`;
+  }).join('');
+  const hits=months.map((m,i)=>{
+    const half=months.length<=1?iw/2:iw/(months.length-1)/2;
+    return `<rect class="lc-hit" data-i="${i}" x="${(x(i)-half).toFixed(1)}" y="${T}" width="${(half*2).toFixed(1)}" height="${ih}" fill="transparent"/>`;
+  }).join('');
+  el.classList.add('chart-line');
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Lucro bruto e custos por mês" preserveAspectRatio="xMidYMid meet">
+      ${grid}${xl}<line class="lc-guide" x1="0" x2="0" y1="${T}" y2="${T+ih}" stroke="#b9ae97" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
+      ${lines}${hits}
+    </svg>
+    <div class="lc-tip" hidden></div>
+    <table class="sr-only"><caption>Lucro bruto e custos por mês</caption><thead><tr><th>Mês</th><th>Lucro bruto</th><th>Custos</th></tr></thead>
+      <tbody>${months.map((m,i)=>`<tr><td>${esc(m.label)}</td><td>${brl.format(series[0].values[i])}</td><td>${brl.format(series[1].values[i])}</td></tr>`).join('')}</tbody></table>`;
+  const svg=el.querySelector('svg'), guide=el.querySelector('.lc-guide'), tip=el.querySelector('.lc-tip');
+  const show=i=>{
+    const gx=x(i);
+    guide.setAttribute('x1',gx); guide.setAttribute('x2',gx); guide.setAttribute('visibility','visible');
+    tip.innerHTML=`<strong>${esc(months[i].label)}</strong>${series.map(s=>`<div><i style="background:${s.color}"></i>${esc(s.label)}<b>${brl.format(s.values[i])}</b></div>`).join('')}`;
+    tip.hidden=false;
+    const box=svg.getBoundingClientRect(), host=el.getBoundingClientRect();
+    const px=(gx/W)*box.width+(box.left-host.left);
+    const left=Math.min(Math.max(8,px+12), host.width-tip.offsetWidth-8);
+    tip.style.left=`${px+12+tip.offsetWidth>host.width-8?px-12-tip.offsetWidth:left}px`;
+    tip.style.top='8px';
+  };
+  const hide=()=>{ guide.setAttribute('visibility','hidden'); tip.hidden=true; };
+  el.querySelectorAll('.lc-hit').forEach(r=>{
+    r.addEventListener('mouseenter',()=>show(Number(r.dataset.i)));
+    r.addEventListener('click',()=>show(Number(r.dataset.i)));
+  });
+  svg.addEventListener('mouseleave',hide);
+}
 function renderDashboard(){
   const patients=state.patients.filter(p=>inPeriod(p.date));
   const costsPeriod=state.costs.filter(c=>inPeriod(c.date));
@@ -2060,17 +2132,7 @@ function renderDashboard(){
   const months=monthlySeries(periodDays()>=300?12:periodDays()>=150?8:6);
   const maxY=Math.max(1,...months.flatMap(m=>[m.profit,m.cost,m.overhead+m.cost]));
   const chart=document.getElementById('chartMonthly');
-  if(chart){
-    chart.innerHTML=months.map(m=>{
-      const costTotal=m.cost+m.overhead;
-      const ph=Math.max(4,Math.round((Math.max(0,m.profit)/maxY)*132));
-      const ch=Math.max(4,Math.round((costTotal/maxY)*132));
-      return `<div class="chart-col" title="${esc(m.label)}: lucro ${brl.format(m.profit)} · custos ${brl.format(costTotal)}">
-        <div class="chart-bars"><span class="chart-bar profit" style="height:${ph}px"></span><span class="chart-bar cost" style="height:${ch}px"></span></div>
-        <small>${esc(m.label)}</small>
-      </div>`;
-    }).join('');
-  }
+  if(chart) renderMonthlyLineChart(chart, months);
   const cash=document.getElementById('chartCash');
   if(cash){
     const open=receber, done=rec, total=Math.max(1,done+open);

@@ -1,10 +1,9 @@
 {
-  "version": "2.26.2",
-  "name": "Baixa em lote concilia recebidos sem histórico",
+  "version": "2.27.0",
+  "name": "Lucro × custos em linhas",
   "releasedAt": "2026-11-24",
   "changes": [
-    "Tratamentos importados como Faturado / Recebido sem baixas no histórico agora recebem as baixas da lista (data, valor, parcial até a quitação) sem mudar o total recebido.",
-    "A revisão indica 'já constava como recebido: registra no histórico' e o saldo após cada baixa; a Ficha e o Extrato de baixas passam a mostrar o histórico.",
-    "Se parte já constava como recebida e parte está em aberto, documenta a primeira e baixa o restante."
+    "Dashboard: o gráfico Lucro bruto × custos passou a ser de linhas, com eixo em R$, nome de cada série no fim da linha e valores do mês ao passar o mouse.",
+    "Cores novas e mais distintas (dourado para lucro, azul para custos), validadas para daltonismo."
   ]
 }
