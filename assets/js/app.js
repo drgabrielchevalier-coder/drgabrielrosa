@@ -2234,7 +2234,7 @@ function refreshPatientStatusFilterOptions(){
   else sel.value='';
 }
 function setPatientView(mode,btn){
-  patientViewMode=['lista','kanban','grafico'].includes(mode)?mode:'lista';
+  patientViewMode=['lista','kanban','grafico','cadastros'].includes(mode)?mode:'lista';
   try{localStorage.setItem('chevalier_patient_view',patientViewMode)}catch(e){}
   document.querySelectorAll('#page-pacientes .view-tab').forEach(b=>b.classList.toggle('active',b.dataset.view===patientViewMode));
   if(btn) btn.classList.add('active');
@@ -2476,6 +2476,207 @@ function fillFilters(){
   sel.innerHTML='<option value="">Todas as clínicas</option>'+state.clinics.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
   sel.value=current;
 }
+/** Visão Cadastros: pessoas (com ou sem tratamento), com busca e filtro de clínica da própria aba. */
+function renderPeopleList(){
+  const q=normTxt(getv('patientSearch'));
+  const cl=getv('patientClinicFilter');
+  const counts={};
+  (state.patients||[]).forEach(p=>{ if(p.personId) counts[p.personId]=(counts[p.personId]||0)+1; });
+  const list=(state.people||[])
+    .filter(pe=>(!cl||pe.clinicId===cl) && (!q||normTxt(`${pe.name} ${pe.phone||''}`).includes(q)))
+    .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'pt-BR'));
+  const cnt=document.getElementById('patientsPeopleCount');
+  if(cnt) cnt.textContent=`${list.length} cadastro(s)${cl?` em ${clinic(cl).name}`:''}. Cadastro = pessoa; os tratamentos ficam na Lista.`;
+  const tb=document.getElementById('patientsPeopleTable');
+  if(!tb) return;
+  tb.innerHTML=list.slice(0,1000).map(pe=>`<tr>
+    ${td('Paciente',`<strong>${esc(pe.name)}</strong>`)}${td('Clínica',esc(pe.clinicId?clinic(pe.clinicId).name:'—'))}${td('Telefone',esc(pe.phone||'—'))}${td('Tratamentos',String(counts[pe.id]||0))}${td('Cadastrado em',fmtDate(pe.createdAt))}
+    <td class="actions-cell"><div class="row-actions">
+      <button class="btn small" onclick="openPatientModal('','','${pe.id}')">＋ Tratamento</button>
+      <button class="btn small" onclick="openPersonModal('${pe.id}')">Editar</button>
+    </div></td></tr>`).join('')||'<tr><td colspan="6"><div class="empty">Nenhum cadastro encontrado.</div></td></tr>';
+}
+window.renderPeopleList=renderPeopleList;
+
+/* ---------- Cadastro de pacientes em lote (só nome + clínica) ---------- */
+const NAME_PARTICLES=new Set(['da','de','do','das','dos','e']);
+function personNameKey(name){
+  return normTxt(name).replace(/[^a-z0-9 ]+/g,' ').split(/\s+/).filter(w=>w&&!NAME_PARTICLES.has(w)).join(' ');
+}
+function editDistance(a,b){
+  if(Math.abs(a.length-b.length)>2) return 9;
+  const prev=Array.from({length:b.length+1},(_,i)=>i);
+  for(let i=1;i<=a.length;i++){
+    let diag=prev[0]; prev[0]=i;
+    for(let j=1;j<=b.length;j++){
+      const tmp=prev[j];
+      prev[j]=Math.min(prev[j]+1, prev[j-1]+1, diag+(a[i-1]===b[j-1]?0:1));
+      diag=tmp;
+    }
+  }
+  return prev[b.length];
+}
+function namesLookAlike(k1,k2){
+  if(!k1||!k2||k1===k2) return k1===k2;
+  if(k1.slice(0,3)!==k2.slice(0,3) || Math.min(k1.length,k2.length)<8) return false;
+  return editDistance(k1,k2)<=2;
+}
+const PEOPLE_NAME_COLS=['propriedade','nome','paciente','name','patient','cliente'];
+/** Lista única de nomes (mais frequente vence como grafia), marcando já cadastrados e parecidos. */
+function buildPeopleBatch(names,clinicId){
+  const groups=new Map();
+  names.forEach(raw=>{
+    const name=String(raw||'').replace(/\s+/g,' ').trim();
+    const key=personNameKey(name);
+    if(!key) return;
+    if(!groups.has(key)) groups.set(key,{key,spellings:{},count:0});
+    const g=groups.get(key); g.count++; g.spellings[name]=(g.spellings[name]||0)+1;
+  });
+  const existing=(state.people||[]).map(pe=>({pe,key:personNameKey(pe.name)}));
+  const items=[...groups.values()].map(g=>{
+    const name=Object.entries(g.spellings).sort((a,b)=>b[1]-a[1])[0][0];
+    const same=existing.filter(x=>x.key===g.key);
+    const sameClinic=same.find(x=>x.pe.clinicId===clinicId);
+    const item={key:g.key,name,count:g.count,variants:Object.keys(g.spellings).filter(n=>n!==name),include:true,status:'novo',note:''};
+    if(sameClinic){ item.include=false; item.status='existe'; item.note='Já cadastrado nesta clínica'; }
+    else if(same.length){ item.note=`Mesmo nome em ${clinic(same[0].pe.clinicId).name||'outra clínica'} (pessoa diferente?)`; item.status='outra'; }
+    else{
+      const near=existing.find(x=>namesLookAlike(x.key,g.key));
+      if(near){ item.include=false; item.status='parecido'; item.note=`Parece já cadastrado: ${near.pe.name}`; }
+    }
+    return item;
+  }).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+  // parecidos dentro do próprio arquivo: a grafia menos frequente fica desmarcada
+  items.forEach((a,i)=>{
+    if(a.status!=='novo'&&a.status!=='outra') return;
+    items.forEach((b,j)=>{
+      if(i===j||b.status==='parecido'||!namesLookAlike(a.key,b.key)) return;
+      const loser=(a.count<b.count||(a.count===b.count&&i>j))?a:b;
+      const winner=loser===a?b:a;
+      if(loser.status==='parecido') return;
+      loser.include=false; loser.status='parecido'; loser.note=`Parece ser: ${winner.name}`;
+    });
+  });
+  return items;
+}
+async function readPeopleNamesFromFile(file){
+  const lower=String(file.name||'').toLowerCase();
+  let headers=[], rows=[];
+  if(/\.xlsx?$/.test(lower)){
+    const x=await window.ChevalierImport.parseXlsxArrayBuffer(await file.arrayBuffer());
+    headers=x.headers; rows=x.rows;
+  }else{
+    const text=await file.text();
+    if(/\.txt$/.test(lower)) return {headers:['Nome'],rows:text.split(/\r?\n/).map(n=>({Nome:n})),col:'Nome'};
+    const parsed=parseImportFileContent(text,file.name);
+    headers=parsed.headers; rows=parsed.rows;
+  }
+  const clean=h=>normTxt(String(h||'').replace(/^\ufeff/,'')).trim();
+  const col=headers.find(h=>PEOPLE_NAME_COLS.includes(clean(h)))||headers.find(h=>PEOPLE_NAME_COLS.some(c=>clean(h).includes(c)))||headers[0]||'';
+  return {headers,rows,col};
+}
+function openPeopleBatchModal(){
+  const defClinic=state.clinics.find(c=>c.id==='allon')?.id||state.clinics[0]?.id||'';
+  const ctx={headers:[],rows:[],col:'',items:[],filename:''};
+  window.__peopleBatch=ctx;
+  openModal('Cadastrar lista de pacientes',`
+    <p class="field-hint" style="margin-top:0">Cria só o <strong>cadastro</strong> (nome + clínica), sem tratamentos nem valores. Quem já está cadastrado nesta clínica é ignorado; nomes parecidos vêm desmarcados para você decidir.</p>
+    <div class="form-grid">
+      <div class="field full"><label>Arquivo (CSV, XLSX ou TXT com um nome por linha)</label>
+        <input id="pbFile" type="file" class="input" accept=".csv,.xlsx,.xls,.txt,text/csv,text/plain"></div>
+      <div class="field full"><label>ou cole os nomes (um por linha)</label>
+        <textarea id="pbPaste" class="textarea" rows="3" placeholder="Maria Silva&#10;João Souza"></textarea></div>
+      <div class="field"><label>Clínica</label><select id="pbClinic" class="select">${clinicOptions(defClinic)}</select></div>
+      <div class="field"><label>Coluna com o nome</label><select id="pbCol" class="select" disabled><option>—</option></select></div>
+    </div>
+    <div id="pbReview" style="margin-top:12px"></div>
+  `,()=>commitPeopleBatch());
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  document.getElementById('modalSave').textContent='Cadastrar marcados';
+  const rebuild=()=>{
+    const clinicId=getv('pbClinic');
+    const pasted=getv('pbPaste').split(/\r?\n/);
+    const fromFile=ctx.col?ctx.rows.map(r=>r[ctx.col]):[];
+    ctx.items=buildPeopleBatch([...fromFile,...pasted],clinicId);
+    renderPeopleBatchReview();
+  };
+  document.getElementById('pbFile')?.addEventListener('change',async ev=>{
+    const f=ev.target.files?.[0]; if(!f) return;
+    try{
+      const r=await readPeopleNamesFromFile(f);
+      Object.assign(ctx,r,{filename:f.name});
+      const sel=document.getElementById('pbCol');
+      if(sel){ sel.disabled=false; sel.innerHTML=r.headers.map(h=>`<option value="${esc(h)}" ${h===r.col?'selected':''}>${esc(String(h).replace(/^\ufeff/,''))}</option>`).join(''); }
+      rebuild();
+    }catch(e){ toast('Não consegui ler o arquivo: '+(e.message||e)); }
+  });
+  document.getElementById('pbCol')?.addEventListener('change',()=>{ ctx.col=getv('pbCol'); rebuild(); });
+  document.getElementById('pbClinic')?.addEventListener('change',rebuild);
+  document.getElementById('pbPaste')?.addEventListener('input',rebuild);
+}
+function renderPeopleBatchReview(){
+  const ctx=window.__peopleBatch; const box=document.getElementById('pbReview');
+  if(!ctx||!box) return;
+  const items=ctx.items;
+  if(!items.length){ box.innerHTML=''; return; }
+  const n=k=>items.filter(i=>i.status===k).length;
+  const badgeFor=i=>i.status==='existe'?'<span class="badge b-gray">Já cadastrado</span>':i.status==='parecido'?'<span class="badge b-amber">Parecido</span>':i.status==='outra'?'<span class="badge b-blue">Outra clínica</span>':'<span class="badge b-green">Novo</span>';
+  box.innerHTML=`<div class="detail-grid" style="margin-bottom:10px">
+      <div><span>Nomes únicos</span><strong>${items.length}</strong></div>
+      <div><span>Novos</span><strong>${n('novo')+n('outra')}</strong></div>
+      <div><span>Já cadastrados</span><strong>${n('existe')}</strong></div>
+      <div><span>Parecidos (revisar)</span><strong>${n('parecido')}</strong></div>
+      <div><span>Marcados</span><strong id="pbSelCount">${items.filter(i=>i.include).length}</strong></div>
+    </div>
+    <div class="row-actions" style="margin-bottom:8px">
+      <button type="button" class="btn small" onclick="peopleBatchFilter('parecido')">Ver só parecidos</button>
+      <button type="button" class="btn small" onclick="peopleBatchFilter('')">Ver todos</button>
+    </div>
+    <div class="table-wrap" style="max-height:380px;overflow:auto"><table>
+      <thead><tr><th></th><th>Nome (pode corrigir)</th><th>Vezes no arquivo</th><th>Situação</th></tr></thead>
+      <tbody>${items.map((i,idx)=>`<tr class="pb-row" data-status="${i.status}">
+        <td><input type="checkbox" class="pb-sel" data-idx="${idx}" ${i.include?'checked':''} ${i.status==='existe'?'disabled':''}></td>
+        <td><input class="input pb-name" data-idx="${idx}" value="${esc(i.name)}" style="height:34px">${i.variants.length?`<span class="cell-sub">também escrito: ${esc(i.variants.join(', '))}</span>`:''}</td>
+        <td>${i.count}</td>
+        <td>${badgeFor(i)}${i.note?`<span class="cell-sub">${esc(i.note)}</span>`:''}</td>
+      </tr>`).join('')}</tbody></table></div>`;
+  box.querySelectorAll('.pb-sel').forEach(el=>el.addEventListener('change',()=>{
+    items[Number(el.dataset.idx)].include=el.checked;
+    const c=document.getElementById('pbSelCount'); if(c) c.textContent=String(items.filter(i=>i.include).length);
+  }));
+  box.querySelectorAll('.pb-name').forEach(el=>el.addEventListener('input',()=>{ items[Number(el.dataset.idx)].name=el.value; }));
+}
+function peopleBatchFilter(status){
+  document.querySelectorAll('#pbReview .pb-row').forEach(tr=>{ tr.hidden=!!status && tr.dataset.status!==status; });
+}
+function commitPeopleBatch(){
+  const ctx=window.__peopleBatch;
+  const clinicId=getv('pbClinic');
+  if(!clinicId) return toast('Escolha a clínica.');
+  const chosen=(ctx?.items||[]).filter(i=>i.include && i.status!=='existe' && String(i.name).trim());
+  if(!chosen.length) return toast('Nenhum nome marcado para cadastrar.');
+  if(!Array.isArray(state.people)) state.people=[];
+  // segurança extra: não duplica nome já cadastrado na mesma clínica (mesmo após editar a grafia)
+  const taken=new Set(state.people.filter(pe=>pe.clinicId===clinicId).map(pe=>personNameKey(pe.name)));
+  let added=0;
+  chosen.forEach(i=>{
+    const name=String(i.name).replace(/\s+/g,' ').trim();
+    const key=personNameKey(name);
+    if(!key||taken.has(key)) return;
+    taken.add(key);
+    state.people.push(emptyPerson({name,clinicId,vinculo:clinic(clinicId).id==='particular'?'Particular':'Parceira'}));
+    added++;
+  });
+  save();closeModal();
+  patientViewMode='cadastros';
+  try{localStorage.setItem('chevalier_patient_view','cadastros')}catch(e){}
+  const f=document.getElementById('patientClinicFilter'); if(f) f.value=clinicId;
+  go('pacientes'); renderAll();
+  toast(`${added} paciente(s) cadastrado(s) em ${clinic(clinicId).name}. Só o cadastro: nenhum tratamento foi criado.`);
+}
+window.openPeopleBatchModal=openPeopleBatchModal;
+window.peopleBatchFilter=peopleBatchFilter;
+
 function renderPatients(){
   fillFilters();
   const axisSel=document.getElementById('patientAxisFilter');
@@ -2486,9 +2687,15 @@ function renderPatients(){
   const listView=document.getElementById('patientsListView');
   const kanbanView=document.getElementById('patientsKanbanView');
   const chartView=document.getElementById('patientsChartView');
+  const peopleView=document.getElementById('patientsPeopleView');
   if(listView) listView.hidden=patientViewMode!=='lista';
   if(kanbanView) kanbanView.hidden=patientViewMode!=='kanban';
   if(chartView) chartView.hidden=patientViewMode!=='grafico';
+  if(peopleView) peopleView.hidden=patientViewMode!=='cadastros';
+  if(patientViewMode==='cadastros'){
+    renderPeopleList();
+    return;
+  }
 
   if(patientViewMode==='kanban'){
     renderPatientsKanban(rows);

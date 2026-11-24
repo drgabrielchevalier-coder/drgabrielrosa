@@ -332,6 +332,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           </div>
           <div class="page-actions">
             <button class="btn" onclick="openImportSpreadsheetModal()" title="Folha de honorários em PDF, foto ou planilha: a IA lê e você confere">⇪ Importar documento</button>
+            <button class="btn" onclick="openPeopleBatchModal()" title="Só nomes: cria os cadastros vinculados a uma clínica, sem tratamentos">☰ Cadastrar lista de pacientes</button>
             <button class="btn" onclick="openPatientModal()">＋ Novo tratamento</button>
             <button class="btn primary" onclick="openPersonModal()">＋ Novo paciente</button>
           </div>
@@ -355,6 +356,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
                   <button type="button" class="view-tab active" data-view="lista" onclick="setPatientView('lista',this)">Lista</button>
                   <button type="button" class="view-tab" data-view="kanban" onclick="setPatientView('kanban',this)">Kanban</button>
                   <button type="button" class="view-tab" data-view="grafico" onclick="setPatientView('grafico',this)">Gráfico</button>
+                  <button type="button" class="view-tab" data-view="cadastros" onclick="setPatientView('cadastros',this)">Cadastros</button>
                 </div>
                 <select class="select" id="patientAxisFilter" onchange="setPatientAxis(this.value)" title="Agrupar / filtrar por">
                   <option value="financeiro">Status financeiro</option>
@@ -384,6 +386,15 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
                 </div>
               </div>
               <div id="patientsKanbanView" class="patients-kanban-wrap" hidden></div>
+              <div id="patientsPeopleView" hidden>
+                <p class="field-hint" id="patientsPeopleCount" style="margin:0 0 8px"></p>
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>Paciente</th><th>Clínica</th><th>Telefone</th><th>Tratamentos</th><th>Cadastrado em</th><th></th></tr></thead>
+                    <tbody id="patientsPeopleTable"></tbody>
+                  </table>
+                </div>
+              </div>
               <div id="patientsChartView" hidden>
                 <div class="card-head" style="padding-left:0;padding-right:0;border:0"><h3 id="patientsChartTitle">Distribuição</h3><div class="right"><span class="badge b-gray" id="patientsChartCount">0</span></div></div>
                 <div class="card-body" id="patientsChartBody" style="padding:0"></div>

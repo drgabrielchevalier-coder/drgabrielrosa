@@ -34,6 +34,7 @@ uploads/        sem execução de PHP (.htaccess)
 - `assets/js/nfe-stock.js`: NF-e → estoque, materiais controlados
 - `assets/js/cost-link.js`: vínculo NF-e × boletos em Custos (`ChevalierCostLink`). A NF-e (`kind:'nfe'`, em `state.costs`) **não é custo**: só agrupa os pagamentos (boletos ou pagamento à vista, com `nfeCostId`) e dá entrada no estoque; `effectiveValue(NF)=0`. Totais de custos devem usar `costEffectiveValue`. Custos tem 3 visões (Por compra, Boletos a pagar, Por status). Teste: `scripts/test-fase6-nfe-boletos.mjs`
 - `assets/js/circular-navigation.js`: menu circular em JS puro (`CircularNavigation.create`), demo em `circular-navigation.html` (noindex)
+- Pacientes → "Cadastrar lista de pacientes" (`openPeopleBatchModal`): cria só `state.people` (nome + clínica) a partir de CSV/XLSX/TXT ou colado; ignora já cadastrados na clínica e desmarca nomes parecidos. Visão "Cadastros" lista as pessoas. **Nunca versionar nomes de pacientes** (o repo vai para o `public_html`).
 - `assets/js/import-assist.js`: wizard de importação (CSV/XLSX/HTML; PDF/foto e planilha fora do padrão via IA em `api/import-ai.php` + `import-ai-lib.php`): arquivo → mapeamento (sugerido pela IA) → revisão linha a linha → confirmar · `planning-calendar.js`: agenda · `scan-tools.js`: boleto/barcode
 - `assets/css/app.css` (painel), `landing.css` + `landing.js` (home.php)
 - `api/state.php`: GET/POST do estado

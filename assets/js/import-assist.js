@@ -761,6 +761,7 @@
     ensureImportBatches,
     autoMapFields,
     applyColumnMap,
+    parseXlsxArrayBuffer,
     validateMapped,
     classifyRecords,
     PATIENT_FIELDS,

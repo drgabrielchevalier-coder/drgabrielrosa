@@ -1,10 +1,10 @@
 {
-  "version": "2.23.0",
-  "name": "Regra da clínica por categoria",
-  "releasedAt": "2026-11-23",
+  "version": "2.24.0",
+  "name": "Cadastro de pacientes em lote",
+  "releasedAt": "2026-11-24",
   "changes": [
-    "Interpretar com IA separa a regra da clínica em categorias (ex.: implante R$ 490 fixo, enxerto R$ 157, coroa sobre implante R$ 410, endodontia 35%) e a regra dos demais procedimentos (ex.: 27%).",
-    "A IA recebe o catálogo e já indica quais procedimentos pertencem a cada categoria; o resumo aparece em Como você divide o valor e as regras na aba Por procedimento.",
-    "No tratamento, cada procedimento usa a regra da sua categoria, mesmo com vários procedimentos no mesmo caso."
+    "Pacientes → Cadastrar lista de pacientes: lê CSV/XLSX/TXT (ou nomes colados) e cria só o cadastro com nome e clínica, sem tratamentos.",
+    "Ignora quem já está cadastrado na clínica, une grafias com/sem 'da/de/dos' e deixa nomes parecidos desmarcados para revisão.",
+    "Nova visão Cadastros na aba Pacientes, com busca, filtro por clínica e atalho para criar tratamento."
   ]
 }
