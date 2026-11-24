@@ -4,7 +4,7 @@
  *
  * - parseRows: lê tabela colada (Markdown com |, tabulação, ; ou CSV simples). Datas dd/mm ou dd/mm/aaaa.
  * - planBatch: cruza cada linha com os tratamentos em aberto do paciente (nome abreviado ou com grafia
- *   diferente: "Jeferson" ↔ "Jefferson Rabello"), distribui o valor do mais antigo para o mais novo,
+ *   diferente: "Rafael" ↔ "Raphael Souza"), distribui o valor do mais antigo para o mais novo,
  *   NUNCA acima do saldo, e devolve a revisão (ok / escolher / não encontrado / excede saldo).
  * Funções puras: quem grava as baixas é o app (applyReceivablePayment), após confirmação do usuário.
  */
@@ -84,8 +84,8 @@
 
   function tokenMatch(q, t) {
     if (q === t) return 1;
-    if (q.length >= 3 && t.startsWith(q)) return 0.85; // abreviação: "Seb" → "Sebastiana"
-    if (q.length >= 5 && editDistance(q, t) <= (q.length >= 8 ? 2 : 1)) return 0.8; // "jeferson" ↔ "jefferson"
+    if (q.length >= 3 && t.startsWith(q)) return 0.85; // abreviação: "Gab" → "Gabriela"
+    if (q.length >= 5 && editDistance(q, t) <= (q.length >= 8 ? 2 : 1)) return 0.8; // "rafael" ↔ "rafaell" (uma letra)
     return 0;
   }
 
