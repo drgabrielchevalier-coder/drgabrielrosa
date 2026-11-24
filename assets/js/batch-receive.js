@@ -5,7 +5,7 @@
  * - parseRows: lê tabela colada (Markdown com |, tabulação, ; ou CSV simples). Datas dd/mm ou dd/mm/aaaa.
  * - planBatch: cruza cada linha com os tratamentos em aberto do paciente (nome abreviado ou com grafia
  *   diferente: "Rafael" ↔ "Raphael Souza"), distribui o valor do mais antigo para o mais novo,
- *   NUNCA acima do saldo, e devolve a revisão (ok / escolher / não encontrado / excede saldo).
+ *   NUNCA acima do saldo, e devolve a revisão (ok / escolher / não encontrado / excede saldo / já lançado).
  * Funções puras: quem grava as baixas é o app (applyReceivablePayment), após confirmação do usuário.
  */
 (function (global) {
@@ -44,25 +44,53 @@
     return iso;
   }
 
-  /** Linhas coladas → [{line, date, name, amount, raw}] (ignora cabeçalho e separadores). */
+  const MONEY_RE = /^(R\$\s*)?\d[\d.]*(,\d{1,2})?$/;
+
+  /**
+   * Linhas coladas → [{line, date, name, amount, raw}] (ignora cabeçalho e separadores).
+   * Aceita: Markdown (|), tabulação, ";", texto separado só por espaços ("03/11 Ana Souza R$ 138,87")
+   * e tabela copiada com uma célula por linha (data / nome / valor em linhas seguidas).
+   */
   function parseRows(text, today) {
     const out = [];
-    String(text || '').split(/\r?\n/).forEach((raw, i) => {
-      const line = raw.trim();
+    let buf = null; // formato "uma célula por linha"
+    const emit = (line, date, name, amount, raw) => {
+      name = String(name || '').replace(/\s+/g, ' ').trim();
+      if (!name || !(amount > 0)) return;
+      out.push({ line, date, name, amount, raw });
+    };
+    String(text || '').split(/\r?\n/).forEach((rawLine, i) => {
+      const line = rawLine.replace(/\*/g, '').trim();
       if (!line || /^\|?\s*:?-{2,}/.test(line)) return;
-      let cells = line.includes('|') ? line.split('|') : line.includes('\t') ? line.split('\t') : line.split(/;|,(?=\s*[A-Za-zÀ-ú])|,(?=\s*R\$)/);
-      cells = cells.map((c) => c.replace(/\*/g, '').trim()).filter((c) => c !== '');
-      if (cells.length < 2) return;
-      let date = '', amount = NaN;
-      const nameParts = [];
-      cells.forEach((c) => {
-        if (!date && isoDate(c, today)) { date = isoDate(c, today); return; }
-        if (Number.isNaN(amount) && /^(R\$\s*)?\d[\d.]*(,\d{1,2})?$/.test(c)) { amount = money(c); return; }
-        if (/[A-Za-zÀ-ú]/.test(c)) nameParts.push(c);
-      });
-      const name = nameParts.join(' ').trim();
-      if (!name || Number.isNaN(amount) || amount <= 0) return; // cabeçalho ("Data | Paciente | Valor") cai aqui
-      out.push({ line: i + 1, date, name, amount, raw: line });
+      const delimited = /[|\t;]/.test(line);
+      if (delimited) {
+        const cells = line.split(/[|\t;]/).map((c) => c.trim()).filter((c) => c !== '');
+        let date = '', amount = NaN;
+        const nameParts = [];
+        cells.forEach((c) => {
+          if (!date && isoDate(c, today)) { date = isoDate(c, today); return; }
+          if (Number.isNaN(amount) && MONEY_RE.test(c)) { amount = money(c); return; }
+          if (/[A-Za-zÀ-ú]/.test(c)) nameParts.push(c);
+        });
+        if (!Number.isNaN(amount) && nameParts.length) { buf = null; emit(i + 1, date, nameParts.join(' '), amount, rawLine); }
+        return;
+      }
+      // uma linha com tudo, separado por espaços: "03/11 Ana Souza R$ 138,87"
+      const m = line.match(/^(\d{1,2}[/.-]\d{1,2}(?:[/.-]\d{2,4})?)\s+(.+?)\s+((?:R\$\s*)?\d[\d.]*(?:,\d{1,2})?)$/);
+      if (m && isoDate(m[1], today) && /[A-Za-zÀ-ú]/.test(m[2])) {
+        buf = null;
+        emit(i + 1, isoDate(m[1], today), m[2], money(m[3]), rawLine);
+        return;
+      }
+      // uma célula por linha: data → nome → valor
+      if (isoDate(line, today)) { buf = { line: i + 1, date: isoDate(line, today), name: '', raw: [rawLine] }; return; }
+      if (buf && MONEY_RE.test(line) && buf.name) {
+        buf.raw.push(rawLine);
+        emit(buf.line, buf.date, buf.name, money(line), buf.raw.join(' · '));
+        buf = null;
+        return;
+      }
+      if (buf && /[A-Za-zÀ-ú]/.test(line)) { buf.name = (buf.name ? buf.name + ' ' : '') + line; buf.raw.push(rawLine); }
     });
     return out;
   }
@@ -124,18 +152,26 @@
     const persons = new Map();
     (cases || []).forEach((c) => {
       if (!(Number(c.balance) > 0.009)) return;
-      if (!persons.has(c.personKey)) persons.set(c.personKey, { key: c.personKey, name: c.name, cases: [] });
+      if (!persons.has(c.personKey)) persons.set(c.personKey, { key: c.personKey, name: c.name, cases: [], paid: [] });
       persons.get(c.personKey).cases.push({ ...c, left: round2(c.balance) });
+    });
+    // baixas que já existem (inclusive de tratamentos quitados) para não lançar em dobro
+    (cases || []).forEach((c) => {
+      (c.payments || []).forEach((pay) => {
+        if (!persons.has(c.personKey)) persons.set(c.personKey, { key: c.personKey, name: c.name, cases: [], paid: [] });
+        persons.get(c.personKey).paid.push({ date: pay.date, amount: round2(pay.amount), label: c.label || '' });
+      });
     });
     persons.forEach((p) => p.cases.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.id).localeCompare(String(b.id))));
 
     // ordem cronológica (mesma data: ordem colada) — saldos vão sendo consumidos
     const order = rows.map((r, i) => i).sort((a, b) => String(rows[a].date || '').localeCompare(String(rows[b].date || '')) || a - b);
     const result = rows.map((r) => ({ ...r }));
+    const candidatePool = [...persons.values()].filter((p) => p.cases.length || p.paid.length);
     order.forEach((i) => {
       const r = result[i];
       const ov = overrides[i];
-      const scored = [...persons.values()]
+      const scored = candidatePool
         .map((p) => ({ key: p.key, name: p.name, score: nameScore(r.name, p.name), open: round2(p.cases.reduce((s, c) => s + c.left, 0)) }))
         .filter((x) => x.score > 0)
         .sort((a, b) => b.score - a.score || b.open - a.open);
@@ -155,6 +191,9 @@
       if (!person) { r.status = 'unmatched'; return; }
       r.personKey = key;
       r.personName = person.name;
+      // já existe baixa ativa desse paciente com a mesma data e valor (ex.: lançada à mão) → não repete
+      const dup = r.date && person.paid.find((x) => !x.used && x.date === r.date && Math.abs(x.amount - r.amount) < 0.011);
+      if (dup) { dup.used = true; r.status = 'already'; r.leftover = 0; r.alreadyIn = dup.label || ''; return; }
       let left = r.amount;
       person.cases.forEach((c) => {
         if (left <= 0.009 || c.left <= 0.009) return;

@@ -66,4 +66,16 @@ ok('ignorar linha', plan2.rows[8].status === 'skip');
 const excess = B.planBatch(B.parseRows('| 01/11 | Mariza | R$ 200,00 |', '2026-11-24'), cases);
 ok('excesso sobre o saldo fica pendente', excess.rows[0].status === 'excess' && excess.rows[0].leftover === 43 && excess.applied === 157);
 
+// formatos de cópia da tabela já formatada
+ok('separado por espaços', B.parseRows('Data Paciente Valor abatido\n03/11 Ana Souza R$ 138,87\n**05/11** Rui R$ 277,00', '2026-11-24').map((r) => `${r.name}:${r.amount}`).join('|') === 'Ana Souza:138.87|Rui:277');
+ok('uma célula por linha', B.parseRows('Data\nPaciente\nValor abatido\n03/11\nAna Souza\nR$ 138,87\n05/11\nRui\nR$ 277,00', '2026-11-24').map((r) => `${r.date}:${r.name}:${r.amount}`).join('|') === '2026-11-03:Ana Souza:138.87|2026-11-05:Rui:277');
+
+// baixa já lançada à mão (mesma data e valor) não se repete; quitado sem saldo não recebe mais
+const withPaid = [
+  { id: 'q1', personKey: 'px', name: 'Paula Reis', date: '2026-10-01', balance: 0, payments: [{ date: '2026-11-17', amount: 437.13 }, { date: '2026-11-18', amount: 382.87 }] },
+];
+const pq = B.planBatch(B.parseRows('| 17/11 | Paula Reis | R$ 437,13 |\n| 18/11 | Paula Reis | R$ 382,87 |\n| 19/11 | Paula Reis | R$ 10,00 |', '2026-11-24'), withPaid);
+ok('já lançado é reconhecido', pq.rows[0].status === 'already' && pq.rows[1].status === 'already');
+ok('quitado: valor novo vira sem saldo', pq.rows[2].status === 'nobalance' && pq.applied === 0);
+
 process.exit(fail ? 1 : 0);
