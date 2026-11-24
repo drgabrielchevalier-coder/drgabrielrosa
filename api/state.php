@@ -28,6 +28,24 @@ try {
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
+/**
+ * Versão do estado (_rev, guardada no próprio payload). Cada gravação aceita soma 1.
+ * O cliente envia __baseRev (a versão em que se baseou): se o banco já está numa versão mais nova
+ * (outro aparelho gravou antes), a gravação é recusada com STATE_CONFLICT em vez de sobrescrever.
+ */
+function chevalier_state_rev($state): int
+{
+    return is_array($state) ? (int) ($state['_rev'] ?? 0) : 0;
+}
+
+if ($method === 'GET' && isset($_GET['rev'])) {
+    // consulta leve: só a versão atual (o celular confere ao voltar para o app)
+    $row = $pdo->query('SELECT payload, UNIX_TIMESTAMP(updated_at) AS ts FROM app_state WHERE id = 1')->fetch();
+    $cur = $row ? json_decode((string) $row['payload'], true) : null;
+    echo json_encode(['ok' => true, 'rev' => chevalier_state_rev($cur), 'updatedAt' => $row ? (int) ($row['ts'] ?? 0) : 0], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if ($method === 'GET') {
     $row = $pdo->query('SELECT payload, UNIX_TIMESTAMP(updated_at) AS ts FROM app_state WHERE id = 1')->fetch();
     $state = $row ? json_decode($row['payload'], true) : null;
@@ -38,6 +56,7 @@ if ($method === 'GET') {
         $opsWiped = chevalier_maybe_auto_wipe_ops($state);
         $importMeta = chevalier_historico_apply_to_state($state, false);
         if ($opsWiped || !empty($importMeta['changed'])) {
+            $state['_rev'] = chevalier_state_rev($state) + 1;
             $json = json_encode($state, JSON_UNESCAPED_UNICODE);
             if ($json !== false && strlen($json) <= 8_000_000) {
                 $stmt = $pdo->prepare('INSERT INTO app_state (id, payload) VALUES (1, :payload)
@@ -52,6 +71,7 @@ if ($method === 'GET') {
         'ok' => true,
         'state' => $state,
         'updatedAt' => $row ? (int) ($row['ts'] ?? 0) : 0,
+        'rev' => chevalier_state_rev($state),
         'historicoImport' => $importMeta,
         'opsWiped' => $opsWiped,
         'csrf' => chevalier_csrf_token(),
@@ -75,8 +95,23 @@ if ($method === 'POST') {
     // Não cria segunda fonte de verdade — continua um único app_state, com guarda.
     $forceWipe = !empty($data['__forceWipe']);
     unset($data['__forceWipe']);
+    $baseRev = array_key_exists('__baseRev', $data) && is_numeric($data['__baseRev']) ? (int) $data['__baseRev'] : null;
+    unset($data['__baseRev']);
     $existingRow = $pdo->query('SELECT payload FROM app_state WHERE id = 1')->fetch();
     $existing = $existingRow ? json_decode((string) ($existingRow['payload'] ?? ''), true) : null;
+    $currentRev = chevalier_state_rev($existing);
+    // Concorrência: aparelho com versão antiga não sobrescreve o que outro aparelho gravou depois.
+    if ($baseRev !== null && $baseRev < $currentRev && !$forceWipe) {
+        http_response_code(409);
+        echo json_encode([
+            'ok' => false,
+            'code' => 'STATE_CONFLICT',
+            'error' => 'Os dados foram alterados em outro aparelho. Carregue a versão mais recente antes de gravar.',
+            'rev' => $currentRev,
+            'csrf' => chevalier_csrf_token(),
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     if (is_array($existing) && !$forceWipe) {
         $exPatients = isset($existing['patients']) && is_array($existing['patients']) ? $existing['patients'] : [];
         $exClinics = isset($existing['clinics']) && is_array($existing['clinics']) ? $existing['clinics'] : [];
@@ -111,6 +146,7 @@ if ($method === 'POST') {
     if (!isset($data['schemaVersion'])) {
         $data['schemaVersion'] = 5;
     }
+    $data['_rev'] = $currentRev + 1;
 
     $json = json_encode($data, JSON_UNESCAPED_UNICODE);
     if ($json === false || strlen($json) > 8_000_000) {
@@ -123,7 +159,7 @@ if ($method === 'POST') {
         ON DUPLICATE KEY UPDATE payload = VALUES(payload)');
     $stmt->execute(['payload' => $json]);
     $ts = (int) $pdo->query('SELECT UNIX_TIMESTAMP(updated_at) FROM app_state WHERE id = 1')->fetchColumn();
-    echo json_encode(['ok' => true, 'updatedAt' => $ts, 'csrf' => chevalier_csrf_token()], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => true, 'updatedAt' => $ts, 'rev' => $data['_rev'], 'csrf' => chevalier_csrf_token()], JSON_UNESCAPED_UNICODE);
     exit;
 }
 

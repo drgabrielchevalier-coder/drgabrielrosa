@@ -1079,3 +1079,10 @@
   }
 /* Controle de estoque desligado: esconde o que só faz sentido com saldo */
 body.stock-off [data-stock-only]{display:none!important}
+/* Indicador de sincronização com o banco */
+.sync-status{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel,#fffdf9);font:inherit;font-size:11px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.sync-status:before{content:"";width:8px;height:8px;border-radius:50%;background:#b9ae97}
+.sync-status[data-kind="ok"]:before{background:#2b7448}
+.sync-status[data-kind="saving"]:before{background:#dd9f4c}
+.sync-status[data-kind="offline"]{color:#b4423a;border-color:#e7b9b4;background:#fdf1ef}
+.sync-status[data-kind="offline"]:before{background:#b4423a}

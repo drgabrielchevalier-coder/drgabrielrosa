@@ -67,6 +67,8 @@ $wiped = $scope === 'patients'
     ? chevalier_wipe_patients_state($existing)
     : chevalier_wipe_operational_state($existing);
 
+// nova versão: aparelhos com a versão anterior não sobrescrevem a limpeza
+$wiped['_rev'] = (int) ($existing['_rev'] ?? 0) + 1;
 $json = json_encode($wiped, JSON_UNESCAPED_UNICODE);
 if ($json === false || strlen($json) > 8_000_000) {
     http_response_code(413);

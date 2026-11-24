@@ -48,6 +48,7 @@ uploads/        sem execução de PHP (.htaccess)
 
 ## Persistência
 - Cliente: `localStorage['chevalier_gestao_v1']`. Servidor: MySQL `app_state` (id=1, payload JSON), `schemaVersion: 5`
+- **Sincronização com versão** (`_rev` no payload): o cliente grava via `save()` → fila `pushState()` com `__baseRev`; `api/state.php` recusa com 409 `STATE_CONFLICT` se o banco está mais novo (outro aparelho gravou) e o cliente recarrega (`loadLatestState`, cópia local em `chevalier_gestao_backup_local`). `GET api/state.php?rev=1` = consulta leve usada ao voltar para o app. Indicador `#syncStatus` no topo. Quem grava `app_state` no servidor deve somar 1 em `_rev` (ex.: `reset-ops.php`).
 - Shape: `clinics, materials, procedures, patients, people, costs, payroll, prostheses, reminders, plans, importBatches, nfImports, stockLedger, imports{...flags seladas}, settings, schemaVersion, opsWipeVersion, opsWipedAt`
 - `patients` = tratamentos/recebíveis, com `payments[]`. Clínicas: allon, daniele, gerlucia, particular.
 

@@ -1,10 +1,10 @@
 {
-  "version": "2.29.2",
-  "name": "Leitor de código de barras corrigido",
+  "version": "2.30.0",
+  "name": "Sincronização segura entre aparelhos",
   "releasedAt": "2026-11-24",
   "changes": [
-    "Leitor de boleto volta a ler o código de barras no iPhone: a leitura reserva (ZXing) usava uma função que não existe na biblioteca e falhava sempre.",
-    "Câmera pede resolução máxima (até 4K) para as barras finas do boleto; foto/PDF importado é lido por inteiro, não só a faixa da tela.",
-    "Código de barras de materiais (EAN/UPC) também passa a ser reconhecido."
+    "Um aparelho com dados desatualizados (ex.: celular com o painel aberto desde cedo) não sobrescreve mais o que outro gravou: o banco recusa e o aparelho carrega a versão mais recente.",
+    "Ao voltar para o app no celular, o painel confere o banco e atualiza sozinho; sem internet, guarda e envia quando a rede volta.",
+    "Indicador no topo: Sincronizado, Salvando… ou Sem conexão, para saber se o aparelho está falando com o banco."
   ]
 }

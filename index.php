@@ -182,6 +182,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
       </div>
       <div class="spacer"></div>
       <div class="top-date" id="todayLabel"></div>
+      <button type="button" class="sync-status" id="syncStatus" data-kind="saving" onclick="sync.lastCheck=0;checkRemoteRev()" aria-live="polite">Conectando…</button>
       <button class="icon-btn" title="Notificações" onclick="openNotifications()" id="notifBtn">♧</button>
       <button class="btn primary top-new" onclick="openQuickModal()">＋ Novo</button>
     </header>
