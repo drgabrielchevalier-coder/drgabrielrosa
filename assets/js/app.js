@@ -345,7 +345,61 @@ function exportReportCsv(){
  * - Gravações em fila (uma por vez, sempre o estado mais recente) e nova tentativa se a rede falhar.
  * - Ao voltar para o app (celular), confere se há versão mais nova no banco e atualiza.
  */
-const sync={inFlight:false,pending:false,dirty:false,offline:false,retryTimer:0,lastCheck:0};
+const sync={inFlight:false,pending:false,dirty:false,offline:false,retryTimer:0,lastCheck:0,lastError:'',needsSetup:false,lastOkAt:0,localFull:false};
+/**
+ * Cópia local (localStorage). No iPhone o limite é ~5 MB: se estourar, NÃO pode impedir a gravação no banco.
+ */
+function storeLocalState(){
+  try{
+    localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
+    sync.localFull=false;
+  }catch(e){
+    sync.localFull=true;
+    try{ localStorage.removeItem('chevalier_gestao_backup_local'); localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state)); sync.localFull=false; }catch(_){}
+    console.warn('cópia local não coube no aparelho', e);
+  }
+}
+/** Explica por que não conectou (para o indicador e o aviso). */
+function describeSyncError(status, data, err){
+  if(data?.needsSetup) return 'O banco de dados não está configurado no servidor (falta a senha do MySQL). Enquanto isso, cada aparelho guarda só os próprios dados.';
+  if(err && /Failed to fetch|NetworkError|Load failed|network/i.test(String(err.message||err))) return 'Sem rede ou o servidor não respondeu.';
+  if(status===401) return 'Sessão expirada: entre de novo.';
+  if(status===413) return 'Os dados ficaram grandes demais para gravar de uma vez.';
+  if(status>=500) return `O servidor respondeu com erro (HTTP ${status})${data?.error?`: ${data.error}`:''}.`;
+  if(status) return `Resposta inesperada do servidor (HTTP ${status})${data?.error?`: ${data.error}`:''}.`;
+  return `Falha ao ler a resposta do servidor${err?.message?`: ${err.message}`:''}.`;
+}
+function noteSyncError(status, data, err){
+  sync.lastError=describeSyncError(status, data, err);
+  sync.needsSetup=!!data?.needsSetup;
+}
+/** Toque no indicador: mostra o diagnóstico e permite testar a conexão. */
+async function openSyncDiagnostics(){
+  const t0=performance.now();
+  let line='';
+  try{
+    const r=await fetch('api/state.php?rev=1',{cache:'no-store',credentials:'same-origin'});
+    let d={}; try{ d=await r.json(); }catch(_){}
+    if(r.status===401){ location.href='login.php'; return; }
+    if(r.ok && d.ok){ line=`Banco respondeu em ${Math.round(performance.now()-t0)} ms · versão ${d.rev}`; if(!persistReady || sync.offline){ sync.lastCheck=0; reconnectState(); } }
+    else { noteSyncError(r.status,d,null); line=sync.lastError; }
+  }catch(e){ noteSyncError(0,null,e); line=sync.lastError; }
+  const kb=(()=>{ try{ return Math.round((localStorage.getItem('chevalier_gestao_v1')||'').length/1024); }catch(_){ return 0; } })();
+  openModal('Conexão com o banco',`
+    <div class="detail-grid">
+      <div><span>Situação</span><strong>${sync.offline||!persistReady?'Sem conexão com o banco':'Conectado e sincronizado'}</strong></div>
+      <div><span>Teste agora</span><strong>${esc(line)}</strong></div>
+      <div><span>Versão dos dados neste aparelho</span><strong>${Number(state._rev||0)}</strong></div>
+      <div><span>Alterações ainda não enviadas</span><strong>${sync.dirty?'Sim':'Não'}</strong></div>
+      <div><span>Última gravação no banco</span><strong>${sync.lastOkAt?new Date(sync.lastOkAt).toLocaleString('pt-BR'):'—'}</strong></div>
+      <div><span>Cópia local</span><strong>${kb} KB${sync.localFull?' · não coube no aparelho':''}</strong></div>
+    </div>
+    ${sync.lastError?`<p class="field-hint" style="margin-top:12px"><strong>Último problema:</strong> ${esc(sync.lastError)}</p>`:''}
+    ${sync.needsSetup?`<p class="field-hint">Para ligar o banco, abra <a href="api/setup.php">Configurar banco de dados</a> e informe a senha do MySQL (hPanel → Bancos de dados). Faça isso no aparelho que tem os dados mais completos: ele envia a cópia dele ao banco e os outros passam a usá-la.</p>`:''}
+  `,()=>{ closeModal(); sync.lastCheck=0; reconnectState(); });
+  document.getElementById('modalSave').textContent='Tentar conectar agora';
+}
+window.openSyncDiagnostics=openSyncDiagnostics;
 function setSyncStatus(kind,msg){
   const el=document.getElementById('syncStatus');
   if(!el) return;
@@ -354,6 +408,7 @@ function setSyncStatus(kind,msg){
   el.title=kind==='ok'?'Dados salvos no banco do servidor':kind==='offline'?'Sem conexão com o banco: as alterações ficam neste aparelho até reconectar':'';
 }
 function refreshSyncBadge(){
+  if(sync.offline && sync.needsSetup) return setSyncStatus('offline','Banco não configurado');
   if(sync.offline) return setSyncStatus('offline', sync.dirty?'Sem conexão · não salvo':'Sem conexão');
   if(sync.inFlight||sync.pending) return setSyncStatus('saving','Salvando…');
   setSyncStatus('ok','Sincronizado');
@@ -361,7 +416,7 @@ function refreshSyncBadge(){
 function save(){
   if(!Array.isArray(state.importBatches)) state.importBatches=[];
   if(!state.schemaVersion) state.schemaVersion=5;
-  localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
+  storeLocalState();
   sync.dirty=true;
   if(!persistReady){ sync.offline=true; refreshSyncBadge(); scheduleSyncRetry(); return; }
   if(sync.inFlight){ sync.pending=true; refreshSyncBadge(); return; }
@@ -381,8 +436,8 @@ async function pushState(){
     if(r.status===401){ location.href='login.php'; return; }
     if(r.ok && data.ok){
       state._rev=Number(data.rev||0);
-      localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
-      sync.offline=false;
+      storeLocalState();
+      sync.offline=false; sync.lastError=''; sync.needsSetup=false; sync.lastOkAt=Date.now();
       if(!sync.pending) sync.dirty=false;
     }else if(r.status===409 && data?.code==='STATE_CONFLICT'){
       sync.pending=false;
@@ -392,10 +447,12 @@ async function pushState(){
       toast('Gravação bloqueada: payload incompleto (proteção do histórico).');
       sync.dirty=false;
     }else{
+      noteSyncError(r.status,data,null);
       throw new Error(data?.error||('HTTP '+r.status));
     }
   }catch(e){
     console.warn('sync', e);
+    if(!sync.lastError) noteSyncError(0,null,e);
     sync.offline=true;
     scheduleSyncRetry();
   }finally{
@@ -410,7 +467,8 @@ async function loadLatestState(reason){
     if(r.status===401){ location.href='login.php'; return false; }
     const data=await r.json().catch(()=>({}));
     applyCsrfFromResponse(data);
-    if(!r.ok || !data.ok || !data.state) throw new Error(data?.error||('HTTP '+r.status));
+    if(!r.ok || !data.ok || !data.state){ noteSyncError(r.status,data,null); throw new Error(data?.error||('HTTP '+r.status)); }
+    sync.lastError=''; sync.needsSetup=false; sync.lastOkAt=Date.now();
     if(reason==='conflict' || (reason==='reconnect' && sync.dirty)){
       try{ localStorage.setItem('chevalier_gestao_backup_local',JSON.stringify({at:new Date().toISOString(),reason,state})); }catch(_){}
     }
@@ -418,7 +476,7 @@ async function loadLatestState(reason){
     state._rev=Number(data.rev||data.state._rev||0);
     persistReady=true;
     sync.offline=false; sync.dirty=false; sync.pending=false;
-    localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
+    storeLocalState();
     try{ ensureSettings(); ensureStockCollections(); ensureClinicPrices(); ensureProstheses(); }catch(_){}
     renderAll();
     refreshSyncBadge();
@@ -7219,7 +7277,7 @@ async function wipeOperationalData(opts={}){
     if(r.ok && data.ok && data.state){
       bindGlobalState(data.state);
       persistReady=true;
-      localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
+      storeLocalState();
       renderAll();
       toast(`Dados operacionais zerados (${data.clearedPatients||0} paciente(s); ${data.materialsKept||0} material(is) mantidos com estoque 0).`);
       return true;
@@ -7229,7 +7287,7 @@ async function wipeOperationalData(opts={}){
   const wiped=buildWipedOperationalState(state);
   bindGlobalState(wiped);
   persistReady=true;
-  localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
+  storeLocalState();
   try{
     const r=await fetch('api/state.php',{
       method:'POST',
@@ -7287,7 +7345,7 @@ async function wipePatientsData(){
     if(r.ok && data.ok && data.scope==='patients' && data.state){
       bindGlobalState(data.state);
       persistReady=true;
-      localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
+      storeLocalState();
       renderAll();
       toast(`Pacientes zerados (${data.clearedPatients||0} tratamento(s), ${data.clearedPeople||0} cadastro(s)). Pode começar a cadastrar.`);
       return true;
@@ -7297,7 +7355,7 @@ async function wipePatientsData(){
   const wiped=buildWipedPatientsState(state);
   bindGlobalState(wiped);
   persistReady=true;
-  localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
+  storeLocalState();
   try{
     const r=await fetch('api/state.php',{
       method:'POST',
@@ -7389,14 +7447,16 @@ async function boot(){
   try{
     const r=await fetch('api/state.php',{cache:'no-store',credentials:'same-origin'});
     if(r.status===401){location.href='login.php';return;}
+    if(!r.ok){ let d={}; try{ d=await r.json(); }catch(_){} noteSyncError(r.status,d,null); }
     if(r.ok){
-      const data=await r.json();
+      let data;
+      try{ data=await r.json(); }catch(parseErr){ noteSyncError(r.status,null,parseErr); throw parseErr; }
       applyCsrfFromResponse(data);
       if(data.ok && data.state){
         bindGlobalState(data.state);
         state._rev=Number(data.rev||data.state._rev||0);
         persistReady=true;
-        localStorage.setItem('chevalier_gestao_v1',JSON.stringify(state));
+        storeLocalState();
         if(data.opsWiped){
           setTimeout(()=>toast('Dados operacionais zerados no servidor (pacientes, cobranças e estoque).'), 400);
         }
@@ -7410,12 +7470,13 @@ async function boot(){
         }).then(async res=>{try{const d=await res.json(); applyCsrfFromResponse(d); if(d?.rev) state._rev=Number(d.rev);}catch(_){}});
       }
     }
-  }catch(e){ /* fallback localStorage — avisado abaixo e reconectado sozinho */ }
+  }catch(e){ if(!sync.lastError) noteSyncError(0,null,e); /* fallback localStorage — avisado abaixo e reconectado sozinho */ }
   if(!persistReady){
     sync.offline=true;
-    setTimeout(()=>toast('Sem conexão com o banco: mostrando a cópia salva neste aparelho. Vou reconectar sozinho.'),600);
+    setTimeout(()=>toast(`Sem conexão com o banco — ${sync.lastError||'motivo desconhecido'} Toque no indicador para detalhes.`),600);
+    if(!sync.needsSetup) setTimeout(()=>{ sync.lastCheck=0; reconnectState(); },3000);
     scheduleSyncRetry();
-  }
+  }else{ sync.lastOkAt=Date.now(); }
   refreshSyncBadge();
   ensureSettings();
   ensureStockCollections();

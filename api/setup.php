@@ -64,18 +64,23 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && !$connected) {
 
                 $localPath = __DIR__ . '/config.local.php';
                 if (is_file($localPath)) {
-                    throw new RuntimeException('config.local.php já existe. Remova-o manualmente no servidor para reconfigurar.');
-                }
+                    // config.local.php já existe (ex.: chave OpenAI/Notaas gravada antes) mas sem banco válido:
+                    // acrescenta/atualiza só as linhas DB_* e preserva as demais (segredos continuam só no servidor).
+                    require_once __DIR__ . '/notaas-lib.php';
+                    if (!chevalier_config_local_upsert(['DB_HOST' => $host, 'DB_NAME' => $name, 'DB_USER' => $user, 'DB_PASS' => $pass])) {
+                        throw new RuntimeException('Não foi possível gravar api/config.local.php');
+                    }
+                } else {
+                    $export = "<?php\n" .
+                        "declare(strict_types=1);\n" .
+                        "define('DB_HOST', " . var_export($host, true) . ");\n" .
+                        "define('DB_NAME', " . var_export($name, true) . ");\n" .
+                        "define('DB_USER', " . var_export($user, true) . ");\n" .
+                        "define('DB_PASS', " . var_export($pass, true) . ");\n";
 
-                $export = "<?php\n" .
-                    "declare(strict_types=1);\n" .
-                    "define('DB_HOST', " . var_export($host, true) . ");\n" .
-                    "define('DB_NAME', " . var_export($name, true) . ");\n" .
-                    "define('DB_USER', " . var_export($user, true) . ");\n" .
-                    "define('DB_PASS', " . var_export($pass, true) . ");\n";
-
-                if (file_put_contents($localPath, $export, LOCK_EX) === false) {
-                    throw new RuntimeException('Não foi possível gravar api/config.local.php');
+                    if (file_put_contents($localPath, $export, LOCK_EX) === false) {
+                        throw new RuntimeException('Não foi possível gravar api/config.local.php');
+                    }
                 }
                 @chmod($localPath, 0600);
                 $connected = true;

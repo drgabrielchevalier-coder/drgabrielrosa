@@ -67,7 +67,7 @@ if ($method === 'GET') {
             }
         }
     }
-    echo json_encode([
+    $out = json_encode([
         'ok' => true,
         'state' => $state,
         'updatedAt' => $row ? (int) ($row['ts'] ?? 0) : 0,
@@ -75,7 +75,14 @@ if ($method === 'GET') {
         'historicoImport' => $importMeta,
         'opsWiped' => $opsWiped,
         'csrf' => chevalier_csrf_token(),
-    ], JSON_UNESCAPED_UNICODE);
+    ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    if ($out === false) {
+        // nunca devolver corpo vazio: o celular não consegue ler e cai na cópia local sem saber por quê
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => 'Falha ao montar os dados: ' . json_last_error_msg()], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    echo $out;
     exit;
 }
 
