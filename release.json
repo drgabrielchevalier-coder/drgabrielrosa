@@ -1,10 +1,10 @@
 {
-  "version": "2.26.1",
-  "name": "Baixa em lote: aceita tabela copiada",
+  "version": "2.26.2",
+  "name": "Baixa em lote concilia recebidos sem histórico",
   "releasedAt": "2026-11-24",
   "changes": [
-    "Baixa em lote passa a ler a tabela copiada já formatada (separada por espaços ou com uma célula por linha), além de Markdown, tabulação e ponto e vírgula.",
-    "Baixas iguais já lançadas (mesma data e valor) aparecem como Já lançado e não são repetidas.",
-    "Depois de lançar, o painel abre Recebíveis para conferir no Extrato de baixas."
+    "Tratamentos importados como Faturado / Recebido sem baixas no histórico agora recebem as baixas da lista (data, valor, parcial até a quitação) sem mudar o total recebido.",
+    "A revisão indica 'já constava como recebido: registra no histórico' e o saldo após cada baixa; a Ficha e o Extrato de baixas passam a mostrar o histórico.",
+    "Se parte já constava como recebida e parte está em aberto, documenta a primeira e baixa o restante."
   ]
 }

@@ -6765,18 +6765,51 @@ function applyReceivablePayment(p, opts={}){
   });
   return amt;
 }
+/**
+ * Conciliação: o tratamento já consta como recebido (ex.: importado como "Faturado / Recebido") mas sem
+ * baixas no histórico. Registra a baixa no histórico SEM alterar p.received nem p.value; nunca passa do
+ * valor que ainda não estava documentado. Saldo após = honorário − baixas registradas.
+ */
+function recordReconciledPayment(p, opts={}){
+  if(!p) return 0;
+  const ledger=sumActivePayments(p);
+  const undoc=moneyRound(Math.max(0, Math.min(Number(p.value||0),Number(p.received||0)) - ledger));
+  const amt=moneyRound(Math.min(undoc, Math.max(0, Number(opts.amount||0))));
+  if(amt<=0) return 0;
+  const after=moneyRound(Math.max(0, Number(p.value||0)-(ledger+amt)));
+  const date=opts.date||todayISO();
+  if(!Array.isArray(p.payments)) p.payments=[];
+  p.payments.push({
+    id:uid(),
+    date,
+    amount:amt,
+    mode:after<=0?'total':'parcial',
+    balanceAfter:after,
+    method:opts.method||'',
+    note:opts.note||'',
+    by:opts.by||'',
+    receipt:opts.receipt||'',
+    voided:false,
+    reconciled:true
+  });
+  if(!p.lastPaymentDate || date>p.lastPaymentDate) p.lastPaymentDate=date;
+  return amt;
+}
 /* ---------- Baixa em lote (repasse da clínica) ---------- */
 function batchReceiveCases(clinicId){
   const active=pay=>!pay.voided && !/estorno|void/i.test(String(pay.mode||''));
   return (state.patients||[])
     .filter(p=>!/n[aã]o vai receber/i.test(String(p.status||'')) && (!clinicId||p.clinicId===clinicId))
-    .filter(p=>balance(p)>0.009 || (Array.isArray(p.payments)&&p.payments.some(active)))
-    .map(p=>({
+    .map(p=>({p, undocumented:moneyRound(Math.max(0, Math.min(Number(p.value||0),Number(p.received||0)) - sumActivePayments(p)))}))
+    .filter(({p,undocumented})=>balance(p)>0.009 || undocumented>0.009 || (Array.isArray(p.payments)&&p.payments.some(active)))
+    .map(({p,undocumented})=>({
       id:p.id,
       personKey:p.personId||('n:'+personNameKey(p.name)),
       name:(p.personId&&personById(p.personId)?.name)||p.name,
       date:p.date||'',
+      value:Number(p.value||0),
       balance:balance(p),
+      undocumented,
       label:`${patientProcedureLabel(p)} · ${fmtDate(p.date)}`,
       // baixas já existentes: evita lançar duas vezes a mesma data + valor
       payments:(p.payments||[]).filter(active).map(x=>({date:String(x.date||'').slice(0,10),amount:Number(x.amount||0)}))
@@ -6827,12 +6860,15 @@ function refreshBatchReceive(){
         const sel=r.status==='skip'?'__skip':(r.personKey||'');
         const cand=r.candidates.map(c=>`<option value="${esc(c.key)}" ${c.key===sel?'selected':''}>${esc(c.name)} · em aberto ${brl.format(c.open)}</option>`).join('');
         const others=persons.filter(([k])=>!r.candidates.some(c=>c.key===k)).map(([k,n])=>`<option value="${esc(k)}" ${k===sel?'selected':''}>${esc(n)}</option>`).join('');
-        const alloc=r.status==='already'?`<span class="cell-sub">Baixa igual já existe (mesma data e valor)${r.alreadyIn?` · ${esc(r.alreadyIn)}`:''}: não será repetida</span>`:r.allocations.length?r.allocations.map(a=>`<div>${brl.format(a.amount)} → ${esc(a.label)}<span class="cell-sub">saldo ${brl.format(a.before)} → ${brl.format(a.after)}</span></div>`).join('')+(r.leftover>0.009?`<span class="cell-sub" style="color:var(--red)">${brl.format(r.leftover)} sem saldo para baixar</span>`:''):'<span class="cell-sub">—</span>';
+        const allocLine=a=>a.kind==='reconcile'
+          ?`<div>${brl.format(a.amount)} → ${esc(a.label)}<span class="cell-sub">já constava como recebido: registra no histórico (saldo após ${brl.format(a.after)})</span></div>`
+          :`<div>${brl.format(a.amount)} → ${esc(a.label)}<span class="cell-sub">saldo ${brl.format(a.before)} → ${brl.format(a.after)}</span></div>`;
+        const alloc=r.status==='already'?`<span class="cell-sub">Baixa igual já existe (mesma data e valor)${r.alreadyIn?` · ${esc(r.alreadyIn)}`:''}: não será repetida</span>`:r.allocations.length?r.allocations.map(allocLine).join('')+(r.leftover>0.009?`<span class="cell-sub" style="color:var(--red)">${brl.format(r.leftover)} sem saldo para baixar</span>`:''):'<span class="cell-sub">—</span>';
         return `<tr>${td('Data',fmtDate(r.date))}${td('Na lista',`<strong>${esc(r.name)}</strong>`)}
           ${td('Paciente no sistema',`<select class="select br-person" data-row="${i}" style="min-width:200px"><option value="">— escolher —</option>${cand}${others?`<optgroup label="Outros com saldo em aberto">${others}</optgroup>`:''}<option value="__skip" ${sel==='__skip'?'selected':''}>Ignorar esta linha</option></select>`)}
           ${td('Baixa em',alloc)}${td('Valor',brl.format(r.amount))}${td('Situação',badgeFor(r))}</tr>`;
       }).join('')}</tbody></table></div>
-    <p class="field-hint">Quando o paciente tem mais de um tratamento em aberto, a baixa vai para o mais antigo e o que sobrar passa para o próximo. O que exceder o saldo não é lançado.</p>`;
+    <p class="field-hint">Quando o paciente tem mais de um tratamento em aberto, a baixa vai para o mais antigo e o que sobrar passa para o próximo. Tratamento que já constava como recebido sem histórico (ex.: importado como Faturado / Recebido) recebe as baixas só no histórico, sem mudar o total. O que exceder o saldo não é lançado.</p>`;
   box.querySelectorAll('.br-person').forEach(el=>el.addEventListener('change',()=>{
     const i=Number(el.dataset.row);
     if(el.value) ctx.overrides[i]=el.value; else delete ctx.overrides[i];
@@ -6857,7 +6893,9 @@ function commitBatchReceive(){
   plan.rows.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))||a.line-b.line).forEach(r=>{
     r.allocations.forEach(a=>{
       const p=state.patients.find(x=>x.id===a.caseId);
-      const done=applyReceivablePayment(p,{amount:a.amount,date:r.date||todayISO(),method,note:`${note} · ${r.name}`,by});
+      const done=a.kind==='reconcile'
+        ? recordReconciledPayment(p,{amount:a.amount,date:r.date||todayISO(),method,note:`${note} · ${r.name} · já constava como recebido`,by})
+        : applyReceivablePayment(p,{amount:a.amount,date:r.date||todayISO(),method,note:`${note} · ${r.name}`,by});
       if(done>0){ n++; total+=done; }
     });
   });
@@ -6868,6 +6906,7 @@ function commitBatchReceive(){
 }
 window.openBatchReceiveModal=openBatchReceiveModal;
 window.applyReceivablePayment=applyReceivablePayment;
+window.recordReconciledPayment=recordReconciledPayment;
 /** Estorno autorizado: mantém o registro histórico e reabre o saldo. */
 function voidPatientPayment(patientId, paymentId){
   const p=state.patients.find(x=>x.id===patientId); if(!p) return;

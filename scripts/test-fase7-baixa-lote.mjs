@@ -78,4 +78,14 @@ const pq = B.planBatch(B.parseRows('| 17/11 | Paula Reis | R$ 437,13 |\n| 18/11 
 ok('já lançado é reconhecido', pq.rows[0].status === 'already' && pq.rows[1].status === 'already');
 ok('quitado: valor novo vira sem saldo', pq.rows[2].status === 'nobalance' && pq.applied === 0);
 
+// importado como recebido (received = valor) sem histórico → conciliação documenta sem cobrar de novo
+const imp = [{ id: 'i1', personKey: 'pi', name: 'Renato Lima', date: '2026-09-21', value: 490, balance: 0, undocumented: 490, payments: [] }];
+const pr = B.planBatch(B.parseRows('| 06/11 | Renato | R$ 73,13 |\n| 10/11 | Renato | R$ 416,87 |\n| 11/11 | Renato | R$ 5,00 |', '2026-11-24'), imp);
+ok('conciliação: 2 baixas documentadas', pr.rows[0].allocations[0].kind === 'reconcile' && pr.rows[0].allocations[0].after === 416.87 && pr.rows[1].allocations[0].after === 0);
+ok('conciliação: além do recebido não lança', pr.rows[2].status === 'nobalance');
+// parte recebida sem histórico + saldo em aberto: documenta primeiro, depois baixa o saldo
+const mixed = [{ id: 'm1', personKey: 'pm', name: 'Lia Prado', date: '2026-09-01', value: 490, balance: 290, undocumented: 200, payments: [] }];
+const pm2 = B.planBatch(B.parseRows('| 01/11 | Lia | R$ 300,00 |', '2026-11-24'), mixed);
+ok('misto: 200 documentado + 100 baixado', pm2.rows[0].allocations.map((a) => `${a.kind}:${a.amount}`).join('|') === 'reconcile:200|pay:100' && pm2.rows[0].allocations[1].after === 190);
+
 process.exit(fail ? 1 : 0);

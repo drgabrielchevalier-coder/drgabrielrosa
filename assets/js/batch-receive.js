@@ -6,6 +6,8 @@
  * - planBatch: cruza cada linha com os tratamentos em aberto do paciente (nome abreviado ou com grafia
  *   diferente: "Rafael" ↔ "Raphael Souza"), distribui o valor do mais antigo para o mais novo,
  *   NUNCA acima do saldo, e devolve a revisão (ok / escolher / não encontrado / excede saldo / já lançado).
+ * - Tratamento que já consta como recebido mas sem baixas no histórico (importado como "Faturado / Recebido"):
+ *   a linha vira "conciliação" — registra a baixa no histórico sem alterar o total recebido.
  * Funções puras: quem grava as baixas é o app (applyReceivablePayment), após confirmação do usuário.
  */
 (function (global) {
@@ -151,9 +153,11 @@
   function planBatch(rows, cases, overrides = {}) {
     const persons = new Map();
     (cases || []).forEach((c) => {
-      if (!(Number(c.balance) > 0.009)) return;
+      // undocumented: valor que já consta como recebido sem baixa no histórico (ex.: importado como "Faturado / Recebido")
+      const undoc = round2(Math.max(0, Number(c.undocumented || 0)));
+      if (!(Number(c.balance) > 0.009) && !(undoc > 0.009)) return;
       if (!persons.has(c.personKey)) persons.set(c.personKey, { key: c.personKey, name: c.name, cases: [], paid: [] });
-      persons.get(c.personKey).cases.push({ ...c, left: round2(c.balance) });
+      persons.get(c.personKey).cases.push({ ...c, left: round2(c.balance), undoc, docBase: round2(Number(c.value || 0) - Number(c.balance || 0) - undoc) });
     });
     // baixas que já existem (inclusive de tratamentos quitados) para não lançar em dobro
     (cases || []).forEach((c) => {
@@ -196,9 +200,19 @@
       if (dup) { dup.used = true; r.status = 'already'; r.leftover = 0; r.alreadyIn = dup.label || ''; return; }
       let left = r.amount;
       person.cases.forEach((c) => {
+        // 1º documenta o que já constava como recebido (não muda o total recebido); 2º baixa o saldo em aberto
+        if (left > 0.009 && c.undoc > 0.009) {
+          const take = round2(Math.min(left, c.undoc));
+          const value = Number(c.value || 0);
+          const docBefore = round2(value - c.docBase);
+          r.allocations.push({ caseId: c.id, label: c.label || '', date: c.date, amount: take, kind: 'reconcile', before: docBefore, after: round2(docBefore - take) });
+          c.undoc = round2(c.undoc - take);
+          c.docBase = round2(c.docBase + take);
+          left = round2(left - take);
+        }
         if (left <= 0.009 || c.left <= 0.009) return;
         const take = round2(Math.min(left, c.left));
-        r.allocations.push({ caseId: c.id, label: c.label || '', date: c.date, amount: take, before: c.left, after: round2(c.left - take) });
+        r.allocations.push({ caseId: c.id, label: c.label || '', date: c.date, amount: take, kind: 'pay', before: c.left, after: round2(c.left - take) });
         c.left = round2(c.left - take);
         left = round2(left - take);
       });
