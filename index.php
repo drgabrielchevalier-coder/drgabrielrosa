@@ -267,10 +267,11 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
               <div class="grid layout-2">
                 <div class="card" style="box-shadow:none">
                   <div class="card-head">
-                    <div><h3>Lucro bruto × custos</h3><small>Evolução mensal</small></div>
-                    <div class="right legend chart-legend">
-                      <span class="leg leg-profit">Lucro bruto</span>
-                      <span class="leg leg-cost">Custos</span>
+                    <div><h3>Lucro, bruto e custos</h3><small>Evolução mensal · Lucro = Bruto − Custos</small></div>
+                    <div class="right legend chart-legend chart-toggles" id="chartMonthlyToggles" role="group" aria-label="Séries do gráfico">
+                      <label class="leg-toggle"><input type="checkbox" value="profit" checked><span class="leg-dot" style="background:#dd9f4c"></span>Lucro</label>
+                      <label class="leg-toggle"><input type="checkbox" value="gross" checked><span class="leg-dot" style="background:#2b7448"></span>Bruto</label>
+                      <label class="leg-toggle"><input type="checkbox" value="cost" checked><span class="leg-dot" style="background:#4a7fd0"></span>Custos</label>
                     </div>
                   </div>
                   <div class="card-body chart-wrap">

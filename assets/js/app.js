@@ -2041,48 +2041,79 @@ function niceStep(range,count){
   const raw=range/Math.max(1,count), mag=Math.pow(10,Math.floor(Math.log10(raw||1))), n=raw/mag;
   return (n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*mag;
 }
+const MONTHLY_SERIES=[
+  {key:'profit',label:'Lucro',color:'#dd9f4c'},
+  {key:'gross',label:'Bruto',color:'#2b7448'},
+  {key:'cost',label:'Custos',color:'#4a7fd0'}
+];
+const MONTHLY_SERIES_KEY='chevalier_dash_series';
+function monthlySeriesSelected(){
+  try{ const v=JSON.parse(localStorage.getItem(MONTHLY_SERIES_KEY)||'null'); if(Array.isArray(v)) return v.filter(k=>MONTHLY_SERIES.some(s=>s.key===k)); }catch(_){}
+  return MONTHLY_SERIES.map(s=>s.key);
+}
+/** Caixinhas acima do gráfico = legenda + filtro (mesmas cores das linhas). */
+function bindMonthlyToggles(){
+  const box=document.getElementById('chartMonthlyToggles'); if(!box) return;
+  const sel=monthlySeriesSelected();
+  box.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+    cb.checked=sel.includes(cb.value);
+    if(cb.dataset.bound) return;
+    cb.dataset.bound='1';
+    cb.addEventListener('change',()=>{
+      const keys=[...box.querySelectorAll('input:checked')].map(x=>x.value);
+      try{ localStorage.setItem(MONTHLY_SERIES_KEY,JSON.stringify(keys)); }catch(_){}
+      const el=document.getElementById('chartMonthly');
+      if(el && el.__months) renderMonthlyLineChart(el, el.__months);
+    });
+  });
+}
 /**
- * Lucro bruto × custos em linhas (SVG): 2 séries, um eixo só, grade discreta, rótulo direto no último
- * ponto, hover com linha-guia + tooltip e tabela oculta para leitor de tela.
+ * Lucro, bruto e custos em linhas (SVG): séries escolhidas nas caixinhas, um eixo só, grade discreta,
+ * rótulo direto no último ponto, hover com linha-guia + tooltip e tabela oculta para leitor de tela.
+ * Bruto = recebido no mês · Custos = custos dos tratamentos + despesas · Lucro = Bruto − Custos.
  */
 function renderMonthlyLineChart(el, months){
-  const series=[
-    {key:'profit',label:'Lucro bruto',color:'#a8802a',values:months.map(m=>moneyRound(m.profit))},
-    {key:'cost',label:'Custos',color:'#3b72b8',values:months.map(m=>moneyRound(m.cost+m.overhead))}
-  ];
+  el.__months=months;
+  bindMonthlyToggles();
+  const sel=monthlySeriesSelected();
+  const valuesOf=key=>months.map(m=>{
+    const gross=moneyRound(m.revenue), cost=moneyRound(m.cost+m.overhead);
+    return key==='gross'?gross:key==='cost'?cost:moneyRound(gross-cost);
+  });
+  const series=MONTHLY_SERIES.filter(s=>sel.includes(s.key)).map(s=>({...s,values:valuesOf(s.key)}));
+  el.classList.add('chart-line');
+  if(!series.length){ el.innerHTML='<div class="empty">Marque Lucro, Bruto ou Custos para ver o gráfico.</div>'; return; }
   const all=series.flatMap(s=>s.values);
   let lo=Math.min(0,...all), hi=Math.max(1,...all);
   const step=niceStep(hi-lo,4);
   lo=Math.floor(lo/step)*step; hi=Math.ceil(hi/step)*step; if(hi===lo) hi=lo+step;
-  const W=640,H=230,L=58,R=92,T=14,B=30, iw=W-L-R, ih=H-T-B;
+  const W=640,H=230,L=58,R=76,T=14,B=30, iw=W-L-R, ih=H-T-B;
   const x=i=>L+(months.length<=1?iw/2:(i*iw)/(months.length-1));
   const y=v=>T+ih-((v-lo)/(hi-lo))*ih;
   const ticks=[]; for(let v=lo; v<=hi+step/2; v+=step) ticks.push(v);
-  const grid=ticks.map(v=>`<line x1="${L}" x2="${L+iw}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="${v===0?'#cfc6b4':'#ece6da'}" stroke-width="1"/>
+  const grid=ticks.map(v=>`<line x1="${L}" x2="${L+iw}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="${Math.abs(v)<1e-9?'#cfc6b4':'#ece6da'}" stroke-width="1"/>
     <text x="${L-8}" y="${(y(v)+3.5).toFixed(1)}" text-anchor="end" class="lc-axis">${esc(brlShort(v))}</text>`).join('');
   const xl=months.map((m,i)=>`<text x="${x(i).toFixed(1)}" y="${H-10}" text-anchor="middle" class="lc-axis">${esc(m.label)}</text>`).join('');
-  // rótulos diretos no fim das linhas, afastados se ficarem colados
-  const lastY=series.map(s=>y(s.values[s.values.length-1]||0));
-  if(Math.abs(lastY[0]-lastY[1])<14){ const mid=(lastY[0]+lastY[1])/2, up=lastY[0]<=lastY[1]?0:1; lastY[up]=mid-7; lastY[1-up]=mid+7; }
+  // rótulos no fim das linhas, afastados no mínimo 14px entre si
+  const labelY=series.map((s,i)=>({i,y:y(s.values[s.values.length-1]||0)})).sort((a,b)=>a.y-b.y);
+  for(let k=1;k<labelY.length;k++) if(labelY[k].y-labelY[k-1].y<14) labelY[k].y=labelY[k-1].y+14;
+  const ly={}; labelY.forEach(o=>{ ly[o.i]=Math.min(o.y,T+ih); });
   const lines=series.map((s,si)=>{
     const pts=s.values.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
     const dots=s.values.map((v,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="4" fill="${s.color}" stroke="#fffdf9" stroke-width="2"/>`).join('');
     const lx=x(s.values.length-1)+10;
     return `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>${dots}
-      <text x="${lx.toFixed(1)}" y="${(lastY[si]+3.5).toFixed(1)}" class="lc-label">${esc(s.label)}</text>`;
+      <text x="${lx.toFixed(1)}" y="${(ly[si]+3.5).toFixed(1)}" class="lc-label">${esc(s.label)}</text>`;
   }).join('');
-  const hits=months.map((m,i)=>{
-    const half=months.length<=1?iw/2:iw/(months.length-1)/2;
-    return `<rect class="lc-hit" data-i="${i}" x="${(x(i)-half).toFixed(1)}" y="${T}" width="${(half*2).toFixed(1)}" height="${ih}" fill="transparent"/>`;
-  }).join('');
-  el.classList.add('chart-line');
-  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Lucro bruto e custos por mês" preserveAspectRatio="xMidYMid meet">
+  const half=months.length<=1?iw/2:iw/(months.length-1)/2;
+  const hits=months.map((m,i)=>`<rect class="lc-hit" data-i="${i}" x="${(x(i)-half).toFixed(1)}" y="${T}" width="${(half*2).toFixed(1)}" height="${ih}" fill="transparent"/>`).join('');
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(series.map(s=>s.label).join(', '))} por mês" preserveAspectRatio="xMidYMid meet">
       ${grid}${xl}<line class="lc-guide" x1="0" x2="0" y1="${T}" y2="${T+ih}" stroke="#b9ae97" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
       ${lines}${hits}
     </svg>
     <div class="lc-tip" hidden></div>
-    <table class="sr-only"><caption>Lucro bruto e custos por mês</caption><thead><tr><th>Mês</th><th>Lucro bruto</th><th>Custos</th></tr></thead>
-      <tbody>${months.map((m,i)=>`<tr><td>${esc(m.label)}</td><td>${brl.format(series[0].values[i])}</td><td>${brl.format(series[1].values[i])}</td></tr>`).join('')}</tbody></table>`;
+    <table class="sr-only"><caption>${esc(series.map(s=>s.label).join(', '))} por mês</caption><thead><tr><th>Mês</th>${series.map(s=>`<th>${esc(s.label)}</th>`).join('')}</tr></thead>
+      <tbody>${months.map((m,i)=>`<tr><td>${esc(m.label)}</td>${series.map(s=>`<td>${brl.format(s.values[i])}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   const svg=el.querySelector('svg'), guide=el.querySelector('.lc-guide'), tip=el.querySelector('.lc-tip');
   const show=i=>{
     const gx=x(i);
@@ -2091,8 +2122,7 @@ function renderMonthlyLineChart(el, months){
     tip.hidden=false;
     const box=svg.getBoundingClientRect(), host=el.getBoundingClientRect();
     const px=(gx/W)*box.width+(box.left-host.left);
-    const left=Math.min(Math.max(8,px+12), host.width-tip.offsetWidth-8);
-    tip.style.left=`${px+12+tip.offsetWidth>host.width-8?px-12-tip.offsetWidth:left}px`;
+    tip.style.left=`${px+12+tip.offsetWidth>host.width-8?Math.max(8,px-12-tip.offsetWidth):px+12}px`;
     tip.style.top='8px';
   };
   const hide=()=>{ guide.setAttribute('visibility','hidden'); tip.hidden=true; };

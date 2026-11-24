@@ -641,8 +641,12 @@
   .chart-legend{display:flex;gap:12px;align-items:center;font-size:10px;color:var(--muted)}
   .leg{display:inline-flex;align-items:center;gap:6px}
   .leg:before{content:"";width:8px;height:8px;border-radius:50%}
-  .leg-profit:before{background:#a8802a}
-  .leg-cost:before{background:#3b72b8}
+  .chart-toggles{gap:8px;flex-wrap:wrap}
+  .leg-toggle{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:#fffdf9;font-size:11px;color:var(--text,#1f1d1a);cursor:pointer;user-select:none}
+  .leg-toggle input{margin:0;accent-color:#1f1d1a}
+  .leg-toggle .leg-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .chart-toggles span.leg-dot:before{content:none;display:none}
+  .leg-toggle:has(input:not(:checked)){opacity:.55}
   .chart-monthly.chart-line{display:block;position:relative;min-height:0}
   .chart-line svg{display:block;width:100%;height:auto;overflow:visible}
   .chart-line .lc-axis{font-size:10px;fill:var(--muted,#8a8478)}
