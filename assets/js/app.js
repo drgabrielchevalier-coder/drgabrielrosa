@@ -7418,7 +7418,54 @@ function voidPatientPayment(patientId, paymentId){
 window.setReceiveMode=setReceiveMode;
 window.refreshReceivePreview=refreshReceivePreview;
 window.voidPatientPayment=voidPatientPayment;
-function toggleCost(id){const c=state.costs.find(x=>x.id===id);if(!c)return;c.status=c.status==='PAGO'?'À PAGAR':'PAGO';save();renderAll();toast('Status do custo atualizado.')}
+/** Custos → Baixa em lote: marca como PAGO os custos em aberto com vencimento até uma data (filtro opcional por texto). */
+function costBatchCandidates(until, text){
+  const L=window.ChevalierCostLink;
+  const q=String(text||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+  return (state.costs||[]).filter(c=>{
+    if(c.kind==='nfe' || (L&&L.isNfeCost&&L.isNfeCost(c))) return false;
+    if(String(c.status||'').toUpperCase()==='PAGO') return false;
+    if(!c.due || c.due>until) return false;
+    if(q){ const hay=`${c.desc||''} ${c.type||''} ${c.notes||''}`.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); if(!hay.includes(q)) return false; }
+    return true;
+  }).sort((a,b)=>String(a.due).localeCompare(String(b.due)));
+}
+function renderCostBatchList(){
+  const until=getv('cbUntil')||todayISO();
+  const list=costBatchCandidates(until,getv('cbText'));
+  const box=document.getElementById('cbList'); if(!box) return;
+  box.innerHTML=list.length?`<div class="table-wrap"><table><thead><tr><th><input type="checkbox" id="cbAll" checked></th><th>Vencimento</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>${list.map(c=>`<tr><td><input type="checkbox" class="cb-item" value="${esc(c.id)}" checked></td><td>${fmtDate(c.due)}</td><td>${esc(c.desc)}${c.installment?` <span class="cell-sub">Parcela ${esc(c.installment)}</span>`:''}</td><td>${brl.format(Number(c.value)||0)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nenhum custo em aberto com vencimento até essa data.</div>';
+  const sum=()=>{ const ids=[...document.querySelectorAll('.cb-item:checked')].map(i=>i.value); const t=list.filter(c=>ids.includes(c.id)).reduce((s,c)=>s+(Number(c.value)||0),0); const el=document.getElementById('cbTotal'); if(el) el.textContent=`${ids.length} de ${list.length} selecionado(s) · ${brl.format(t)}`; };
+  document.getElementById('cbAll')?.addEventListener('change',e=>{ document.querySelectorAll('.cb-item').forEach(i=>i.checked=e.target.checked); sum(); });
+  document.querySelectorAll('.cb-item').forEach(i=>i.addEventListener('change',sum));
+  sum();
+}
+function openCostBatchPayModal(){
+  openModal('Baixa em lote de custos',`
+    <p class="field-hint">Marca como <strong>PAGO</strong> os custos em aberto com vencimento até a data escolhida. Confira a lista e desmarque o que ainda não foi pago.</p>
+    <div class="form-grid">
+      <div class="field"><label>Vencimento até</label><input id="cbUntil" type="date" class="input" value="${todayISO()}"></div>
+      <div class="field"><label>Filtrar (opcional)</label><input id="cbText" class="input" placeholder="Ex.: Dental Cremer"></div>
+      <div class="field full"><label>Data do pagamento</label><select id="cbPaidAt" class="select"><option value="due">A data de vencimento de cada um</option><option value="today">Hoje</option></select></div>
+    </div>
+    <p class="field-hint" id="cbTotal" style="margin-top:8px"></p>
+    <div id="cbList"></div>
+  `,()=>{
+    const ids=new Set([...document.querySelectorAll('.cb-item:checked')].map(i=>i.value));
+    if(!ids.size) return toast('Nenhum custo selecionado.');
+    const mode=getv('cbPaidAt');
+    let n=0,t=0;
+    state.costs.forEach(c=>{ if(ids.has(c.id)){ c.status='PAGO'; c.paidAt=mode==='today'?todayISO():(c.due||todayISO()); n++; t+=Number(c.value)||0; } });
+    save();closeModal();renderAll();
+    toast(`${n} custo(s) marcados como pagos · ${brl.format(t)}.`);
+  });
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  document.getElementById('modalSave').textContent='Marcar como pagos';
+  ['cbUntil','cbText'].forEach(id=>document.getElementById(id)?.addEventListener('input',renderCostBatchList));
+  renderCostBatchList();
+}
+window.openCostBatchPayModal=openCostBatchPayModal;
+function toggleCost(id){const c=state.costs.find(x=>x.id===id);if(!c)return;c.status=c.status==='PAGO'?'À PAGAR':'PAGO';if(c.status==='PAGO')c.paidAt=todayISO();else delete c.paidAt;save();renderAll();toast('Status do custo atualizado.')}
 function exportData(){
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='chevalier-gestao-backup.json';a.click();URL.revokeObjectURL(a.href);
 }

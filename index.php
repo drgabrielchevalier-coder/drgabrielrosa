@@ -805,6 +805,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
             <button class="btn" id="costReconcileBtn" onclick="openCostReconcileModal()">⇄ Conciliar NF × boletos</button>
             <button class="btn" onclick="openNfeImportModal()" title="Compra do fornecedor: agrupa os boletos e atualiza o custo dos materiais">⇪ Importar NF-e</button>
             <button class="btn" onclick="openBoletoScanModal()" title="Boleto, DAS, DARF, GPS ou FGTS — identifica o tipo e os dados">⎙ Escanear documento</button>
+            <button class="btn" onclick="openCostBatchPayModal()" title="Marcar como pagos todos os custos vencidos até uma data">✓ Baixa em lote</button>
             <button class="btn" onclick="openImportSpreadsheetModal('costs')" title="Vários custos de uma vez: planilha CSV/XLSX (ex.: lista de boletos exportada)">⇪ Importar planilha</button>
             <button class="btn primary" onclick="openCostModal()">＋ Novo custo</button>
           </div>

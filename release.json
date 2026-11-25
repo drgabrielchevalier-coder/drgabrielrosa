@@ -1,8 +1,9 @@
 {
-  "version": "2.31.1",
-  "name": "Importar planilha em Custos",
+  "version": "2.31.2",
+  "name": "Baixa em lote de custos",
   "releasedAt": "2026-11-25",
   "changes": [
-    "Custos ganhou o botão “⇪ Importar planilha”: abre a importação assistida já em modo Custos, para lançar vários boletos/custos de uma vez a partir de CSV ou XLSX."
+    "Custos ganhou “✓ Baixa em lote”: escolha “vencimento até” (e, se quiser, um filtro como “Dental Cremer”), confira a lista e marque todos como pagos de uma vez.",
+    "A data do pagamento fica registrada (no vencimento de cada um ou hoje)."
   ]
 }
