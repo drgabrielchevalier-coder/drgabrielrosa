@@ -468,6 +468,83 @@
     return canvas;
   }
 
+  /** Texto de um PDF digital, remontado por linha visual (y) e ordenado por x — até `maxPages` páginas. */
+  async function pdfTextLines(file, maxPages = 3) {
+    const pdfjsLib = await loadPdfJs();
+    if (!pdfjsLib) return '';
+    const data = new Uint8Array(await file.arrayBuffer());
+    const pdf = await pdfjsLib.getDocument({ data }).promise;
+    const out = [];
+    for (let p = 1; p <= Math.min(pdf.numPages, maxPages); p++) {
+      const page = await pdf.getPage(p);
+      const tc = await page.getTextContent();
+      const rows = [];
+      tc.items.forEach((it) => {
+        const str = String(it.str || '');
+        if (!str.trim()) return;
+        const y = it.transform[5];
+        const x = it.transform[4];
+        let row = rows.find((r) => Math.abs(r.y - y) < 3);
+        if (!row) {
+          row = { y, parts: [] };
+          rows.push(row);
+        }
+        row.parts.push({ x, str });
+      });
+      rows.sort((a, b) => b.y - a.y);
+      rows.forEach((r) => out.push(r.parts.sort((a, b) => a.x - b.x).map((q) => q.str).join(' ').replace(/\s+/g, ' ').trim()));
+    }
+    return out.join('\n');
+  }
+
+  /**
+   * Escanear documento: identifica o tipo (boleto, DAS, DARF, GPS, FGTS, NF-e) e extrai os dados.
+   * PDF digital → texto direto (preciso); foto/PDF escaneado → código de barras e OCR.
+   * Retorno: { docType, guide? (guias de tributo), parsed? (boleto), source, text }
+   */
+  async function readDocumentFromFile(file, opts = {}) {
+    const TG = global.ChevalierTaxGuide;
+    const name = String(file.name || '').toLowerCase();
+    const isPdf = String(file.type || '') === 'application/pdf' || name.endsWith('.pdf');
+    const classify = (text, source) => {
+      if (!TG || !text || text.replace(/\s/g, '').length < 40) return null;
+      const docType = TG.detectDocType(text);
+      if (TG.isTaxKind(docType)) {
+        const guide = TG.parseTaxGuide(text, docType);
+        if (guide.ok) return { docType, guide, source, text };
+      }
+      if (docType === 'nfe') return { docType, source, text };
+      if (docType === 'boleto') {
+        const ex = extractFromText(text);
+        const parsed = ex.linha ? parseBoletoDigits(ex.linha) : null;
+        if (parsed) return { docType, parsed: { ...parsed, beneficiary: ex.beneficiary || parsed.beneficiary, installment: ex.installment || '', due: ex.due || parsed.due, value: ex.value ?? parsed.value }, source, text };
+      }
+      // código de arrecadação sem rótulo reconhecível (convênio/tributo)
+      const line = TG.findArrecadacaoLine(text);
+      if (line && TG.valueFromArrecadacao(line)) {
+        const guide = TG.parseTaxGuide(text, docType === 'unknown' ? 'tributo' : docType);
+        if (guide.ok) return { docType: guide.docType, guide, source, text };
+      }
+      return null;
+    };
+    if (isPdf) {
+      try {
+        const hit = classify(await pdfTextLines(file), 'pdf-text');
+        if (hit) return hit;
+      } catch (_) { /* PDF escaneado ou protegido: segue para imagem */ }
+    }
+    const res = await readBoletoFromFile(file, opts);
+    if (res.text) {
+      const hit = classify(res.text, 'ocr');
+      if (hit && (hit.guide || hit.docType === 'nfe')) return hit;
+    }
+    if (res.parsed && res.parsed.kind === 'arrecadacao' && res.parsed.linha && TG) {
+      const guide = TG.parseTaxGuide(res.text || res.parsed.linha.replace(/(\d{12})/g, '$1 '), 'tributo');
+      if (guide.ok) return { docType: 'tributo', guide: { ...guide, value: guide.value ?? res.parsed.value }, source: res.source, text: res.text };
+    }
+    return { docType: res.parsed ? 'boleto' : 'unknown', ...res };
+  }
+
   async function readBoletoFromFile(file, opts = {}) {
     const name = String(file.name || '').toLowerCase();
     const type = String(file.type || '');
@@ -580,6 +657,8 @@
     detectBarcodeFromSource,
     startCamera,
     readBoletoFromFile,
+    readDocumentFromFile,
+    pdfTextLines,
     findCostConflicts,
     findMaterialByBarcode,
     BANK_NAMES,

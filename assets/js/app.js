@@ -6533,19 +6533,21 @@ async function applyBoletoDigits(raw){
 }
 async function processBoletoDocument(file){
   const st=document.getElementById('bScanStatus');
-  if(st) st.textContent='Lendo documento do boleto…';
+  if(st) st.textContent='Lendo o documento e identificando o tipo…';
   try{
     const wrap=document.querySelector('#boletoScan .scan-video-wrap');
     const guide=document.querySelector('#boletoScan .scan-frame');
-    const result=await ChevalierScan.readBoletoFromFile(file,{wrapEl:wrap,guideEl:guide});
+    const result=await ChevalierScan.readDocumentFromFile(file,{wrapEl:wrap,guideEl:guide});
+    if(result.guide){ askTaxGuideProceed(result.guide); return; }
+    if(result.docType==='nfe'){ offerNfeFromScan(); return; }
     if(result.parsed && (result.parsed.value!=null || result.parsed.linha || result.parsed.barcode)){
       fillBoletoForm(result.parsed);
       if(st) st.textContent='Dados identificados — confirme para lançar.';
       askBoletoProceed(result.parsed);
       return;
     }
-    if(st) st.textContent='Não encontrei o código automaticamente. Cole a linha digitável ou tente outra foto/PDF.';
-    toast('Não foi possível ler o boleto automaticamente.');
+    if(st) st.textContent='Não identifiquei o documento automaticamente. Cole a linha digitável ou tente outra foto/PDF.';
+    toast('Não foi possível ler o documento automaticamente.');
   }catch(err){
     if(st) st.textContent=err.message||'Falha na leitura.';
     toast(err.message||'Falha ao analisar o boleto.');
@@ -6651,25 +6653,100 @@ function saveBoletoAsCost(force=false){
   save();closeModal();renderAll();go('custos');
   toast(nfeLinkId?'Boleto lançado e vinculado à NF-e (sem duplicidade).':'Boleto lançado em Custos.');
 }
+/* ---------- Guias de tributo (DAS, DARF, GPS, FGTS) → Contas a pagar ---------- */
+let __taxGuidePending=null;
+/** Código de arrecadação lido pela câmera (8 + segmento 5 = órgão público) → guia de tributo. */
+function taxGuideFromArrecadacao(parsed){
+  const TG=window.ChevalierTaxGuide;
+  const d=ChevalierScan.onlyDigits(parsed?.linha||'');
+  if(!TG || parsed?.kind!=='arrecadacao' || d.length!==48 || d[1]!=='5') return null;
+  const g=TG.parseTaxGuide(d.replace(/(\d{12})/g,'$1 '),'tributo');
+  if(!g.ok) return null;
+  return {...g, due:'', notes:'Lido pelo código de barras — importe o PDF para trazer apuração e vencimento.'};
+}
+function askTaxGuideProceed(g){
+  if(!g) return;
+  if(window.ChevalierScan) ChevalierScan.stopCamera();
+  __taxGuidePending=g;
+  const conflicts=ChevalierScan.findCostConflicts({desc:g.desc,value:g.value,due:g.due,boletoLine:g.linha},state.costs)
+    .concat((state.costs||[]).filter(c=>g.docNumber && c.docNumber===g.docNumber))
+    .filter((c,i,a)=>a.indexOf(c)===i);
+  const fees=(g.multa||0)+(g.juros||0);
+  openModal(`${g.label} identificado — lançar em Contas a pagar?`,`
+    <div class="boleto-result">
+      <h4>Dados lidos do documento</h4>
+      <dl>
+        <dt>Documento</dt><dd>${esc(g.label)}${g.docNumber?` · nº ${esc(g.docNumber)}`:''}</dd>
+        ${g.periodLabel?`<dt>Apuração</dt><dd>${esc(g.periodLabel)}</dd>`:''}
+        <dt>Valor</dt><dd>${brl.format(g.value||0)}${fees>0?` <span class="cell-sub">principal ${brl.format(g.principal)} + multa ${brl.format(g.multa)} + juros ${brl.format(g.juros)}</span>`:''}</dd>
+        ${g.originalDue&&g.originalDue!==g.due?`<dt>Vencimento original</dt><dd>${fmtDate(g.originalDue)}</dd>`:''}
+        ${g.items?.length>1?`<dt>Composição</dt><dd style="font-weight:400">${g.items.map(i=>`${esc(i.code)} ${esc(i.name.replace(/\s*-\s*SIMPLES NACIONAL/i,''))} ${brl.format(i.total)}`).join('<br>')}</dd>`:''}
+      </dl>
+    </div>
+    ${conflicts.length?`<div class="conflict-box"><strong>Possível duplicata</strong><ul>${conflicts.slice(0,4).map(c=>`<li>${esc(c.desc)} · ${brl.format(c.value)} · venc. ${fmtDate(c.due)} · ${esc(c.status)}</li>`).join('')}</ul></div>`:''}
+    <div class="form-grid" style="margin-top:12px">
+      <div class="field full"><label>Descrição</label><input id="tgDesc" class="input" value="${esc(g.desc)}"></div>
+      <div class="field"><label>Valor</label><input id="tgValue" type="number" step="0.01" class="input" value="${g.value??''}"></div>
+      <div class="field"><label>Pagar até</label><input id="tgDue" type="date" class="input" value="${g.due||''}"></div>
+      <div class="field"><label>Status</label><select id="tgStatus" class="select"><option>À PAGAR</option><option>PAGO</option></select></div>
+      <div class="field"><label>Forma</label><select id="tgMethod" class="select"><option>BOLETO À VISTA</option><option>PIX</option><option>DÉBITO</option></select></div>
+    </div>
+    ${g.notes?`<p class="field-hint">${esc(g.notes)}</p>`:''}
+  `,saveTaxGuideAsCost);
+  document.getElementById('modalSave').textContent=conflicts.length?'Lançar mesmo assim':'Lançar em Contas a pagar';
+}
+function saveTaxGuideAsCost(){
+  const g=__taxGuidePending; if(!g) return closeModal();
+  const value=num('tgValue');
+  if(!(value>0)) return toast('Informe o valor.');
+  const status=getv('tgStatus')||'À PAGAR';
+  state.costs.unshift({
+    id:uid(),
+    desc:getv('tgDesc')||g.desc,
+    type:'IMPOSTO E CRO',
+    center:'Geral',
+    date:todayISO(),
+    due:getv('tgDue')||g.due||todayISO(),
+    method:getv('tgMethod')||'BOLETO À VISTA',
+    value,
+    status,
+    installment:'',
+    boletoLine:g.linha||'',
+    docType:g.docType,
+    docNumber:g.docNumber||'',
+    period:g.period||'',
+    notes:g.notes||'',
+    ...(status==='PAGO'?{paidAt:todayISO()}:{})
+  });
+  __taxGuidePending=null;
+  save();closeModal();renderAll();go('custos');
+  toast(`${g.label} lançado em Contas a pagar.`);
+}
+function offerNfeFromScan(){
+  if(window.ChevalierScan) ChevalierScan.stopCamera();
+  openModal('Este documento é uma NF-e',`<p>Identifiquei uma <strong>nota fiscal (DANFE)</strong>. NF-e entra por <strong>Importar NF-e</strong>: ela agrupa os boletos da compra e atualiza materiais, sem contar a compra duas vezes.</p>`,()=>{ closeModal(); openNfeImportModal(); });
+  document.getElementById('modalSave').textContent='Abrir Importar NF-e';
+}
+window.askTaxGuideProceed=askTaxGuideProceed;
 /** Atualiza o aviso do leitor só se a janela ainda estiver aberta. */
 function setBoletoScanStatus(msg){ const el=document.getElementById('bScanStatus'); if(el) el.textContent=msg; }
 function openBoletoScanModal(prefill=null){
   if(!window.ChevalierScan) return toast('Ferramenta de leitura indisponível.');
   const types=['BOLETO','IMPLANTE','LAB','BIOMATERIAL','INSUMOS','COMPONENTES','EQUIPAMENTO','ALUGUEL','IMPOSTO E CRO','Consultoria'];
-  openModal('Escanear boleto',`
+  openModal('Escanear documento',`
     <div class="scan-stage" id="boletoScan">
       <div class="scan-video-wrap boleto-cam">
         <video id="bVideo" playsinline muted></video>
-        <img id="bPreview" alt="Boleto" hidden>
+        <img id="bPreview" alt="Documento" hidden>
         <div class="scan-frame" id="bGuide"></div>
-        <div class="scan-guide-label">Alinhe o código de barras (faixa retangular)</div>
+        <div class="scan-guide-label">Alinhe o código de barras (boleto, DAS, DARF…)</div>
       </div>
       <div class="row-actions">
         <button type="button" class="btn primary" id="bStartCam">Abrir câmera</button>
         <label class="btn" style="cursor:pointer">Importar foto / PDF<input type="file" id="bFile" accept="image/*,application/pdf,.pdf" capture="environment" hidden></label>
         <button type="button" class="btn" id="bStopCam">Parar</button>
       </div>
-      <p class="scan-status" id="bScanStatus">A leitura é automática: aponte a faixa retangular para o código de barras do boleto, ou importe foto/PDF.</p>
+      <p class="scan-status" id="bScanStatus">Boleto, DAS, DARF, GPS ou FGTS: aponte a faixa para o código de barras ou importe o PDF/foto — o tipo e os dados são identificados automaticamente.</p>
       <div id="bResultPreview" class="boleto-result" hidden></div>
       <div class="form-grid">
         <div class="field full"><label>Linha digitável</label><input id="bLinha" class="input" placeholder="00000.00000 00000.000000 ..."><div class="row-actions" style="margin-top:8px"><button type="button" class="btn small" id="bParseLinha">Ler linha</button></div></div>
@@ -6714,6 +6791,8 @@ function openBoletoScanModal(prefill=null){
     if(!parsed) return;
     scanning=false;
     ChevalierScan.stopCamera();
+    const tg=taxGuideFromArrecadacao(parsed);
+    if(tg){ setBoletoScanStatus('Guia de tributo identificada.'); askTaxGuideProceed(tg); return; }
     fillBoletoForm(parsed);
     const preview=document.getElementById('bResultPreview');
     if(preview){
@@ -6925,7 +7004,7 @@ function openQuickModal(){
     ctx.push(`<button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openPatientModal()">Novo tratamento</button>`);
   }else if(page==='custos'){
     ctx.push(`<button type="button" class="btn primary" style="height:80px;justify-content:center" onclick="closeModal();openCostModal()">Nova despesa</button>`);
-    ctx.push(`<button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBoletoScanModal()">Escanear boleto</button>`);
+    ctx.push(`<button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBoletoScanModal()">Escanear documento</button>`);
   }else if(page==='recebiveis' || page==='prestacao' || page==='particulares'){
     ctx.push(`<button type="button" class="btn primary" style="height:80px;justify-content:center" onclick="closeModal();openQuickReceivePicker()">Baixar recebimento</button>`);
     ctx.push(`<button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openReceivableModal(${page==='prestacao'?"'prestacao'":''})">Novo recebível</button>`);
@@ -6945,7 +7024,7 @@ function openQuickModal(){
     <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openReceivableModal()">Recebível</button>
     <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openQuickReceivePicker()">Baixa</button>
     <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openCostModal()">Custo / despesa</button>
-    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBoletoScanModal()">Escanear boleto</button>
+    <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBoletoScanModal()">Escanear documento</button>
     <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openBarcodeScanModal()">Código de barras</button>
     <button type="button" class="btn" style="height:80px;justify-content:center" onclick="closeModal();openMaterialModal()">Material</button>`;
   openModal('Novo lançamento',`

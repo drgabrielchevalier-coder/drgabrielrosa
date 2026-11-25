@@ -1,8 +1,11 @@
 {
-  "version": "2.30.3",
-  "name": "ACORDO entra como a receber",
-  "releasedAt": "2026-11-24",
+  "version": "2.31.0",
+  "name": "Escanear documento: boleto, DAS e DARF",
+  "releasedAt": "2026-11-25",
   "changes": [
-    "Na importação de honorários do Notion, o status ACORDO passa a entrar como “À receber” (combinado, ainda não recebido), e não mais como recebido."
+    "“Escanear boleto” virou “Escanear documento”: importe o PDF ou foto (ou aponte a câmera) e o sistema identifica sozinho se é boleto, DAS, DARF, GPS, FGTS ou NF-e.",
+    "DAS e DARF são lidos direto do PDF: valor, prazo para pagar, apuração, número do documento, vencimento original, multa e juros e a composição dos tributos — confira e lance em Contas a pagar (tipo Imposto).",
+    "Alerta de duplicata também para guias (mesmo número de documento ou mesmo código de barras).",
+    "Se o documento for uma NF-e, o leitor encaminha para Importar NF-e."
   ]
 }

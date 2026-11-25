@@ -804,14 +804,14 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <div class="page-actions">
             <button class="btn" id="costReconcileBtn" onclick="openCostReconcileModal()">⇄ Conciliar NF × boletos</button>
             <button class="btn" onclick="openNfeImportModal()" title="Compra do fornecedor: agrupa os boletos e atualiza o custo dos materiais">⇪ Importar NF-e</button>
-            <button class="btn" onclick="openBoletoScanModal()">⎙ Escanear boleto</button>
+            <button class="btn" onclick="openBoletoScanModal()" title="Boleto, DAS, DARF, GPS ou FGTS — identifica o tipo e os dados">⎙ Escanear documento</button>
             <button class="btn primary" onclick="openCostModal()">＋ Novo custo</button>
           </div>
         </div>
           <div class="ai-banner scan-banner">
             <div>
-              <strong>Leitor de boletos</strong>
-              <p>Leitura automática do código de barras (faixa retangular). Importe foto ou PDF, confira os dados e confirme para lançar em Custos — com alerta se já existir lançamento parecido.</p>
+              <strong>Leitor de documentos</strong>
+              <p>Boleto, DAS, DARF, GPS ou FGTS: aponte a câmera para o código de barras ou importe o PDF/foto. O sistema identifica o tipo e os dados (valor, vencimento, apuração, multa e juros) — confira e confirme para lançar em Contas a pagar, com alerta se já existir lançamento parecido.</p>
             </div>
             <button class="btn primary" onclick="openBoletoScanModal()">Escanear agora</button>
           </div>
@@ -1141,6 +1141,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
 </div>
 <div class="toast" id="toast"></div>
 
+<script src="<?= chevalier_asset_url('assets/js/tax-guide.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/scan-tools.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/dental-catalog.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/procedure-catalog.js') ?>"></script>
