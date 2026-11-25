@@ -8130,9 +8130,9 @@ async function applyBundledHistoricos(force=false){
 window.applyBundledHistoricos=applyBundledHistoricos;
 window.importAllHistoricos=applyBundledHistoricos;
 
-function openImportSpreadsheetModal(){
+function openImportSpreadsheetModal(kind){
   if(window.ChevalierImport?.openWizard){
-    ChevalierImport.openWizard();
+    ChevalierImport.openWizard({kind});
     return;
   }
   // Fallback legado (CSV/HTML) se o wizard não carregou

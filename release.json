@@ -1,11 +1,8 @@
 {
-  "version": "2.31.0",
-  "name": "Escanear documento: boleto, DAS e DARF",
+  "version": "2.31.1",
+  "name": "Importar planilha em Custos",
   "releasedAt": "2026-11-25",
   "changes": [
-    "“Escanear boleto” virou “Escanear documento”: importe o PDF ou foto (ou aponte a câmera) e o sistema identifica sozinho se é boleto, DAS, DARF, GPS, FGTS ou NF-e.",
-    "DAS e DARF são lidos direto do PDF: valor, prazo para pagar, apuração, número do documento, vencimento original, multa e juros e a composição dos tributos — confira e lance em Contas a pagar (tipo Imposto).",
-    "Alerta de duplicata também para guias (mesmo número de documento ou mesmo código de barras).",
-    "Se o documento for uma NF-e, o leitor encaminha para Importar NF-e."
+    "Custos ganhou o botão “⇪ Importar planilha”: abre a importação assistida já em modo Custos, para lançar vários boletos/custos de uma vez a partir de CSV ou XLSX."
   ]
 }

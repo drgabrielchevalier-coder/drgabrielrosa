@@ -905,10 +905,10 @@
     }
   }
 
-  function openWizard() {
+  function openWizard(opts = {}) {
     global.__importWizard = {
       step: 1,
-      kindMode: 'auto',
+      kindMode: opts.kind === 'costs' || opts.kind === 'patients' ? opts.kind : 'auto',
       kind: 'patients',
       clinicId: '',
       parsed: null,
