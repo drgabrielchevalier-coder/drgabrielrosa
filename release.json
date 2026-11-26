@@ -1,9 +1,12 @@
 {
-  "version": "2.31.2",
-  "name": "Baixa em lote de custos",
-  "releasedAt": "2026-11-25",
+  "version": "2.32.0",
+  "name": "Retirada da semana (pró-labore × custos × impostos)",
+  "releasedAt": "2026-11-26",
   "changes": [
-    "Custos ganhou “✓ Baixa em lote”: escolha “vencimento até” (e, se quiser, um filtro como “Dental Cremer”), confira a lista e marque todos como pagos de uma vez.",
-    "A data do pagamento fica registrada (no vencimento de cada um ou hoje)."
+    "Dashboard: novo bloco “Retirada da semana” mostra quanto pode sair para você na semana (segunda a domingo), separado de impostos, reposição de custos, reserva e contas a vencer. Zera toda segunda.",
+    "Cada recebimento é dividido em envelopes: imposto (se o lançamento emite nota) → repor custos do caso → reserva (10%) → livre para retirada.",
+    "Contas até domingo (boletos, guias e atrasadas) saem primeiro do capital de giro; o que ele não cobre sai da retirada.",
+    "Previsão das guias: DAS (15,5% das notas do mês, Anexo V) e DARF do INSS do pró-labore, vencendo dia 20 — some quando a guia real é lançada.",
+    "Tratamento ganhou a opção “Emitir nota fiscal”. Registro de retiradas com histórico por semana. Ajustes (alíquota, reserva, pró-labore) no detalhe da semana."
   ]
 }

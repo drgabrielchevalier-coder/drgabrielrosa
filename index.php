@@ -214,6 +214,17 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
         </div>
 
         <div class="flow">
+          <section class="block" id="weeklyDrawBlock">
+            <div class="block-head">
+              <div class="step" aria-hidden="true">R$</div>
+              <div>
+                <h3>Retirada da semana</h3>
+                <p>Quanto pode sair para você (pró-labore) sem faltar para custos, impostos e reserva.</p>
+              </div>
+            </div>
+            <div class="block-body" id="weeklyDrawCard"></div>
+          </section>
+
           <section class="block">
             <div class="block-head">
               <div class="step" aria-hidden="true">1</div>
@@ -1144,6 +1155,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
 <div class="toast" id="toast"></div>
 
 <script src="<?= chevalier_asset_url('assets/js/tax-guide.js') ?>"></script>
+<script src="<?= chevalier_asset_url('assets/js/weekly-draw.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/scan-tools.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/dental-catalog.js') ?>"></script>
 <script src="<?= chevalier_asset_url('assets/js/procedure-catalog.js') ?>"></script>

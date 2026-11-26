@@ -367,8 +367,8 @@ function storeLocalState(){
  */
 const BACKUP_KEY='chevalier_gestao_backup_local';
 const SEED_REMINDERS=new Set(['reavaliar planejamento cbct','entrega protetico / prova','lembrete de retorno pos-cirurgico']);
-const MERGE_KEYS=['people','patients','costs','procedures','materials','payroll','prostheses','reminders','plans','importBatches','nfImports','stockLedger'];
-const MERGE_LABELS={people:'pacientes cadastrados',patients:'tratamentos',costs:'custos',procedures:'procedimentos',materials:'materiais',payroll:'folha',prostheses:'próteses',reminders:'lembretes',plans:'planos',importBatches:'lotes de importação',nfImports:'NF-e importadas',stockLedger:'movimentos de estoque'};
+const MERGE_KEYS=['people','patients','costs','withdrawals','procedures','materials','payroll','prostheses','reminders','plans','importBatches','nfImports','stockLedger'];
+const MERGE_LABELS={withdrawals:'retiradas',people:'pacientes cadastrados',patients:'tratamentos',costs:'custos',procedures:'procedimentos',materials:'materiais',payroll:'folha',prostheses:'próteses',reminders:'lembretes',plans:'planos',importBatches:'lotes de importação',nfImports:'NF-e importadas',stockLedger:'movimentos de estoque'};
 function mergeNorm(v){ return String(v??'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
 function mergeSig(key,x){
   if(!x||typeof x!=='object') return '';
@@ -2426,6 +2426,7 @@ function renderMonthlyLineChart(el, months){
   svg.addEventListener('mouseleave',hide);
 }
 function renderDashboard(){
+  try{ renderWeeklyDrawCard(); }catch(e){ console.warn('retirada semanal', e); }
   const patients=state.patients.filter(p=>inPeriod(p.date));
   const costsPeriod=state.costs.filter(c=>inPeriod(c.date));
   const fat=patients.reduce((s,p)=>s+Number(p.value||0),0);
@@ -5403,6 +5404,7 @@ function openPatientModal(origin='',editId='',personId=''){
       <div class="field"><label>Recebido</label><input id="fReceived" type="number" step="0.01" class="input" value="${p.received??0}" oninput="autoTreatStatus('f')"></div>
       <div class="field"><label>Vencimento</label><input id="fDue" type="date" class="input" value="${p.due||addDays(10)}"></div>
       <div class="field"><label>Status financeiro</label><select id="fStatus" class="select">${statusOptions(p.status)}</select></div>
+      <div class="field"><label class="check-inline"><input type="checkbox" id="fInvoice" ${p.invoice?'checked':''}> Emitir nota fiscal</label><small class="field-hint">Com nota, o imposto (${(window.ChevalierDraw?financeSettings().taxRate:15.5)}%) é reservado na retirada da semana e entra na previsão do DAS.</small></div>
       <div class="field full"><label>Progresso clínico</label><select id="fProgress" class="select">${['Orçamento','Em tratamento','Planejar caso','Solicitar material','Em fila / agendado','Aguardo pós Cirúrgico','Aguardando cicatrização','Aguardando moldagem','Moldagem','Enviado para Laboratório','Aguardando Prova','Aguardando Cimentação','Alta'].map(s=>`<option ${s===(p.progress||'Em tratamento')?'selected':''}>${s}</option>`).join('')}</select></div>
       <details class="field full progressive-block" ${(editId||needsGate)?'open':''}>
         <summary>${stockEnabled()?'Materiais do estoque':'Materiais e custos'} <span class="cell-sub">${needsGate?'obrigatório para implante / enxerto / componente':stockEnabled()?'da composição — baixa o saldo':'da composição — entram no custo do tratamento'}</span></summary>
@@ -5474,6 +5476,7 @@ function openPatientModal(origin='',editId='',personId=''){
         components:num('fComponents'),
         clinical:num('fClinical'),
         progress:getv('fProgress'),
+        invoice:!!document.getElementById('fInvoice')?.checked,
         consumedItems:consumed,
         payments:Array.isArray(prev?.payments)?prev.payments:[],
         lastPaymentDate:prev?.lastPaymentDate||'',
@@ -7465,6 +7468,116 @@ function openCostBatchPayModal(){
   renderCostBatchList();
 }
 window.openCostBatchPayModal=openCostBatchPayModal;
+/* ---------- Retirada semanal (pró-labore × custos × impostos × reserva) — lógica em weekly-draw.js ---------- */
+let weeklyDrawOffset=0;
+function financeSettings(){
+  const st=ensureSettings();
+  const D=window.ChevalierDraw;
+  if(!st.finance||typeof st.finance!=='object') st.finance={};
+  if(D){
+    Object.entries(D.DEFAULTS).forEach(([k,v])=>{ if(st.finance[k]===undefined||st.finance[k]==='') st.finance[k]=v; });
+    if(!st.finance.since) st.finance.since=D.weekRange(todayISO(),Number(st.finance.weekStart)||1).start;
+  }
+  if(!Array.isArray(state.withdrawals)) state.withdrawals=[];
+  return st.finance;
+}
+function weeklyDrawData(offset=0){
+  const D=window.ChevalierDraw; if(!D) return null;
+  const linkIdx=costsLinkIndex();
+  return D.compute({today:todayISO(),weekOffset:offset,settings:financeSettings(),patients:state.patients||[],costs:state.costs||[],withdrawals:state.withdrawals||[],effectiveValue:c=>costEffectiveValue(c,linkIdx)});
+}
+function renderWeeklyDrawCard(){
+  const el=document.getElementById('weeklyDrawCard'); if(!el) return;
+  const r=weeklyDrawData(0); if(!r){ el.innerHTML=''; return; }
+  const t=r.totals;
+  el.innerHTML=`
+    <div class="hero-note draw-hero">
+      <div>
+        <h3>Disponível para retirada · ${fmtDate(r.week.start)} a ${fmtDate(r.week.end)}</h3>
+        <p>Recebido na semana menos impostos das notas, reposição dos custos, reserva de ${r.settings.reservePct}% e as contas da semana que o capital de giro não cobre. Zera toda segunda-feira.</p>
+      </div>
+      <div class="hero-kpi"><strong>${brl.format(r.available)}</strong><small>${r.withdrawn>0?`já retirado ${brl.format(r.withdrawn)}`:'nada retirado ainda'}${r.shortfall>0?` · faltam ${brl.format(r.shortfall)} para as contas`:''}</small></div>
+    </div>
+    <div class="grid kpi-grid draw-kpis">
+      <div class="kpi"><div class="label">Recebido na semana</div><div class="value">${brl.format(t.received)}</div><div class="meta">${r.receipts.length} baixa(s)</div></div>
+      <div class="kpi"><div class="label">Impostos a guardar</div><div class="value">${brl.format(t.tax+r.inssWeekly)}</div><div class="meta">notas ${r.settings.taxRate}% + INSS</div></div>
+      <div class="kpi"><div class="label">Repor custos</div><div class="value">${brl.format(t.costReserve)}</div><div class="meta">materiais, lab, componentes</div></div>
+      <div class="kpi"><div class="label">Reserva</div><div class="value">${brl.format(t.reserve)}</div><div class="meta">${r.settings.reservePct}% do que sobra</div></div>
+      <div class="kpi ${r.bills.length?'kpi-warn':''}"><div class="label">Contas até domingo</div><div class="value">${brl.format(r.billsOps+r.billsTax)}</div><div class="meta">${r.bills.length} conta(s)${r.deficitOps+r.deficitTax>0?` · ${brl.format(r.deficitOps+r.deficitTax)} saem da retirada`:' · cobertas pelos fundos'}</div></div>
+      <div class="kpi"><div class="label">Fundos acumulados</div><div class="value">${brl.format(r.funds.giro+r.funds.impostos+r.funds.reserva)}</div><div class="meta">giro ${brl.format(r.funds.giro)} · impostos ${brl.format(r.funds.impostos)}</div></div>
+    </div>
+    <div class="row-actions" style="margin-top:12px"><button class="btn primary" type="button" onclick="openWithdrawalModal()">＋ Registrar retirada</button><button class="btn" type="button" onclick="openWeeklyDrawModal(0)">Ver detalhes da semana</button></div>`;
+}
+function openWeeklyDrawModal(offset){
+  weeklyDrawOffset=Number(offset)||0;
+  const r=weeklyDrawData(weeklyDrawOffset); if(!r) return toast('Módulo de retirada não carregou. Recarregue a página.');
+  const t=r.totals, s=r.settings;
+  const line=(label,val,cls='')=>`<tr class="${cls}"><td>${label}</td><td style="text-align:right;white-space:nowrap">${val}</td></tr>`;
+  const rec=r.receipts.length?`<div class="table-wrap"><table><thead><tr><th>Data</th><th>Paciente</th><th>Recebido</th><th>Imposto</th><th>Repor custo</th><th>Reserva</th><th>Livre</th></tr></thead><tbody>${r.receipts.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${esc(x.name)}${x.invoice?' <span class="badge b-amber">NF</span>':''}</td><td>${brl.format(x.amount)}</td><td>${brl.format(x.tax)}</td><td>${brl.format(x.costReserve)}</td><td>${brl.format(x.reserve)}</td><td><strong>${brl.format(x.free)}</strong></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nenhuma baixa nesta semana.</div>';
+  const bills=r.bills.length?`<div class="table-wrap"><table><thead><tr><th>Vencimento</th><th>Conta</th><th>Valor</th><th></th></tr></thead><tbody>${r.bills.map(b=>`<tr><td>${fmtDate(b.due)}${b.overdue?' <span class="badge b-red">atrasada</span>':''}</td><td>${esc(b.desc)}${b.estimated?' <span class="badge b-gray">prevista</span>':''}</td><td>${brl.format(b.value)}</td><td>${b.tax?'imposto':'giro'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nenhuma conta vencendo até domingo.</div>';
+  const guides=r.guides.length?`<ul class="field-hint" style="margin:6px 0 0 18px">${r.guides.map(g=>`<li>${esc(g.label)}: ${brl.format(g.value)}${g.kind==='das'?` (${s.taxRate}% de ${brl.format(g.base)} em notas)`:''} · vence ${fmtDate(g.due)}${g.real?' · <strong>guia já lançada</strong>':''}</li>`).join('')}</ul>`:'<p class="field-hint">Nenhuma guia prevista.</p>';
+  const wd=r.withdrawals.length?r.withdrawals.map(w=>`<li>${fmtDate(w.date)} · ${brl.format(w.value)}${w.note?` · ${esc(w.note)}`:''} <button type="button" class="btn small danger" onclick="deleteWithdrawal('${esc(w.id)}')">Excluir</button></li>`).join(''):'<li>Nenhuma retirada nesta semana.</li>';
+  openModal(`Retirada da semana · ${fmtDate(r.week.start)} a ${fmtDate(r.week.end)}`,`
+    <div class="row-actions" style="margin-bottom:12px"><button type="button" class="btn small" onclick="openWeeklyDrawModal(${weeklyDrawOffset-1})">◀ Semana anterior</button>${weeklyDrawOffset<0?`<button type="button" class="btn small" onclick="openWeeklyDrawModal(${weeklyDrawOffset+1})">Próxima ▶</button><button type="button" class="btn small" onclick="openWeeklyDrawModal(0)">Esta semana</button>`:''}</div>
+    <div class="table-wrap"><table><tbody>
+      ${line('Recebido na semana',brl.format(t.received))}
+      ${line(`− Impostos das notas (${s.taxRate}%)`,brl.format(t.tax))}
+      ${line('− Repor custos dos casos (materiais, lab, componentes)',brl.format(t.costReserve))}
+      ${line(`− Reserva (${s.reservePct}% do que sobra)`,brl.format(t.reserve))}
+      ${line(`− Provisão do INSS do pró-labore (${brl.format(s.proLabore)} × ${s.inssRate}% por mês)`,brl.format(r.inssWeekly))}
+      ${line('− Contas da semana não cobertas pelo capital de giro',brl.format(r.deficitOps))}
+      ${line('− Guias/impostos da semana não cobertos pelo fundo de impostos',brl.format(r.deficitTax))}
+      ${line('− Já retirado nesta semana',brl.format(r.withdrawn))}
+      ${line('<strong>= Disponível para retirada</strong>',`<strong>${brl.format(r.available)}</strong>`)}
+    </tbody></table></div>
+    ${r.shortfall>0?`<div class="conflict-box"><strong>Semana no vermelho:</strong> faltam ${brl.format(r.shortfall)} para cobrir as contas. Não há retirada disponível.</div>`:''}
+    <h4 style="margin:16px 0 6px">Fundos acumulados desde ${fmtDate(r.since)}</h4>
+    <p class="field-hint">Capital de giro <strong>${brl.format(r.funds.giro)}</strong> (custos reservados − custos pagos) · Impostos <strong>${brl.format(r.funds.impostos)}</strong> (reservado − guias pagas) · Reserva <strong>${brl.format(r.funds.reserva)}</strong></p>
+    <h4 style="margin:16px 0 6px">Recebimentos da semana</h4>${rec}
+    <h4 style="margin:16px 0 6px">Contas até domingo (inclui atrasadas)</h4>${bills}
+    <h4 style="margin:16px 0 6px">Guias de recolhimento previstas</h4>${guides}
+    <h4 style="margin:16px 0 6px">Retiradas da semana</h4><ul class="field-hint" style="margin:0 0 0 18px">${wd}</ul>
+    <details style="margin-top:16px"><summary><strong>Ajustes do cálculo</strong></summary>
+      <div class="form-grid" style="margin-top:10px">
+        <div class="field"><label>Alíquota do Simples (%)</label><input id="fnTax" type="number" step="0.01" class="input" value="${s.taxRate}"><small class="field-hint">15,5% = Anexo V, faixa 1 (identificado no seu DAS de set/2026).</small></div>
+        <div class="field"><label>Reserva (% do que sobra)</label><input id="fnReserve" type="number" step="0.5" class="input" value="${s.reservePct}"></div>
+        <div class="field"><label>Pró-labore declarado (R$/mês)</label><input id="fnPro" type="number" step="0.01" class="input" value="${s.proLabore}"><small class="field-hint">Base do DARF de INSS (11%).</small></div>
+        <div class="field"><label>INSS do pró-labore (%)</label><input id="fnInss" type="number" step="0.5" class="input" value="${s.inssRate}"></div>
+        <div class="field"><label>Controle desde</label><input id="fnSince" type="date" class="input" value="${r.since}"><small class="field-hint">Os fundos acumulam a partir desta data.</small></div>
+      </div>
+      <div class="row-actions" style="margin-top:8px"><button type="button" class="btn small primary" onclick="saveFinanceSettings()">Salvar ajustes</button></div>
+    </details>
+  `,()=>{ closeModal(); openWithdrawalModal(); });
+  document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
+  document.getElementById('modalSave').textContent='＋ Registrar retirada';
+}
+function saveFinanceSettings(){
+  const f=financeSettings();
+  f.taxRate=num('fnTax'); f.reservePct=num('fnReserve'); f.proLabore=num('fnPro'); f.inssRate=num('fnInss');
+  if(getv('fnSince')) f.since=getv('fnSince');
+  save(); renderAll(); openWeeklyDrawModal(weeklyDrawOffset); toast('Ajustes da retirada salvos.');
+}
+function openWithdrawalModal(){
+  const r=weeklyDrawData(0);
+  openModal('Registrar retirada (pró-labore)',`<div class="form-grid">
+    <div class="field"><label>Data</label><input id="wdDate" type="date" class="input" value="${todayISO()}"></div>
+    <div class="field"><label>Valor</label><input id="wdValue" type="number" step="0.01" class="input" value="${r&&r.available>0?r.available:''}"></div>
+    <div class="field full"><label>Observação</label><input id="wdNote" class="input" placeholder="Ex.: contas pessoais da semana"></div>
+  </div><p class="field-hint">Disponível nesta semana: <strong>${brl.format(r?.available||0)}</strong>.</p>`,()=>{
+    const value=num('wdValue'); if(!(value>0)) return toast('Informe o valor.');
+    if(r && value>r.available+0.009 && !confirm(`O valor passa do disponível da semana (${brl.format(r.available)}). Registrar mesmo assim?`)) return;
+    financeSettings();
+    state.withdrawals.unshift({id:uid(),date:getv('wdDate')||todayISO(),value:moneyRound(value),note:getv('wdNote')});
+    save(); closeModal(); renderAll(); toast(`Retirada de ${brl.format(value)} registrada.`);
+  });
+  document.getElementById('modalSave').textContent='Registrar';
+}
+function deleteWithdrawal(id){
+  if(!confirm('Excluir esta retirada?')) return;
+  state.withdrawals=(state.withdrawals||[]).filter(w=>w.id!==id);
+  save(); renderAll(); openWeeklyDrawModal(weeklyDrawOffset);
+}
+Object.assign(window,{openWeeklyDrawModal,openWithdrawalModal,deleteWithdrawal,saveFinanceSettings});
 function toggleCost(id){const c=state.costs.find(x=>x.id===id);if(!c)return;c.status=c.status==='PAGO'?'À PAGAR':'PAGO';if(c.status==='PAGO')c.paidAt=todayISO();else delete c.paidAt;save();renderAll();toast('Status do custo atualizado.')}
 function exportData(){
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='chevalier-gestao-backup.json';a.click();URL.revokeObjectURL(a.href);

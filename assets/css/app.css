@@ -1086,3 +1086,11 @@ body.stock-off [data-stock-only]{display:none!important}
 .sync-status[data-kind="saving"]:before{background:#dd9f4c}
 .sync-status[data-kind="offline"]{color:#b4423a;border-color:#e7b9b4;background:#fdf1ef}
 .sync-status[data-kind="offline"]:before{background:#b4423a}
+
+/* Retirada da semana */
+.draw-hero{margin:0 0 14px}
+.draw-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:760px){.draw-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi-warn{border-color:#e7c48a}
+.check-inline{display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer}
+.check-inline input{width:18px;height:18px}
