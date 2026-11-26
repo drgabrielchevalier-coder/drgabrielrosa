@@ -127,6 +127,7 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           <button type="button" class="nav-btn" data-page="relatorios" title="Visão financeira"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-btn-label">Visão financeira</span></button>
           <button type="button" class="nav-btn" data-page="recebiveis" title="Recebíveis e baixas"><span class="nav-icon" aria-hidden="true">◌</span><span class="nav-btn-label">Recebíveis e baixas</span></button>
           <button type="button" class="nav-btn" data-page="custos" title="Contas a pagar"><span class="nav-icon" aria-hidden="true">↓</span><span class="nav-btn-label">Contas a pagar</span></button>
+          <button type="button" class="nav-btn" data-page="provisoes" title="Provisões e fluxo de caixa"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-btn-label">Provisões e fluxo de caixa</span></button>
           <button type="button" class="nav-btn" data-page="prestacao" title="Honorários"><span class="nav-icon" aria-hidden="true">↗</span><span class="nav-btn-label">Honorários</span></button>
           <button type="button" class="nav-btn" data-page="folha" title="Folha de pagamento"><span class="nav-icon" aria-hidden="true">₿</span><span class="nav-btn-label">Folha de pagamento</span></button>
         </div>
@@ -861,6 +862,15 @@ window.CHEVALIER_CSRF=<?= json_encode($chevalierCsrf, JSON_HEX_TAG|JSON_HEX_AMP|
           </table></div></div>
           <div class="card"><div class="card-head"><h3>Resumo</h3></div><div class="card-body" id="payrollSummary"></div></div>
         </div>
+      </section>
+
+      <!-- PROVISÕES E FLUXO DE CAIXA -->
+      <section class="page" id="page-provisoes">
+        <div class="page-head">
+          <div><h2>Provisões e fluxo de caixa</h2><p>Cobertura das obrigações futuras: provisão requerida × saldo provisionado, semana a semana.</p></div>
+          <div class="page-actions"><button class="btn" onclick="openWeeklyDrawModal(0)">Retirada da semana</button></div>
+        </div>
+        <div class="flow" id="provisoesBody"></div>
       </section>
 
       <!-- RELATORIOS -->

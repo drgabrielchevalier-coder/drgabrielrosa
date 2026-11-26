@@ -15,6 +15,7 @@
     inssRate: 11,       // % INSS do sócio (DARF 1099)
     taxDueDay: 20,      // DAS e DARF vencem dia 20 do mês seguinte
     weekStart: 1,       // 1 = segunda-feira
+    reserveGoal: 0,     // meta da reserva de contingência (0 = automática: 3 meses de desembolsos)
     since: '2026-11-23', // início do controle (ISO)
   };
 
@@ -39,7 +40,7 @@
 
   function settingsOf(s) {
     const o = { ...DEFAULTS, ...(s || {}) };
-    ['taxRate', 'reservePct', 'proLabore', 'inssRate', 'taxDueDay', 'weekStart'].forEach((k) => {
+    ['taxRate', 'reservePct', 'proLabore', 'inssRate', 'taxDueDay', 'weekStart', 'reserveGoal'].forEach((k) => {
       o[k] = Number(o[k]);
       if (!Number.isFinite(o[k])) o[k] = DEFAULTS[k];
     });
@@ -150,6 +151,7 @@
     let reserva = 0;
     let carry = 0;
     let out = null;
+    const history = [];
     for (let ws = firstWeek; ws <= week.start; ws = addDays(ws, 7)) {
       const we = addDays(ws, 6);
       const rec = allReceipts.filter((x) => inRange(x.date, ws, we));
@@ -185,6 +187,12 @@
       const withdrawn = r2(wds.reduce((s2, x) => s2 + x.value, 0));
       const carryIn = r2(carry);
       carry = r2(carry + weekResult - withdrawn);
+      // provisão requerida × provisionado de fato (retirada acima do disponível consome as provisões)
+      const overdraw = Math.max(0, -carry);
+      const saved = r2(Math.max(0, giro + impostos - overdraw));
+      const savedOps = r2(Math.max(0, Math.min(saved, giro - overdraw)));
+      const savedTax = r2(saved - savedOps);
+      history.push({ week: ws, requiredOps: r2(needOps), requiredTax: r2(needTax), required: r2(needOps + needTax), savedOps, savedTax, saved });
       if (ws === week.start) {
         out = {
           receipts: rec.sort((a, b) => a.date.localeCompare(b.date)),
@@ -204,6 +212,37 @@
       out = { receipts: [], totals: { received: 0, tax: 0, costReserve: 0, reserve: 0, free: 0 }, contribOps: 0, contribTax: 0, weekResult: 0, carryIn: 0, withdrawals: [], withdrawn: 0, bills: [] };
       carry = 0;
     }
+    // projeção: próximas 8 semanas a partir da semana pedida (contas em aberto pagas no vencimento)
+    const openNow = bills.filter((b) => !b.paidAt && b.due);
+    const forecast = [];
+    for (let i = 0; i < 8; i++) {
+      const ws = addDays(week.start, 7 * i);
+      const we = addDays(ws, 6);
+      let reqOps = 0;
+      let reqTax = 0;
+      let dueOps = 0;
+      let dueTax = 0;
+      openNow.forEach((b) => {
+        if (b.due < ws && i > 0) return; // atrasadas contam só na semana atual
+        if (b.due <= addDays(we, HORIZON)) {
+          const part = b.value / (weeksUntil(b.due < ws ? ws : b.due, ws) + 1);
+          if (b.tax) reqTax += part; else reqOps += part;
+        }
+        if ((b.due >= ws || i === 0) && b.due <= we) {
+          if (b.tax) dueTax += b.value; else dueOps += b.value;
+        }
+      });
+      forecast.push({ week: ws, requiredOps: r2(reqOps), requiredTax: r2(reqTax), required: r2(reqOps + reqTax), dueOps: r2(dueOps), dueTax: r2(dueTax), due: r2(dueOps + dueTax) });
+    }
+    const cur = history.length ? history[history.length - 1] : { required: 0, saved: 0, requiredOps: 0, requiredTax: 0, savedOps: 0, savedTax: 0 };
+    const coverage = {
+      required: cur.required,
+      saved: r2(Math.max(0, cur.saved)),
+      gap: r2(Math.max(0, cur.required - Math.max(0, cur.saved))),
+      pct: cur.required > 0 ? Math.max(0, Math.min(999, Math.round(100 * Math.max(0, cur.saved) / cur.required))) : 100,
+      ops: { required: cur.requiredOps, saved: r2(Math.max(0, cur.savedOps)) },
+      tax: { required: cur.requiredTax, saved: r2(Math.max(0, cur.savedTax)) },
+    };
     const billsOps = r2(out.bills.filter((b) => !b.tax).reduce((s2, b) => s2 + b.value, 0));
     const billsTax = r2(out.bills.filter((b) => b.tax).reduce((s2, b) => s2 + b.value, 0));
     return {
@@ -217,6 +256,9 @@
       billsOps,
       billsTax,
       guides: guides.filter((g) => g.due >= week.start),
+      history: history.filter((h) => h.week <= week.start).slice(-12),
+      forecast,
+      coverage,
       available: r2(Math.max(0, carry)),
       shortfall: r2(Math.max(0, -carry)),
     };

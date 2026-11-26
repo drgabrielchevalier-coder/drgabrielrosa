@@ -1094,3 +1094,35 @@ body.stock-off [data-stock-only]{display:none!important}
 .kpi-warn{border-color:#e7c48a}
 .check-inline{display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer}
 .check-inline input{width:18px;height:18px}
+
+/* Provisões e fluxo de caixa */
+#page-provisoes,#weeklyDrawBlock{--pv-card:#fffdf8;--pv-ink:#191919;--pv-ink2:#666;--pv-grid:#e7e7e7;--pv-axis:#cfc9bc;--pv-plan:#8a8a8a;--pv-s1:#257de0;--pv-s2:#f47230;--pv-today:#f6efe0}
+.pv-hero{display:grid;grid-template-columns:1.3fr 1fr;gap:18px;align-items:center}
+@media (max-width:760px){.pv-hero{grid-template-columns:1fr}}
+.pv-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:999px;padding:4px 10px;margin-top:10px}
+.pv-ok{background:#e3f6e6;color:#077a19}.pv-warn{background:#fff3d1;color:#5c4300}.pv-crit{background:#fde4e3;color:#b42318}
+.pv-gauge .row{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:#c9ccc4;margin-bottom:6px}
+.pv-gauge .big{font-size:28px;color:#fff;font-family:Georgia,serif}.pv-gauge .big2{font-size:20px;color:#e9e6dd;font-family:Georgia,serif}
+.pv-gauge .track{position:relative;height:14px;background:#4a4b47;border-radius:7px;margin:10px 0 6px}
+.pv-gauge .fill{position:absolute;left:0;top:0;bottom:0;background:#fff;border-radius:7px}
+.pv-gauge .target{position:absolute;right:0;top:-5px;bottom:-5px;width:3px;background:#fbb315;border-radius:2px}
+.pv-funds{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}
+@media (max-width:760px){.pv-funds{grid-template-columns:1fr}}
+.pv-fund{border:1px solid var(--line,#e6e1d6);border-radius:14px;padding:14px;background:#fff}
+.pv-fund .lbl{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#666}
+.pv-fund .val{font-size:22px;font-family:Georgia,serif;margin:4px 0}
+.pv-fund .meta{font-size:12px;color:#666;margin-top:2px}
+.pv-fund .st{display:inline-flex;gap:4px;align-items:center;font-weight:600}
+.pv-bar{position:relative;height:10px;background:#efebe2;border-radius:5px;margin:10px 0 6px}
+.pv-bar .f{position:absolute;left:0;top:0;bottom:0;background:#191919;border-radius:5px}
+.pv-bar .t{position:absolute;right:0;top:-4px;bottom:-4px;width:2px;background:#191919}
+.pv-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#666;margin-bottom:6px}
+.pv-legend i{display:inline-block;width:18px;height:0;vertical-align:middle;margin-right:6px}
+.pv-legend b{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:middle;margin-right:6px}
+.pv-chart svg{display:block;overflow:visible}
+.pv-todo{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:760px){.pv-todo{grid-template-columns:1fr}}
+.pv-todo>div{border:1px solid var(--line,#e6e1d6);border-radius:14px;padding:14px;font-size:13px;background:#fff}
+.pv-todo strong{display:block;font-size:18px;font-family:Georgia,serif;margin:4px 0}
+.pv-tip{position:fixed;z-index:9999;background:#191919;color:#fff;font-size:12px;line-height:1.5;padding:8px 10px;border-radius:10px;pointer-events:none;box-shadow:0 6px 20px rgba(0,0,0,.18);max-width:220px}
+.pv-tip strong{display:block;margin-bottom:2px}

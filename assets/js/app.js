@@ -4980,7 +4980,7 @@ function renderAll(){
   try{
     if(window.ChevalierPlan){ChevalierPlan.ensureCollections();ChevalierPlan.seedDefaults();ChevalierPlan.bindUi();}
   }catch(e){ console.warn('ChevalierPlan init', e); }
-  renderDashboard();renderPatients();renderClinics();renderProcedures();renderOrcamento();renderService();renderPrivate();renderTrabalhos();renderLab();renderEntregas();renderTimeline();renderReceivables();renderCosts();renderPayroll();renderReports();renderMaterials();renderStock();renderBanco();renderSettings();
+  renderDashboard();renderPatients();renderClinics();renderProcedures();renderOrcamento();renderService();renderPrivate();renderTrabalhos();renderLab();renderEntregas();renderTimeline();renderReceivables();renderCosts();renderProvisions();renderPayroll();renderReports();renderMaterials();renderStock();renderBanco();renderSettings();
   try{
     if(window.ChevalierPlan){ChevalierPlan.renderCalendario();ChevalierPlan.renderPlanejamento();}
   }catch(e){ console.warn('ChevalierPlan render', e); }
@@ -5000,7 +5000,7 @@ const NAV_GROUP_PAGES={
   agenda:['calendario','planejamento'],
   tratamentos:['orcamento','planejamento','particular','prestacao'],
   protese:['trabalhos','protese','entregas','timeline','consulta'],
-  financeiro:['relatorios','recebiveis','custos','prestacao','folha'],
+  financeiro:['relatorios','recebiveis','custos','provisoes','prestacao','folha'],
   materiais:['estoque','materiais','banco','procedimentos'],
   gestao:['clinicas','relatorios','config']
 };
@@ -5019,6 +5019,7 @@ const PAGE_META={
   consulta:{module:'Prótese',title:'Consulta por código'},
   recebiveis:{module:'Financeiro',title:'Recebíveis e baixas'},
   custos:{module:'Financeiro',title:'Contas a pagar'},
+  provisoes:{module:'Financeiro',title:'Provisões e fluxo de caixa'},
   folha:{module:'Financeiro',title:'Folha de pagamento'},
   relatorios:{module:'Financeiro',title:'Visão financeira'},
   materiais:{module:'Materiais',title:'Catálogo de materiais'},
@@ -7504,7 +7505,7 @@ function renderWeeklyDrawCard(){
       <div class="kpi"><div class="label">Repor custos</div><div class="value">${brl.format(t.costReserve)}</div><div class="meta">materiais, lab, componentes</div></div>
       <div class="kpi"><div class="label">Reserva</div><div class="value">${brl.format(t.reserve)}</div><div class="meta">${r.settings.reservePct}% do que sobra</div></div>
       <div class="kpi ${r.contribOps+r.contribTax>0?'kpi-warn':''}"><div class="label">Contas (próx. 4 semanas)</div><div class="value">${brl.format(r.billsOps+r.billsTax)}</div><div class="meta">${r.bills.length} conta(s)${r.contribOps+r.contribTax>0?` · provisão da semana ${brl.format(r.contribOps+r.contribTax)}`:' · cobertas pelos fundos'}</div></div>
-      <div class="kpi"><div class="label">Fundos acumulados</div><div class="value">${brl.format(r.funds.giro+r.funds.impostos+r.funds.reserva)}</div><div class="meta">giro ${brl.format(r.funds.giro)} · impostos ${brl.format(r.funds.impostos)}</div></div>
+      <div class="kpi" style="cursor:pointer" onclick="go('provisoes')"><div class="label">Índice de cobertura de provisões</div><div class="value">${r.coverage.pct}%</div><div class="meta">${provisionStatus(r.coverage).label} · ${brl.format(r.coverage.saved)} de ${brl.format(r.coverage.required)}</div></div>
     </div>
     <div class="row-actions" style="margin-top:12px"><button class="btn primary" type="button" onclick="openWithdrawalModal()">＋ Registrar retirada</button><button class="btn" type="button" onclick="openWeeklyDrawModal(0)">Ver detalhes da semana</button></div>`;
 }
@@ -7546,6 +7547,7 @@ function openWeeklyDrawModal(offset){
         <div class="field"><label>Reserva (% do que sobra)</label><input id="fnReserve" type="number" step="0.5" class="input" value="${s.reservePct}"></div>
         <div class="field"><label>Pró-labore declarado (R$/mês)</label><input id="fnPro" type="number" step="0.01" class="input" value="${s.proLabore}"><small class="field-hint">Base do DARF de INSS (11%).</small></div>
         <div class="field"><label>INSS do pró-labore (%)</label><input id="fnInss" type="number" step="0.5" class="input" value="${s.inssRate}"></div>
+        <div class="field"><label>Meta da reserva de contingência (R$)</label><input id="fnGoal" type="number" step="0.01" class="input" value="${Number(s.reserveGoal)||''}" placeholder="automática"><small class="field-hint">Vazio = 3 meses de desembolsos.</small></div>
         <div class="field"><label>Controle desde</label><input id="fnSince" type="date" class="input" value="${r.since}"><small class="field-hint">Fundos e sobra acumulam a partir desta data.</small></div>
       </div>
       <div class="row-actions" style="margin-top:8px"><button type="button" class="btn small primary" onclick="saveFinanceSettings()">Salvar ajustes</button></div>
@@ -7554,9 +7556,114 @@ function openWeeklyDrawModal(offset){
   document.getElementById('modalRoot')?.querySelector('.modal')?.classList.add('modal-wide');
   document.getElementById('modalSave').textContent='＋ Registrar retirada';
 }
+/* ---------- Provisões e fluxo de caixa (página) ---------- */
+function provisionStatus(c){
+  if(!c || c.required<=0 || c.pct>=100) return {key:'ok',label:'Coberto',color:'#077a19',icon:'<path d="m4 12 5 5L20 6"/>',stroke:'#0aac23'};
+  if(c.pct>=80) return {key:'warn',label:'Atenção',color:'#5c4300',icon:'<path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18v.5"/>',stroke:'#b07800'};
+  return {key:'crit',label:'Descoberto',color:'#b42318',icon:'<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/>',stroke:'#dc3c3d'};
+}
+function provBar(saved,required){
+  const pct=required>0?Math.min(100,100*saved/required):100;
+  return `<div class="pv-bar"><div class="f" style="width:${pct}%"></div><div class="t"></div></div>`;
+}
+/** Passo "redondo" do eixo para ~4–5 linhas de grade. */
+function niceTick(mx){ const step=Math.pow(10,Math.floor(Math.log10(Math.max(1,mx)))); return [0.1,0.2,0.25,0.5,1,2,2.5,5,10].map(k=>k*step).find(t=>mx/t<=5)||step*10; }
+function svgEl(tag,attrs,text){ const a=Object.entries(attrs).map(([k,v])=>`${k}="${v}"`).join(' '); return text==null?`<${tag} ${a}/>`:`<${tag} ${a}>${esc(String(text))}</${tag}>`; }
+function shortDate(iso){ const [y,m,d]=String(iso).split('-'); return `${d}/${m}`; }
+function provLineChart(r){
+  const pts=[...r.history.map(h=>({week:h.week,req:h.required,saved:h.saved,past:true})), ...r.forecast.slice(1).map(f=>({week:f.week,req:f.required,saved:null,past:false}))];
+  if(!pts.length) return '<div class="empty">Sem dados ainda.</div>';
+  const W=1000,H=300,L=78,R=970,T=24,B=258;
+  const mx=Math.max(100,...pts.map(p=>Math.max(p.req,p.saved||0)))*1.12;
+  const tick=niceTick(mx);
+  const n=pts.length,x=i=>n===1?(L+R)/2:L+(R-L)*i/(n-1),y=v=>B-(B-T)*v/mx;
+  let g='';
+  const ti=r.history.length-1;
+  if(ti>=0){ const cw=n>1?(R-L)/(n-1):80; const x0=Math.max(L,x(ti)-cw/2), x1=Math.min(R,x(ti)+cw/2); g+=svgEl('rect',{x:x0,y:T,width:x1-x0,height:B-T,fill:'var(--pv-today)'}); g+=svgEl('text',{x:(x0+x1)/2,y:T+14,'text-anchor':'middle','font-size':12,fill:'#8a6d2f','font-weight':600},'hoje'); }
+  for(let v=0;v<=mx;v+=tick){ g+=svgEl('line',{x1:L,x2:R,y1:y(v),y2:y(v),stroke:'var(--pv-grid)','stroke-width':1}); g+=svgEl('text',{x:L-10,y:y(v)+4,'text-anchor':'end','font-size':12,fill:'var(--pv-ink2)'},brl.format(v).replace(/,00$/,'')); }
+  pts.forEach((p,i)=>{ if(n<=12||i%2===0) g+=svgEl('text',{x:x(i),y:B+22,'text-anchor':'middle','font-size':12,fill:'var(--pv-ink2)'},shortDate(p.week)); });
+  g+=svgEl('polyline',{points:pts.map((p,i)=>`${x(i)},${y(p.req)}`).join(' '),fill:'none',stroke:'var(--pv-plan)','stroke-width':2,'stroke-dasharray':'6 5'});
+  const past=pts.filter(p=>p.past);
+  if(past.length){
+    g+=svgEl('polyline',{points:past.map((p,i)=>`${x(i)},${y(p.saved)}`).join(' '),fill:'none',stroke:'var(--pv-s1)','stroke-width':2});
+    past.forEach((p,i)=>{ g+=svgEl('circle',{cx:x(i),cy:y(p.saved),r:4.5,fill:'var(--pv-s1)',stroke:'var(--pv-card)','stroke-width':2}); });
+    const c=past[past.length-1], gap=c.req-c.saved;
+    if(gap>0.5){ g+=svgEl('line',{x1:x(ti),x2:x(ti),y1:y(c.req),y2:y(c.saved),stroke:'#b07800','stroke-width':2,'stroke-dasharray':'2 3'}); g+=svgEl('text',{x:x(ti)+8,y:(y(c.req)+y(c.saved))/2+4,'font-size':12,fill:'#5c4300','font-weight':600},`déficit ${brl.format(gap)}`); }
+    const ly=y(c.saved)+22>B-6?y(c.saved)-10:y(c.saved)+22;
+    g+=svgEl('text',{x:x(ti)+8,y:ly,'font-size':12,fill:'var(--pv-ink)','font-weight':600},`provisionado ${brl.format(c.saved)}`);
+  }
+  // camada de hover
+  pts.forEach((p,i)=>{ const cw=n>1?(R-L)/(n-1):80; g+=svgEl('rect',{x:x(i)-cw/2,y:T,width:cw,height:B-T,fill:'transparent',class:'pv-hit','data-tip':`Semana de ${shortDate(p.week)}|Provisão requerida: ${brl.format(p.req)}${p.past?`|Saldo provisionado: ${brl.format(p.saved)}`:'|(projeção)'}`}); });
+  return `<div class="pv-legend"><span><i style="border-top:2px dashed var(--pv-plan)"></i>Provisão requerida</span><span><i style="border-top:2px solid var(--pv-s1)"></i>Saldo provisionado</span></div><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Curva de provisionamento">${g}</svg>`;
+}
+function provBarsChart(r){
+  const W=1000,H=260,L=78,R=970,T=26,B=218, F=r.forecast;
+  const mx=Math.max(100,...F.map(f=>f.due))*1.18;
+  const tick=niceTick(mx);
+  const bw=(R-L)/F.length,y=v=>B-(B-T)*v/mx,h=v=>(B-T)*v/mx; let g='';
+  for(let v=0;v<=mx;v+=tick){ g+=svgEl('line',{x1:L,x2:R,y1:y(v),y2:y(v),stroke:'var(--pv-grid)','stroke-width':1}); g+=svgEl('text',{x:L-10,y:y(v)+4,'text-anchor':'end','font-size':12,fill:'var(--pv-ink2)'},brl.format(v).replace(/,00$/,'')); }
+  F.forEach((f,i)=>{
+    const cx=L+bw*i+bw/2,w=Math.min(46,bw*.5); let top=B;
+    if(f.dueOps>0){ g+=svgEl('rect',{x:cx-w/2,y:B-h(f.dueOps),width:w,height:h(f.dueOps),fill:'var(--pv-s1)',rx:f.dueTax>0?0:4}); top=B-h(f.dueOps); }
+    if(f.dueTax>0){ g+=svgEl('rect',{x:cx-w/2,y:top-h(f.dueTax)-(f.dueOps>0?2:0),width:w,height:h(f.dueTax),fill:'var(--pv-s2)',rx:4}); top=top-h(f.dueTax)-(f.dueOps>0?2:0); }
+    g+=svgEl('text',{x:cx,y:(f.due>0?top:B)-8,'text-anchor':'middle','font-size':12,fill:'var(--pv-ink)','font-weight':600},f.due>0?brl.format(f.due).replace(/,\d\d$/,''):'—');
+    g+=svgEl('text',{x:cx,y:B+20,'text-anchor':'middle','font-size':12,fill:i===0?'#8a6d2f':'var(--pv-ink2)','font-weight':i===0?600:400},(i===0?'esta · ':'')+shortDate(f.week));
+    g+=svgEl('rect',{x:cx-bw/2,y:T,width:bw,height:B-T,fill:'transparent',class:'pv-hit','data-tip':`Semana de ${shortDate(f.week)}|Fornecedores: ${brl.format(f.dueOps)}|Tributos e guias: ${brl.format(f.dueTax)}|Total: ${brl.format(f.due)}`});
+  });
+  g+=svgEl('line',{x1:L,x2:R,y1:B,y2:B,stroke:'var(--pv-axis)','stroke-width':1});
+  return `<div class="pv-legend"><span><b style="background:var(--pv-s1)"></b>Fornecedores (boletos)</span><span><b style="background:var(--pv-s2)"></b>Tributos e guias</span></div><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Cronograma de desembolsos">${g}</svg>`;
+}
+function renderProvisions(){
+  const box=document.getElementById('provisoesBody'); if(!box) return;
+  const r=weeklyDrawData(0); if(!r){ box.innerHTML='<div class="empty">Módulo financeiro não carregou.</div>'; return; }
+  const c=r.coverage, st=provisionStatus(c), f=financeSettings();
+  const goal=Number(f.reserveGoal)>0?Number(f.reserveGoal):moneyRound(r.forecast.reduce((s2,x)=>s2+x.due,0)*1.5);
+  const icon=(s)=>`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${s.stroke}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${s.icon}</svg>`;
+  const fund=(label,saved,req,hint)=>{ const s2=provisionStatus({required:req,pct:req>0?Math.round(100*saved/req):100}); return `<div class="pv-fund"><div class="lbl">${label}</div><div class="val">${brl.format(saved)}</div>${provBar(saved,req)}<div class="meta">requerido ${brl.format(req)} · <span class="st" style="color:${s2.color}">${icon(s2)}${s2.key==='ok'?'coberto':`déficit ${brl.format(Math.max(0,req-saved))}`}</span></div><div class="meta">${hint}</div></div>`; };
+  const heavy=r.forecast.slice(1).reduce((a,b)=>b.due>a.due?b:a,{due:0});
+  const nextTax=r.forecast.find(x=>x.dueTax>0);
+  box.innerHTML=`
+    <section class="block"><div class="block-head"><div class="step" aria-hidden="true">%</div><div><h3>Índice de cobertura de provisões</h3><p>Saldo provisionado ÷ provisão requerida para honrar as obrigações das próximas 4 semanas (vencidas e desta semana integrais).</p></div></div>
+      <div class="block-body">
+        <div class="hero-note pv-hero">
+          <div><h3>Provisão requerida hoje</h3><p>Quanto já deveria estar reservado para pagar em dia todos os boletos e guias do horizonte de 4 semanas.</p>
+            <span class="pv-chip pv-${st.key}">${icon(st)}${st.label} · ${c.pct}% coberto</span></div>
+          <div class="pv-gauge"><div class="row"><span>Saldo provisionado</span><span>Provisão requerida</span></div>
+            <div class="row" style="align-items:baseline"><strong class="big">${brl.format(c.saved)}</strong><strong class="big2">${brl.format(c.required)}</strong></div>
+            <div class="track"><div class="fill" style="width:${c.required>0?Math.min(100,100*c.saved/c.required):100}%"></div><div class="target"></div></div>
+            <div class="row"><span>${c.gap>0?`déficit de <strong>${brl.format(c.gap)}</strong> para 100% de cobertura`:'obrigações do horizonte cobertas'}</span><span>meta ▮</span></div></div>
+        </div>
+        <div class="pv-funds">
+          ${fund('Fundo de capital de giro',c.ops.saved,c.ops.required,'Fornecedores: boletos e compras a prazo')}
+          ${fund('Fundo de obrigações tributárias',c.tax.saved,c.tax.required,'DAS, DARF (INSS pró-labore), CRO e guias')}
+          <div class="pv-fund"><div class="lbl">Reserva de contingência</div><div class="val">${brl.format(r.funds.reserva)}</div>${provBar(r.funds.reserva,goal)}<div class="meta">meta ${brl.format(goal)} · ${goal>0?Math.round(100*r.funds.reserva/goal):0}%</div><div class="meta">${Number(f.reserveGoal)>0?'meta definida nos ajustes':'meta automática: 3 meses de desembolsos'}</div></div>
+        </div>
+      </div></section>
+    <section class="block"><div class="block-head"><div class="step" aria-hidden="true">↗</div><div><h3>Curva de provisionamento — requerido × realizado</h3><p>A provisão requerida sobe antes de cada vencimento e cai quando a obrigação é liquidada; o saldo provisionado é o que de fato ficou reservado (retiradas acima do disponível consomem as provisões).</p></div></div>
+      <div class="block-body pv-chart">${provLineChart(r)}</div></section>
+    <section class="block"><div class="block-head"><div class="step" aria-hidden="true">▥</div><div><h3>Cronograma de desembolsos — 8 semanas</h3><p>Obrigações por semana de vencimento. Semanas de maior desembolso exigem provisionamento antecipado.</p></div></div>
+      <div class="block-body pv-chart">${provBarsChart(r)}</div></section>
+    <section class="block"><div class="block-head"><div class="step" aria-hidden="true">✓</div><div><h3>Ações recomendadas</h3><p>Leitura objetiva dos indicadores da semana.</p></div></div>
+      <div class="block-body pv-todo">
+        <div>${c.gap>0?'Antes de retirar, recomponha':'Provisões'}<strong>${c.gap>0?brl.format(c.gap):'em dia'}</strong>${c.gap>0?'para 100% de cobertura.':'nenhum déficit no horizonte.'}</div>
+        <div>Pico de desembolso<strong>${heavy.due>0?`${shortDate(heavy.week)} a ${shortDate(addDaysISO(heavy.week,6))}`:'—'}</strong>${heavy.due>0?`${brl.format(heavy.due)} em obrigações.`:'sem obrigações à frente.'}</div>
+        <div>Próximas guias tributárias<strong>${nextTax?brl.format(nextTax.dueTax):'—'}</strong>${nextTax?`semana de ${shortDate(nextTax.week)}.`:'nenhuma no horizonte.'}</div>
+      </div></section>`;
+  bindProvisionTips(box);
+}
+function addDaysISO(iso,n){ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function bindProvisionTips(root){
+  let tip=document.getElementById('pvTip');
+  if(!tip){ tip=document.createElement('div'); tip.id='pvTip'; tip.className='pv-tip'; tip.hidden=true; document.body.appendChild(tip); }
+  root.querySelectorAll('.pv-hit').forEach(el=>{
+    const show=e=>{ const parts=String(el.dataset.tip||'').split('|'); tip.innerHTML=`<strong>${esc(parts[0])}</strong>${parts.slice(1).map(x=>`<div>${esc(x)}</div>`).join('')}`; tip.hidden=false; const pt=e.touches?e.touches[0]:e; tip.style.left=Math.min(window.innerWidth-220,pt.clientX+12)+'px'; tip.style.top=(pt.clientY+12)+'px'; };
+    el.addEventListener('mousemove',show); el.addEventListener('touchstart',show,{passive:true}); el.addEventListener('mouseleave',()=>tip.hidden=true);
+  });
+}
+window.renderProvisions=renderProvisions;
 function saveFinanceSettings(){
   const f=financeSettings();
-  f.taxRate=num('fnTax'); f.reservePct=num('fnReserve'); f.proLabore=num('fnPro'); f.inssRate=num('fnInss');
+  f.taxRate=num('fnTax'); f.reservePct=num('fnReserve'); f.proLabore=num('fnPro'); f.inssRate=num('fnInss'); f.reserveGoal=num('fnGoal');
   if(getv('fnSince')) f.since=getv('fnSince');
   save(); renderAll(); openWeeklyDrawModal(weeklyDrawOffset); toast('Ajustes da retirada salvos.');
 }

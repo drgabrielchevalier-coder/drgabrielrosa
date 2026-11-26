@@ -87,6 +87,17 @@ ok('imposto guardado na semana da nota cobre o DAS (nada sai da retirada)', near
 const prev = D.compute({ today: '2026-11-26', weekOffset: -1, settings: base, patients: [comNota, semNota], costs: [], withdrawals: [] });
 ok('semana anterior ao início: zerada', prev.beforeSince && near(prev.totals.received, 0) && near(prev.available, 0));
 
+// cobertura de provisões e projeção
+const pac0 = { ...comNota, cost: 0, lab: 0, invoice: false };
+const c1 = D.compute({ today: '2026-11-26', settings: base, patients: [pac0], costs: [boleto], withdrawals: [] });
+ok('cobertura: requerido 100 e provisionado 100 (100%) quando nada foi retirado além do disponível', near(c1.coverage.required, 100) && near(c1.coverage.saved, 100) && c1.coverage.pct === 100);
+const c2 = D.compute({ today: '2026-11-26', settings: base, patients: [pac0], costs: [boleto], withdrawals: [{ date: '2026-11-25', value: c1.available + 60 }] });
+ok('retirada acima do disponível consome a provisão (falta 60 → 40%)', near(c2.coverage.gap, 60) && c2.coverage.pct === 40);
+ok('projeção de 8 semanas', c1.forecast.length === 8 && c1.forecast[0].week === '2026-11-23');
+ok('desembolso aparece na semana do vencimento (14/12 → 400)', near(c1.forecast.find((f) => f.week === '2026-12-14').due, 400));
+ok('provisão requerida cresce até o vencimento (100 → 133,33 → 200 → 400)', near(c1.forecast[1].required, 133.33) && near(c1.forecast[2].required, 200) && near(c1.forecast[3].required, 400));
+ok('histórico desde o início do controle', c1.history.length === 1 && c1.history[0].week === '2026-11-23');
+
 if (fail) {
   console.error(`\n${fail} verificação(ões) falharam.`);
   process.exit(1);

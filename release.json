@@ -1,11 +1,11 @@
 {
-  "version": "2.32.1",
-  "name": "Retirada da semana: modelo aprovado",
+  "version": "2.33.0",
+  "name": "Provisões e fluxo de caixa",
   "releasedAt": "2026-11-26",
   "changes": [
-    "Alíquota de 6% (Anexo III), aplicada só nos lançamentos marcados “Emitir nota fiscal” (marque quando o paciente pedir).",
-    "Contas das próximas 4 semanas são guardadas aos poucos até o vencimento (um boleto não zera mais a semana em que vence); atrasadas e as da semana entram inteiras.",
-    "A sobra da semana não retirada acumula como pró-labore disponível nas semanas seguintes; se faltar, a falta é descontada depois.",
-    "Controle iniciado em 23/11/2026; reserva de 10%."
+    "Financeiro → nova página “Provisões e fluxo de caixa”: índice de cobertura de provisões (saldo provisionado ÷ provisão requerida), com status Coberto / Atenção / Descoberto.",
+    "Fundos separados: capital de giro (fornecedores), obrigações tributárias (DAS, DARF, CRO) e reserva de contingência com meta (automática: 3 meses de desembolsos, ou definida nos ajustes).",
+    "Curva de provisionamento (requerido × realizado, semana a semana, com projeção) e cronograma de desembolsos das próximas 8 semanas, com valores ao passar o dedo/mouse.",
+    "Ações recomendadas da semana e índice de cobertura também no bloco Retirada da semana do dashboard."
   ]
 }
