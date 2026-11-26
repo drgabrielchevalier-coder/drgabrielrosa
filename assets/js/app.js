@@ -5404,7 +5404,7 @@ function openPatientModal(origin='',editId='',personId=''){
       <div class="field"><label>Recebido</label><input id="fReceived" type="number" step="0.01" class="input" value="${p.received??0}" oninput="autoTreatStatus('f')"></div>
       <div class="field"><label>Vencimento</label><input id="fDue" type="date" class="input" value="${p.due||addDays(10)}"></div>
       <div class="field"><label>Status financeiro</label><select id="fStatus" class="select">${statusOptions(p.status)}</select></div>
-      <div class="field"><label class="check-inline"><input type="checkbox" id="fInvoice" ${p.invoice?'checked':''}> Emitir nota fiscal</label><small class="field-hint">Com nota, o imposto (${(window.ChevalierDraw?financeSettings().taxRate:15.5)}%) é reservado na retirada da semana e entra na previsão do DAS.</small></div>
+      <div class="field"><label class="check-inline"><input type="checkbox" id="fInvoice" ${p.invoice?'checked':''}> Emitir nota fiscal</label><small class="field-hint">Marque só se o paciente pedir nota: o imposto (${(window.ChevalierDraw?financeSettings().taxRate:6)}%) é reservado na retirada da semana e entra na previsão do DAS.</small></div>
       <div class="field full"><label>Progresso clínico</label><select id="fProgress" class="select">${['Orçamento','Em tratamento','Planejar caso','Solicitar material','Em fila / agendado','Aguardo pós Cirúrgico','Aguardando cicatrização','Aguardando moldagem','Moldagem','Enviado para Laboratório','Aguardando Prova','Aguardando Cimentação','Alta'].map(s=>`<option ${s===(p.progress||'Em tratamento')?'selected':''}>${s}</option>`).join('')}</select></div>
       <details class="field full progressive-block" ${(editId||needsGate)?'open':''}>
         <summary>${stockEnabled()?'Materiais do estoque':'Materiais e custos'} <span class="cell-sub">${needsGate?'obrigatório para implante / enxerto / componente':stockEnabled()?'da composição — baixa o saldo':'da composição — entram no custo do tratamento'}</span></summary>
@@ -7475,8 +7475,8 @@ function financeSettings(){
   const D=window.ChevalierDraw;
   if(!st.finance||typeof st.finance!=='object') st.finance={};
   if(D){
+    if(!st.finance.v){ st.finance.taxRate=D.DEFAULTS.taxRate; st.finance.since=D.DEFAULTS.since; st.finance.v=2; } // 2.32.1: 6% (Anexo III), início 23/11
     Object.entries(D.DEFAULTS).forEach(([k,v])=>{ if(st.finance[k]===undefined||st.finance[k]==='') st.finance[k]=v; });
-    if(!st.finance.since) st.finance.since=D.weekRange(todayISO(),Number(st.finance.weekStart)||1).start;
   }
   if(!Array.isArray(state.withdrawals)) state.withdrawals=[];
   return st.finance;
@@ -7494,16 +7494,16 @@ function renderWeeklyDrawCard(){
     <div class="hero-note draw-hero">
       <div>
         <h3>Disponível para retirada · ${fmtDate(r.week.start)} a ${fmtDate(r.week.end)}</h3>
-        <p>Recebido na semana menos impostos das notas, reposição dos custos, reserva de ${r.settings.reservePct}% e as contas da semana que o capital de giro não cobre. Zera toda segunda-feira.</p>
+        <p>Resultado da semana (recebido menos impostos das notas, reposição de custos, reserva de ${r.settings.reservePct}% e provisão das contas das próximas 4 semanas) mais a sobra acumulada das semanas anteriores.</p>
       </div>
-      <div class="hero-kpi"><strong>${brl.format(r.available)}</strong><small>${r.withdrawn>0?`já retirado ${brl.format(r.withdrawn)}`:'nada retirado ainda'}${r.shortfall>0?` · faltam ${brl.format(r.shortfall)} para as contas`:''}</small></div>
+      <div class="hero-kpi"><strong>${brl.format(r.available)}</strong><small>${r.shortfall>0?`faltam ${brl.format(r.shortfall)} para cobrir contas`:`semana ${brl.format(r.weekResult)} · acumulado ${brl.format(r.carryIn)}`}${r.withdrawn>0?` · retirado ${brl.format(r.withdrawn)}`:''}</small></div>
     </div>
     <div class="grid kpi-grid draw-kpis">
       <div class="kpi"><div class="label">Recebido na semana</div><div class="value">${brl.format(t.received)}</div><div class="meta">${r.receipts.length} baixa(s)</div></div>
       <div class="kpi"><div class="label">Impostos a guardar</div><div class="value">${brl.format(t.tax+r.inssWeekly)}</div><div class="meta">notas ${r.settings.taxRate}% + INSS</div></div>
       <div class="kpi"><div class="label">Repor custos</div><div class="value">${brl.format(t.costReserve)}</div><div class="meta">materiais, lab, componentes</div></div>
       <div class="kpi"><div class="label">Reserva</div><div class="value">${brl.format(t.reserve)}</div><div class="meta">${r.settings.reservePct}% do que sobra</div></div>
-      <div class="kpi ${r.bills.length?'kpi-warn':''}"><div class="label">Contas até domingo</div><div class="value">${brl.format(r.billsOps+r.billsTax)}</div><div class="meta">${r.bills.length} conta(s)${r.deficitOps+r.deficitTax>0?` · ${brl.format(r.deficitOps+r.deficitTax)} saem da retirada`:' · cobertas pelos fundos'}</div></div>
+      <div class="kpi ${r.contribOps+r.contribTax>0?'kpi-warn':''}"><div class="label">Contas (próx. 4 semanas)</div><div class="value">${brl.format(r.billsOps+r.billsTax)}</div><div class="meta">${r.bills.length} conta(s)${r.contribOps+r.contribTax>0?` · provisão da semana ${brl.format(r.contribOps+r.contribTax)}`:' · cobertas pelos fundos'}</div></div>
       <div class="kpi"><div class="label">Fundos acumulados</div><div class="value">${brl.format(r.funds.giro+r.funds.impostos+r.funds.reserva)}</div><div class="meta">giro ${brl.format(r.funds.giro)} · impostos ${brl.format(r.funds.impostos)}</div></div>
     </div>
     <div class="row-actions" style="margin-top:12px"><button class="btn primary" type="button" onclick="openWithdrawalModal()">＋ Registrar retirada</button><button class="btn" type="button" onclick="openWeeklyDrawModal(0)">Ver detalhes da semana</button></div>`;
@@ -7514,7 +7514,7 @@ function openWeeklyDrawModal(offset){
   const t=r.totals, s=r.settings;
   const line=(label,val,cls='')=>`<tr class="${cls}"><td>${label}</td><td style="text-align:right;white-space:nowrap">${val}</td></tr>`;
   const rec=r.receipts.length?`<div class="table-wrap"><table><thead><tr><th>Data</th><th>Paciente</th><th>Recebido</th><th>Imposto</th><th>Repor custo</th><th>Reserva</th><th>Livre</th></tr></thead><tbody>${r.receipts.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${esc(x.name)}${x.invoice?' <span class="badge b-amber">NF</span>':''}</td><td>${brl.format(x.amount)}</td><td>${brl.format(x.tax)}</td><td>${brl.format(x.costReserve)}</td><td>${brl.format(x.reserve)}</td><td><strong>${brl.format(x.free)}</strong></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nenhuma baixa nesta semana.</div>';
-  const bills=r.bills.length?`<div class="table-wrap"><table><thead><tr><th>Vencimento</th><th>Conta</th><th>Valor</th><th></th></tr></thead><tbody>${r.bills.map(b=>`<tr><td>${fmtDate(b.due)}${b.overdue?' <span class="badge b-red">atrasada</span>':''}</td><td>${esc(b.desc)}${b.estimated?' <span class="badge b-gray">prevista</span>':''}</td><td>${brl.format(b.value)}</td><td>${b.tax?'imposto':'giro'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nenhuma conta vencendo até domingo.</div>';
+  const bills=r.bills.length?`<div class="table-wrap"><table><thead><tr><th>Vencimento</th><th>Conta</th><th>Valor</th><th></th></tr></thead><tbody>${r.bills.map(b=>`<tr><td>${fmtDate(b.due)}${b.overdue?' <span class="badge b-red">atrasada</span>':b.thisWeek?' <span class="badge b-amber">esta semana</span>':''}</td><td>${esc(b.desc)}${b.estimated?' <span class="badge b-gray">prevista</span>':''}</td><td>${brl.format(b.value)}</td><td>${b.tax?'imposto':'giro'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nenhuma conta vencendo até domingo.</div>';
   const guides=r.guides.length?`<ul class="field-hint" style="margin:6px 0 0 18px">${r.guides.map(g=>`<li>${esc(g.label)}: ${brl.format(g.value)}${g.kind==='das'?` (${s.taxRate}% de ${brl.format(g.base)} em notas)`:''} · vence ${fmtDate(g.due)}${g.real?' · <strong>guia já lançada</strong>':''}</li>`).join('')}</ul>`:'<p class="field-hint">Nenhuma guia prevista.</p>';
   const wd=r.withdrawals.length?r.withdrawals.map(w=>`<li>${fmtDate(w.date)} · ${brl.format(w.value)}${w.note?` · ${esc(w.note)}`:''} <button type="button" class="btn small danger" onclick="deleteWithdrawal('${esc(w.id)}')">Excluir</button></li>`).join(''):'<li>Nenhuma retirada nesta semana.</li>';
   openModal(`Retirada da semana · ${fmtDate(r.week.start)} a ${fmtDate(r.week.end)}`,`
@@ -7525,25 +7525,28 @@ function openWeeklyDrawModal(offset){
       ${line('− Repor custos dos casos (materiais, lab, componentes)',brl.format(t.costReserve))}
       ${line(`− Reserva (${s.reservePct}% do que sobra)`,brl.format(t.reserve))}
       ${line(`− Provisão do INSS do pró-labore (${brl.format(s.proLabore)} × ${s.inssRate}% por mês)`,brl.format(r.inssWeekly))}
-      ${line('− Contas da semana não cobertas pelo capital de giro',brl.format(r.deficitOps))}
-      ${line('− Guias/impostos da semana não cobertos pelo fundo de impostos',brl.format(r.deficitTax))}
+      ${line('− Provisão para contas das próximas 4 semanas (o que o capital de giro não cobre)',brl.format(r.contribOps))}
+      ${line('− Provisão para guias/impostos (o que o fundo de impostos não cobre)',brl.format(r.contribTax))}
+      ${line('<strong>= Resultado da semana</strong>',`<strong>${brl.format(r.weekResult)}</strong>`)}
+      ${line('+ Sobra acumulada das semanas anteriores',brl.format(r.carryIn))}
       ${line('− Já retirado nesta semana',brl.format(r.withdrawn))}
       ${line('<strong>= Disponível para retirada</strong>',`<strong>${brl.format(r.available)}</strong>`)}
     </tbody></table></div>
-    ${r.shortfall>0?`<div class="conflict-box"><strong>Semana no vermelho:</strong> faltam ${brl.format(r.shortfall)} para cobrir as contas. Não há retirada disponível.</div>`:''}
+    ${r.beforeSince?`<p class="field-hint">Semana anterior ao início do controle (${fmtDate(r.since)}).</p>`:''}
+    ${r.shortfall>0?`<div class="conflict-box"><strong>No vermelho:</strong> faltam ${brl.format(r.shortfall)} para cobrir as contas. Não há retirada disponível; a falta é descontada das próximas semanas.</div>`:''}
     <h4 style="margin:16px 0 6px">Fundos acumulados desde ${fmtDate(r.since)}</h4>
     <p class="field-hint">Capital de giro <strong>${brl.format(r.funds.giro)}</strong> (custos reservados − custos pagos) · Impostos <strong>${brl.format(r.funds.impostos)}</strong> (reservado − guias pagas) · Reserva <strong>${brl.format(r.funds.reserva)}</strong></p>
     <h4 style="margin:16px 0 6px">Recebimentos da semana</h4>${rec}
-    <h4 style="margin:16px 0 6px">Contas até domingo (inclui atrasadas)</h4>${bills}
+    <h4 style="margin:16px 0 6px">Contas das próximas 4 semanas (inclui atrasadas)</h4><p class="field-hint">Cada conta é guardada aos poucos até o vencimento: as que vencem nesta semana (ou atrasadas) entram inteiras.</p>${bills}
     <h4 style="margin:16px 0 6px">Guias de recolhimento previstas</h4>${guides}
     <h4 style="margin:16px 0 6px">Retiradas da semana</h4><ul class="field-hint" style="margin:0 0 0 18px">${wd}</ul>
     <details style="margin-top:16px"><summary><strong>Ajustes do cálculo</strong></summary>
       <div class="form-grid" style="margin-top:10px">
-        <div class="field"><label>Alíquota do Simples (%)</label><input id="fnTax" type="number" step="0.01" class="input" value="${s.taxRate}"><small class="field-hint">15,5% = Anexo V, faixa 1 (identificado no seu DAS de set/2026).</small></div>
+        <div class="field"><label>Alíquota do Simples (%)</label><input id="fnTax" type="number" step="0.01" class="input" value="${s.taxRate}"><small class="field-hint">Aplicada só nos lançamentos com nota fiscal. Hoje: 6% (Anexo III).</small></div>
         <div class="field"><label>Reserva (% do que sobra)</label><input id="fnReserve" type="number" step="0.5" class="input" value="${s.reservePct}"></div>
         <div class="field"><label>Pró-labore declarado (R$/mês)</label><input id="fnPro" type="number" step="0.01" class="input" value="${s.proLabore}"><small class="field-hint">Base do DARF de INSS (11%).</small></div>
         <div class="field"><label>INSS do pró-labore (%)</label><input id="fnInss" type="number" step="0.5" class="input" value="${s.inssRate}"></div>
-        <div class="field"><label>Controle desde</label><input id="fnSince" type="date" class="input" value="${r.since}"><small class="field-hint">Os fundos acumulam a partir desta data.</small></div>
+        <div class="field"><label>Controle desde</label><input id="fnSince" type="date" class="input" value="${r.since}"><small class="field-hint">Fundos e sobra acumulam a partir desta data.</small></div>
       </div>
       <div class="row-actions" style="margin-top:8px"><button type="button" class="btn small primary" onclick="saveFinanceSettings()">Salvar ajustes</button></div>
     </details>

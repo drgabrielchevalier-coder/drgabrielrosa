@@ -1,12 +1,11 @@
 {
-  "version": "2.32.0",
-  "name": "Retirada da semana (pró-labore × custos × impostos)",
+  "version": "2.32.1",
+  "name": "Retirada da semana: modelo aprovado",
   "releasedAt": "2026-11-26",
   "changes": [
-    "Dashboard: novo bloco “Retirada da semana” mostra quanto pode sair para você na semana (segunda a domingo), separado de impostos, reposição de custos, reserva e contas a vencer. Zera toda segunda.",
-    "Cada recebimento é dividido em envelopes: imposto (se o lançamento emite nota) → repor custos do caso → reserva (10%) → livre para retirada.",
-    "Contas até domingo (boletos, guias e atrasadas) saem primeiro do capital de giro; o que ele não cobre sai da retirada.",
-    "Previsão das guias: DAS (15,5% das notas do mês, Anexo V) e DARF do INSS do pró-labore, vencendo dia 20 — some quando a guia real é lançada.",
-    "Tratamento ganhou a opção “Emitir nota fiscal”. Registro de retiradas com histórico por semana. Ajustes (alíquota, reserva, pró-labore) no detalhe da semana."
+    "Alíquota de 6% (Anexo III), aplicada só nos lançamentos marcados “Emitir nota fiscal” (marque quando o paciente pedir).",
+    "Contas das próximas 4 semanas são guardadas aos poucos até o vencimento (um boleto não zera mais a semana em que vence); atrasadas e as da semana entram inteiras.",
+    "A sobra da semana não retirada acumula como pró-labore disponível nas semanas seguintes; se faltar, a falta é descontada depois.",
+    "Controle iniciado em 23/11/2026; reserva de 10%."
   ]
 }

@@ -1,21 +1,21 @@
 /* Retirada semanal (pró-labore) — Dr Gabriel Rosa
  * Separa o que entrou na semana em "envelopes":
  *   imposto (se o lançamento emite nota) → repor custos do caso → reserva (%) → livre para retirada.
- * Depois desconta as contas da semana (boletos, guias reais e previstas) que os fundos acumulados
- * (capital de giro e impostos) não cobrem, e as retiradas já feitas. Cada semana começa do zero.
+ * Contas (boletos, guias reais e previstas) das próximas 4 semanas são provisionadas aos poucos nos fundos
+ * (capital de giro e impostos); o que os fundos não cobrem sai do pró-labore. A sobra de cada semana acumula.
  * Lógica pura (sem DOM): testada em scripts/test-fase9-retirada.mjs.
  */
 (function (global) {
   'use strict';
 
   const DEFAULTS = {
-    taxRate: 15.5,      // % Simples Nacional sobre o faturamento com nota (Anexo V, faixa 1)
+    taxRate: 6,         // % Simples Nacional sobre o faturamento com nota (Anexo III, faixa 1)
     reservePct: 10,     // % do que sobra depois de impostos e custos → reserva
     proLabore: 1521,    // pró-labore declarado (base do INSS/DARF)
     inssRate: 11,       // % INSS do sócio (DARF 1099)
     taxDueDay: 20,      // DAS e DARF vencem dia 20 do mês seguinte
     weekStart: 1,       // 1 = segunda-feira
-    since: '',          // início do controle (ISO); vazio = início da semana atual
+    since: '2026-11-23', // início do controle (ISO)
   };
 
   const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -89,6 +89,10 @@
   };
 
   /**
+   * Simula semana a semana desde o início do controle até a semana pedida:
+   *   recebimentos → envelopes; fundos (giro, impostos) recebem a reposição/imposto e pagam as contas;
+   *   cada conta em aberto das próximas 4 semanas é provisionada aos poucos (1/(semanas até vencer + 1));
+   *   o que os fundos não cobrem sai do pró-labore; a sobra (ou falta) de cada semana acumula.
    * @param {{today:string, settings?:object, patients?:object[], costs?:object[], withdrawals?:object[], weekOffset?:number, effectiveValue?:(c:object)=>number}} input
    */
   function compute(input) {
@@ -97,109 +101,124 @@
     const today = input.weekOffset ? addDays(baseToday, 7 * input.weekOffset) : baseToday;
     const week = weekRange(today, cfg.weekStart);
     const since = cfg.since || weekRange(baseToday, cfg.weekStart).start;
+    const firstWeek = weekRange(since, cfg.weekStart).start;
     const eff = typeof input.effectiveValue === 'function' ? input.effectiveValue : (c) => Number(c.value) || 0;
     const inRange = (d, a, b) => d && d >= a && d <= b;
+    const HORIZON = 21; // dias depois do fim da semana (4 semanas no total)
 
-    // 1) Recebimentos: semana e acumulado desde o início do controle
-    const receipts = [];
-    const acc = { tax: 0, costReserve: 0, reserve: 0 };
+    // recebimentos (desde o início do controle) já divididos nos envelopes
+    const allReceipts = [];
     const invoicedByMonth = {};
     (input.patients || []).forEach((p) => {
       activePayments(p).forEach((pay) => {
         const d = String(pay.date).slice(0, 10);
-        const parts = splitReceipt(p, Number(pay.amount), cfg);
         if (p.invoice) invoicedByMonth[ym(d)] = r2((invoicedByMonth[ym(d)] || 0) + Number(pay.amount));
-        if (inRange(d, since, week.end)) {
-          acc.tax += parts.tax;
-          acc.costReserve += parts.costReserve;
-          acc.reserve += parts.reserve;
-        }
-        if (inRange(d, week.start, week.end)) {
-          receipts.push({ patientId: p.id, name: p.name || '', clinicId: p.clinicId || '', date: d, amount: r2(pay.amount), invoice: !!p.invoice, ...parts });
-        }
+        if (d < since) return;
+        allReceipts.push({ patientId: p.id, name: p.name || '', clinicId: p.clinicId || '', date: d, amount: r2(pay.amount), invoice: !!p.invoice, ...splitReceipt(p, Number(pay.amount), cfg) });
       });
     });
-    receipts.sort((a, b) => a.date.localeCompare(b.date));
-    const sum = (k) => r2(receipts.reduce((s, x) => s + x[k], 0));
-    const totals = { received: sum('amount'), tax: sum('tax'), costReserve: sum('costReserve'), reserve: sum('reserve'), free: sum('free') };
 
-    // 2) Provisão semanal do INSS do pró-labore (DARF mensal fixo ÷ semanas do mês)
     const inssMonthly = r2(cfg.proLabore * cfg.inssRate / 100);
     const inssWeekly = r2(inssMonthly * 12 / 52);
-    const weeksElapsed = Math.max(1, Math.round((parse(week.end) - parse(since)) / (7 * 86400000)));
 
-    // 3) Pagamentos feitos desde o início (saem dos fundos)
+    // contas reais + guias previstas (DAS sobre notas do mês, DARF do pró-labore) ainda não lançadas
     const costs = (input.costs || []).filter((c) => c && !isNf(c));
-    let paidOps = 0;
-    let paidTax = 0;
-    costs.forEach((c) => {
-      const pd = paidDate(c);
-      if (!inRange(pd, since, week.end) || String(c.status || '').toUpperCase() !== 'PAGO') return;
-      if (isTaxCost(c)) paidTax += eff(c);
-      else paidOps += eff(c);
-    });
-
-    const funds = {
-      giro: r2(acc.costReserve - paidOps),
-      impostos: r2(acc.tax + inssWeekly * weeksElapsed - paidTax),
-      reserva: r2(acc.reserve),
-    };
-
-    // 4) Contas da semana: em aberto com vencimento até o fim da semana (inclui atrasadas)
-    const bills = [];
-    costs.forEach((c) => {
-      if (String(c.status || '').toUpperCase() === 'PAGO' || !c.due || c.due > week.end) return;
-      bills.push({ id: c.id, desc: c.desc || 'Custo', due: c.due, value: r2(eff(c)), tax: isTaxCost(c), overdue: c.due < week.start, estimated: false });
-    });
-
-    // 5) Guias previstas (DAS sobre notas do mês + DARF do pró-labore) que vencem até o fim da semana
-    const guides = [];
     const realGuide = (docType, comp) => costs.some((c) => c.docType === docType && ym(c.period) === comp);
+    const guides = [];
     const firstComp = ym(addDays(since, -31));
-    const months = new Set(Object.keys(invoicedByMonth));
-    for (let d = parse(firstComp + '-01'); iso(d) <= week.end; d.setMonth(d.getMonth() + 1)) months.add(ym(iso(d)));
+    const lastDay = addDays(week.end, HORIZON);
+    const months = new Set(Object.keys(invoicedByMonth).filter((m) => m >= firstComp));
+    for (let d = parse(firstComp + '-01'); iso(d) <= lastDay; d.setMonth(d.getMonth() + 1)) months.add(ym(iso(d)));
     [...months].sort().forEach((comp) => {
-      if (comp < firstComp) return;
       const due = nextMonthDay(comp, cfg.taxDueDay);
+      if (due < since) return;
       const base = invoicedByMonth[comp] || 0;
       if (base > 0) guides.push({ kind: 'das', label: `DAS previsto · ${monthLabel(comp)}`, competencia: comp, due, base, value: r2(base * cfg.taxRate / 100), real: realGuide('das', comp) });
       if (inssMonthly > 0 && comp >= ym(since)) guides.push({ kind: 'darf', label: `DARF INSS pró-labore · ${monthLabel(comp)}`, competencia: comp, due, base: cfg.proLabore, value: inssMonthly, real: realGuide('darf', comp) });
     });
-    guides.forEach((g) => {
-      if (!g.real && g.due <= week.end && g.due >= since) bills.push({ id: `prev-${g.kind}-${g.competencia}`, desc: g.label, due: g.due, value: g.value, tax: true, overdue: g.due < week.start, estimated: true });
-    });
-    bills.sort((a, b) => a.due.localeCompare(b.due));
-    const billsOps = r2(bills.filter((b) => !b.tax).reduce((s, b) => s + b.value, 0));
-    const billsTax = r2(bills.filter((b) => b.tax).reduce((s, b) => s + b.value, 0));
+    const bills = costs.map((c) => {
+      const paid = String(c.status || '').toUpperCase() === 'PAGO';
+      return { id: c.id, desc: c.desc || 'Custo', due: c.due || '', value: r2(eff(c)), tax: isTaxCost(c), estimated: false, paidAt: paid ? (paidDate(c) || c.due || since) : '' };
+    }).filter((b) => b.due || b.paidAt);
+    guides.filter((g) => !g.real).forEach((g) => bills.push({ id: `prev-${g.kind}-${g.competencia}`, desc: g.label, due: g.due, value: g.value, tax: true, estimated: true, paidAt: '' }));
 
-    // 5) O que os fundos não cobrem sai da retirada
-    const deficitOps = r2(Math.max(0, billsOps - Math.max(0, funds.giro)));
-    const deficitTax = r2(Math.max(0, billsTax - Math.max(0, funds.impostos)));
+    const weeksUntil = (due, wStart) => Math.max(0, Math.floor((parse(weekRange(due, cfg.weekStart).start) - parse(wStart)) / (7 * 86400000)));
+    const withdrawalsAll = (input.withdrawals || []).map((x) => ({ ...x, date: String(x.date || '').slice(0, 10), value: Number(x.value) || 0 }));
 
-    const withdrawals = (input.withdrawals || []).filter((w) => inRange(String(w.date || '').slice(0, 10), week.start, week.end));
-    const withdrawn = r2(withdrawals.reduce((s, w) => s + (Number(w.value) || 0), 0));
-    const beforeWithdrawals = r2(totals.free - inssWeekly - deficitOps - deficitTax);
-    const available = r2(Math.max(0, beforeWithdrawals - withdrawn));
-
+    let giro = 0;
+    let impostos = 0;
+    let reserva = 0;
+    let carry = 0;
+    let out = null;
+    for (let ws = firstWeek; ws <= week.start; ws = addDays(ws, 7)) {
+      const we = addDays(ws, 6);
+      const rec = allReceipts.filter((x) => inRange(x.date, ws, we));
+      const t = {
+        received: r2(rec.reduce((s2, x) => s2 + x.amount, 0)),
+        tax: r2(rec.reduce((s2, x) => s2 + x.tax, 0)),
+        costReserve: r2(rec.reduce((s2, x) => s2 + x.costReserve, 0)),
+        reserve: r2(rec.reduce((s2, x) => s2 + x.reserve, 0)),
+        free: r2(rec.reduce((s2, x) => s2 + x.free, 0)),
+      };
+      giro += t.costReserve;
+      impostos += t.tax + inssWeekly;
+      reserva += t.reserve;
+      // pagamentos da semana saem dos fundos
+      bills.forEach((b) => {
+        if (!b.paidAt || !inRange(b.paidAt, ws, we) || b.paidAt < since) return;
+        if (b.tax) impostos -= b.value; else giro -= b.value;
+      });
+      // contas em aberto no fim da semana, vencendo até 3 semanas depois (inclui atrasadas)
+      const open = bills.filter((b) => b.due && b.due <= addDays(we, HORIZON) && !(b.paidAt && b.paidAt <= we) && !(b.paidAt && b.paidAt < since));
+      let needOps = 0;
+      let needTax = 0;
+      open.forEach((b) => {
+        const part = b.value / (weeksUntil(b.due, ws) + 1);
+        if (b.tax) needTax += part; else needOps += part;
+      });
+      const contribOps = r2(Math.max(0, needOps - giro));
+      const contribTax = r2(Math.max(0, needTax - impostos));
+      giro += contribOps;
+      impostos += contribTax;
+      const weekResult = r2(t.free - inssWeekly - contribOps - contribTax);
+      const wds = withdrawalsAll.filter((x) => inRange(x.date, ws, we));
+      const withdrawn = r2(wds.reduce((s2, x) => s2 + x.value, 0));
+      const carryIn = r2(carry);
+      carry = r2(carry + weekResult - withdrawn);
+      if (ws === week.start) {
+        out = {
+          receipts: rec.sort((a, b) => a.date.localeCompare(b.date)),
+          totals: t,
+          contribOps,
+          contribTax,
+          weekResult,
+          carryIn,
+          withdrawals: wds,
+          withdrawn,
+          bills: open.map((b) => ({ ...b, overdue: b.due < ws, thisWeek: b.due <= we, weeksLeft: weeksUntil(b.due, ws) })).sort((a, b) => a.due.localeCompare(b.due)),
+        };
+      }
+    }
+    if (!out) {
+      // semana anterior ao início do controle
+      out = { receipts: [], totals: { received: 0, tax: 0, costReserve: 0, reserve: 0, free: 0 }, contribOps: 0, contribTax: 0, weekResult: 0, carryIn: 0, withdrawals: [], withdrawn: 0, bills: [] };
+      carry = 0;
+    }
+    const billsOps = r2(out.bills.filter((b) => !b.tax).reduce((s2, b) => s2 + b.value, 0));
+    const billsTax = r2(out.bills.filter((b) => b.tax).reduce((s2, b) => s2 + b.value, 0));
     return {
       settings: cfg,
       since,
       week,
-      receipts,
-      totals,
+      beforeSince: week.start < firstWeek,
+      ...out,
       inssWeekly,
-      funds,
-      bills,
+      funds: { giro: r2(giro), impostos: r2(impostos), reserva: r2(reserva) },
       billsOps,
       billsTax,
-      deficitOps,
-      deficitTax,
       guides: guides.filter((g) => g.due >= week.start),
-      withdrawals,
-      withdrawn,
-      beforeWithdrawals,
-      available,
-      shortfall: r2(Math.max(0, -beforeWithdrawals)),
+      available: r2(Math.max(0, carry)),
+      shortfall: r2(Math.max(0, -carry)),
     };
   }
 
